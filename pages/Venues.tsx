@@ -7,7 +7,7 @@ import {
   MapPin, Plus, Loader2, X, AlertCircle, CheckCircle2, Trash2, Pencil,
   Armchair, LayoutGrid, Link2, Link2Off, Accessibility, ArrowLeftRight, Users,
 } from 'lucide-react';
-import { countTipos, normalizeRow, paintSeat, serializeRow, type RowConfig, type VenuePaintTool } from '../utils/venueRows';
+import { corredoresOf, countTipos, displayOrder, normalizeRow, paintSeat, parseCorredores, seatSide, serializeRow, type RowConfig, type VenuePaintTool } from '../utils/venueRows';
 
 /**
  * Biblioteca de locais + gerador de grade (Fase 2 — assento numerado,
@@ -38,7 +38,7 @@ interface Venue {
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
-const buildRows = (numFileiras: number, nomenclatura: 'letras' | 'numeros', assentosPadrao: number, corredorApos: number | null): RowConfig[] => {
+const buildRows = (numFileiras: number, nomenclatura: 'letras' | 'numeros', assentosPadrao: number, corredores: number[], espelhado: boolean): RowConfig[] => {
   const rows: RowConfig[] = [];
   for (let i = 0; i < numFileiras; i++) {
     const codigo = nomenclatura === 'letras'
@@ -48,7 +48,8 @@ const buildRows = (numFileiras: number, nomenclatura: 'letras' | 'numeros', asse
       codigo,
       assentos: assentosPadrao,
       pcd: [],
-      corredor_apos: corredorApos ?? undefined,
+      ...(corredores.length ? { corredores_apos: corredores } : {}),
+      ...(espelhado ? { espelhado: true } : {}),
     });
   }
   return rows;
@@ -65,15 +66,36 @@ const TOOLS: { id: VenuePaintTool; label: string; icon: React.ReactNode; hint: s
   { id: 'acompanhante', label: 'Acompanhante', icon: <Users size={13} />, hint: 'Assento ao lado de um lugar PCD, reservado ao acompanhante' },
 ];
 
+/** Campo "6, 18": guarda o texto digitado e só empurra a lista quando muda de verdade. */
+const CorredoresInput: React.FC<{ value: number[]; onChange: (v: number[]) => void; className?: string; ariaLabel: string; placeholder?: string }> = ({ value, onChange, className, ariaLabel, placeholder }) => {
+  const [text, setText] = useState(value.join(', '));
+  useEffect(() => {
+    if (parseCorredores(text).join(',') !== value.join(',')) setText(value.join(', '));
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input
+      value={text}
+      onChange={e => { setText(e.target.value); onChange(parseCorredores(e.target.value)); }}
+      className={className}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      inputMode="numeric"
+    />
+  );
+};
+
 const SeatGridPreview: React.FC<{
   rows: RowConfig[];
   onPaint: (rowIdx: number, seatNum: number) => void;
   onChangeAssentos: (rowIdx: number, value: number) => void;
   onToggleBloco: (rowIdx: number) => void;
-}> = ({ rows, onPaint, onChangeAssentos, onToggleBloco }) => (
-  <div className="space-y-2 max-h-80 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10">
+  onChangeCorredores: (rowIdx: number, value: number[]) => void;
+  onToggleEsquerda: (rowIdx: number) => void;
+}> = ({ rows, onPaint, onChangeAssentos, onToggleBloco, onChangeCorredores, onToggleEsquerda }) => (
+  <div className="space-y-3 max-h-[28rem] overflow-y-auto p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10">
     {rows.map((row, rowIdx) => (
-      <div key={row.codigo} className={`flex items-center gap-2 ${row.espaco_antes ? 'mt-5' : ''}`}>
+      <div key={row.codigo} className={`space-y-1 ${row.espaco_antes ? 'mt-5' : ''}`}>
+        <div className="flex items-center gap-2">
         <span className="w-8 shrink-0 text-[10px] font-black text-slate-500 text-center">{row.codigo}</span>
         <input
           type="number"
@@ -83,6 +105,22 @@ const SeatGridPreview: React.FC<{
           className="w-14 shrink-0 p-1 text-[10px] text-center bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-white/10 font-bold"
           aria-label={`Assentos na fileira ${row.codigo}`}
         />
+        <CorredoresInput
+          value={corredoresOf(row)}
+          onChange={v => onChangeCorredores(rowIdx, v)}
+          className="w-16 shrink-0 p-1 text-[10px] text-center bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-white/10 font-bold"
+          ariaLabel={`Corredores após o assento, fileira ${row.codigo}`}
+          placeholder="corr."
+        />
+        <button
+          type="button"
+          onClick={() => onToggleEsquerda(rowIdx)}
+          aria-pressed={row.alinhamento === 'esquerda'}
+          title="Alinhar esta fileira à esquerda (fileira curta que não fica centralizada na planta)"
+          className={`shrink-0 px-1.5 py-1 rounded-lg text-[9px] font-black uppercase ${row.alinhamento === 'esquerda' ? 'bg-[#ff0068] text-white' : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-200 dark:border-white/10'}`}
+        >
+          Esq.
+        </button>
         {rowIdx > 0 ? (
           <button
             type="button"
@@ -94,11 +132,13 @@ const SeatGridPreview: React.FC<{
             Bloco
           </button>
         ) : <span className="w-[46px] shrink-0" aria-hidden="true" />}
-        <div className="flex flex-wrap gap-1 flex-1 justify-center">
-          {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
+        </div>
+        <div className="overflow-x-auto pb-1">
+        <div className={`flex gap-1 w-max min-w-full ${row.alinhamento === 'esquerda' ? 'justify-start' : 'justify-center'}`}>
+          {displayOrder(row).map((n, i, order) => {
             const tipo = row.tipos?.[String(n)];
             const isComp = row.acompanhante?.[String(n)] != null;
-            const isAisle = row.corredor_apos === n;
+            const isAisle = i > 0 && seatSide(row, order[i - 1]) !== seatSide(row, n);
             const label = tipo === 'cadeirante'
               ? 'espaço de cadeirante'
               : tipo === 'pcd_largo'
@@ -106,6 +146,7 @@ const SeatGridPreview: React.FC<{
                 : isComp ? `acompanhante de ${row.codigo}-${row.acompanhante![String(n)]}` : '';
             return (
               <React.Fragment key={n}>
+                {isAisle && <span className="w-3" aria-hidden="true" />}
                 <button
                   type="button"
                   onClick={() => onPaint(rowIdx, n)}
@@ -121,10 +162,10 @@ const SeatGridPreview: React.FC<{
                 >
                   {tipo === 'cadeirante' ? <Accessibility size={11} /> : tipo === 'pcd_largo' ? <ArrowLeftRight size={11} /> : isComp ? <Users size={11} /> : n}
                 </button>
-                {isAisle && <span className="w-3" aria-hidden="true" />}
               </React.Fragment>
             );
           })}
+        </div>
         </div>
       </div>
     ))}
@@ -143,7 +184,8 @@ const VenueFormModal: React.FC<{
   const [numFileiras, setNumFileiras] = useState(editing?.rows_config.length || 10);
   const [nomenclatura, setNomenclatura] = useState<'letras' | 'numeros'>('letras');
   const [assentosPadrao, setAssentosPadrao] = useState(20);
-  const [corredorApos, setCorredorApos] = useState<number | ''>('');
+  const [corredoresGerador, setCorredoresGerador] = useState<number[]>([]);
+  const [espelhadoGerador, setEspelhadoGerador] = useState(false);
   const [rows, setRows] = useState<RowConfig[]>((editing?.rows_config ?? []).map(normalizeRow));
   const [tool, setTool] = useState<VenuePaintTool>('cadeirante');
   const [saving, setSaving] = useState(false);
@@ -153,7 +195,7 @@ const VenueFormModal: React.FC<{
     const marcados = countTipos(rows);
     if (marcados.cadeirante + marcados.pcd_largo + marcados.acompanhante > 0
       && !window.confirm('Gerar uma nova grade apaga os lugares PCD, largos e de acompanhante já marcados. Continuar?')) return;
-    setRows(buildRows(numFileiras, nomenclatura, assentosPadrao, corredorApos === '' ? null : corredorApos));
+    setRows(buildRows(numFileiras, nomenclatura, assentosPadrao, corredoresGerador, espelhadoGerador));
   };
 
   const handlePaint = (rowIdx: number, seatNum: number) => {
@@ -165,6 +207,31 @@ const VenueFormModal: React.FC<{
 
   const handleChangeAssentos = (rowIdx: number, value: number) => {
     setRows(prev => prev.map((r, i) => (i === rowIdx ? { ...r, assentos: value } : r)));
+  };
+
+  const handleChangeCorredores = (rowIdx: number, value: number[]) => {
+    setRows(prev => prev.map((r, i) => {
+      if (i !== rowIdx) return r;
+      const { corredor_apos: _legado, ...rest } = r;
+      return { ...rest, corredores_apos: value };
+    }));
+  };
+
+  const handleToggleEsquerda = (rowIdx: number) => {
+    setRows(prev => prev.map((r, i) => (i === rowIdx ? { ...r, alinhamento: r.alinhamento ? undefined : 'esquerda' } : r)));
+  };
+
+  const todasEspelhadas = rows.length > 0 && rows.every(r => r.espelhado);
+  const handleToggleEspelhado = () => {
+    setRows(prev => prev.map(r => ({ ...r, espelhado: todasEspelhadas ? undefined : true })));
+  };
+
+  const handleInverterOrdem = () => {
+    setRows(prev => {
+      const palco = prev.some(r => r.palco_apos);
+      const rev = prev.map(r => ({ ...r, palco_apos: undefined })).reverse();
+      return palco ? rev.map((r, i) => (i === rev.length - 1 ? { ...r, palco_apos: true } : r)) : rev;
+    });
   };
 
   const handleToggleBloco = (rowIdx: number) => {
@@ -216,7 +283,7 @@ const VenueFormModal: React.FC<{
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="venue-modal-title">
-      <div className="w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-white/10 p-6 space-y-5">
+      <div className="w-full sm:max-w-4xl max-h-[92dvh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-white/10 p-6 space-y-5">
         <div className="flex items-center justify-between">
           <h2 id="venue-modal-title" className="text-lg font-black uppercase tracking-tight italic text-slate-900 dark:text-white">
             {editing ? 'Editar local' : 'Novo local'}
@@ -269,10 +336,14 @@ const VenueFormModal: React.FC<{
               <input type="number" min={1} value={assentosPadrao} onChange={e => setAssentosPadrao(Math.max(1, Number(e.target.value) || 1))} className={inputCls} />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Corredor após nº</label>
-              <input type="number" min={0} value={corredorApos} onChange={e => setCorredorApos(e.target.value === '' ? '' : Number(e.target.value))} className={inputCls} placeholder="opcional" />
+              <label className={labelCls}>Corredores após nº</label>
+              <CorredoresInput value={corredoresGerador} onChange={setCorredoresGerador} className={inputCls} ariaLabel="Corredores após o assento" placeholder="ex: 6, 18" />
             </div>
           </div>
+          <label className="flex items-center gap-2 mb-3 px-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
+            <input type="checkbox" checked={espelhadoGerador} onChange={e => setEspelhadoGerador(e.target.checked)} className="accent-[#ff0068]" />
+            Numeração da direita para a esquerda (lugar 1 à direita de quem olha o palco)
+          </label>
           <button
             type="button"
             onClick={handleGerar}
@@ -305,11 +376,18 @@ const VenueFormModal: React.FC<{
                 </button>
               ))}
             </div>
-            <SeatGridPreview rows={rows} onPaint={handlePaint} onChangeAssentos={handleChangeAssentos} onToggleBloco={handleToggleBloco} />
+            <SeatGridPreview rows={rows} onPaint={handlePaint} onChangeAssentos={handleChangeAssentos} onToggleBloco={handleToggleBloco} onChangeCorredores={handleChangeCorredores} onToggleEsquerda={handleToggleEsquerda} />
             <p className="px-1 text-[10px] text-slate-500">
               {(() => { const c = countTipos(rows); return `${c.cadeirante} cadeirante · ${c.pcd_largo} obeso (largo) · ${c.acompanhante} acompanhante`; })()}
               {' — '}ao marcar um lugar PCD, o vizinho comum mais próximo (mesmo lado do corredor) vira o assento de acompanhante; ajuste com a ferramenta Acompanhante.
             </p>
+            <label className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={todasEspelhadas} onChange={handleToggleEspelhado} className="accent-[#ff0068]" />
+              Numeração da direita para a esquerda (só o desenho; o número do lugar não muda)
+            </label>
+            <button type="button" onClick={handleInverterOrdem} className="px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide bg-white dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/50 cursor-pointer">
+              Inverter ordem das fileiras (palco embaixo da última)
+            </button>
             <label className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
               <input type="checkbox" checked={temPalco} onChange={handleTogglePalco} className="accent-[#ff0068]" />
               Desenhar o palco abaixo da última fileira

@@ -1614,6 +1614,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Tier 2: tempo de reserva temporária (10min default)
   const [audienceReservationMinutes, setAudienceReservationMinutes] = useState<number>(15);
   const [eventSeatMap, setEventSeatMap] = useState(false);
+  const [coverDragOver, setCoverDragOver] = useState(false);
+  // Mesmo caminho pro clique e pro arrastar-e-soltar. A compressão (<=250KB, webp)
+  // acontece dentro de uploadEventCover.
+  const handleCoverFile = async (file: File | undefined | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setError('Envie uma imagem (PNG, JPG ou WEBP).'); return; }
+    try {
+      const url = await uploadEventCover('config_' + Date.now(), file);
+      setGeneral(g => ({ ...g, coverUrl: url, coverFocalX: 50, coverFocalY: 50 }));
+    } catch (err: any) {
+      setError('Erro ao subir banner: ' + err.message);
+    }
+  };
   const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
   const [styles,  setStyles]  = useState<string[]>([]);
   const [formats, setFormats] = useState<any[]>([]);
@@ -2836,6 +2849,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 {/* Banner */}
                 <div>
                   <label className={label}>Banner do Evento (1200×630 recomendado)</label>
+                  <div
+                    onDragOver={e => { e.preventDefault(); setCoverDragOver(true); }}
+                    onDragLeave={() => setCoverDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setCoverDragOver(false); handleCoverFile(e.dataTransfer.files?.[0]); }}
+                  >
                   {general.coverUrl ? (
                     <div className="relative group rounded-2xl overflow-hidden aspect-[1200/630] bg-slate-100 dark:bg-slate-800">
                       <img
@@ -2850,22 +2868,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                const compressed = await imageCompression(file, {
-                                  maxSizeMB: 0.5,
-                                  maxWidthOrHeight: 1600,
-                                  useWebWorker: true,
-                                  fileType: 'image/webp',
-                                });
-                                const url = await uploadEventCover('config_' + Date.now(), compressed);
-                                setGeneral(g => ({ ...g, coverUrl: url, coverFocalX: 50, coverFocalY: 50 }));
-                              } catch (err: any) {
-                                setError('Erro ao subir banner: ' + err.message);
-                              }
-                            }}
+                            onChange={e => { handleCoverFile(e.target.files?.[0]); e.target.value = ''; }}
                           />
                           Trocar
                         </label>
@@ -2885,27 +2888,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </div>
                     </div>
                   ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center gap-3 aspect-[1200/630] border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl hover:border-[#ff0068]/50 transition-colors text-slate-400 hover:text-[#ff0068]">
+                    <label className={`cursor-pointer flex flex-col items-center justify-center gap-3 aspect-[1200/630] border-2 border-dashed rounded-2xl hover:border-[#ff0068]/50 transition-colors hover:text-[#ff0068] ${coverDragOver ? 'border-[#ff0068] bg-[#ff0068]/5 text-[#ff0068]' : 'border-slate-300 dark:border-white/10 text-slate-400'}`}>
                       <input
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            const url = await uploadEventCover('config_' + Date.now(), file);
-                            setGeneral(g => ({ ...g, coverUrl: url }));
-                          } catch (err: any) {
-                            setError('Erro ao subir banner: ' + err.message);
-                          }
-                        }}
+                        onChange={e => { handleCoverFile(e.target.files?.[0]); e.target.value = ''; }}
                       />
                       <Upload size={28} />
-                      <p className="text-[10px] font-black uppercase tracking-widest">Clique para enviar</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest">Clique ou arraste a imagem aqui</p>
                       <p className="text-[9px] text-slate-400">PNG, JPG ou WEBP — recomendado 1200×630</p>
                     </label>
                   )}
+                  </div>
                 </div>
 
                 {/* Descrição */}
@@ -3124,7 +3119,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
                 <div>
                   <label className={label}>Local do Evento</label>
-                  <input type="text" value={general.location} onChange={e => setGeneral({ ...general, location: e.target.value })} placeholder="Ex: Ginásio Municipal - Centro" className={input} />
+                  <input type="text" value={general.location} onChange={e => setGeneral({ ...general, location: e.target.value })} placeholder="Ex: Teatro Municipal – Rua das Palmeiras, 123, Centro" className={input} />
+                  <p className="text-[10px] text-slate-500 mt-1 px-1">Nome do local, rua e número. Aparece na vitrine e no ingresso.</p>
                 </div>
                 <div>
                   <label className={label}>Cidade / Estado</label>

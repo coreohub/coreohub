@@ -1,0 +1,161 @@
+[
+  {
+    "codigo": "O",
+    "assentos": 4,
+    "pcd": [],
+    "espelhado": true,
+    "alinhamento": "esquerda"
+  },
+  {
+    "codigo": "N",
+    "assentos": 9,
+    "pcd": [],
+    "corredor_apos": 3,
+    "espelhado": true,
+    "alinhamento": "esquerda"
+  },
+  {
+    "codigo": "M",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "L",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "K",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "J",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "I",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "H",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "G",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "F",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "E",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "D",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "C",
+    "assentos": 24,
+    "pcd": [],
+    "corredor_apos": 6,
+    "corredores_apos": [
+      6,
+      18
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "B",
+    "assentos": 20,
+    "pcd": [],
+    "corredor_apos": 4,
+    "corredores_apos": [
+      4,
+      16
+    ],
+    "espelhado": true
+  },
+  {
+    "codigo": "A",
+    "assentos": 20,
+    "pcd": [],
+    "corredor_apos": 4,
+    "corredores_apos": [
+      4,
+      16
+    ],
+    "espelhado": true,
+    "palco_apos": true
+  }
+]
