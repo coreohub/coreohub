@@ -7,7 +7,7 @@ import {
   MapPin, Plus, Loader2, X, AlertCircle, CheckCircle2, Trash2, Pencil,
   Armchair, LayoutGrid, Link2, Link2Off, Accessibility, ArrowLeftRight, Users,
 } from 'lucide-react';
-import { corredoresOf, countTipos, displayOrder, normalizeRow, paintSeat, parseCorredores, seatSide, serializeRow, type RowConfig, type VenuePaintTool } from '../utils/venueRows';
+import { corredoresOf, countTipos, diffSeatIds, displayOrder, generatorDefaultsFrom, normalizeRow, paintSeat, parseCorredores, seatSide, serializeRow, type RowConfig, type VenuePaintTool } from '../utils/venueRows';
 
 /**
  * Biblioteca de locais + gerador de grade (Fase 2 — assento numerado,
@@ -181,11 +181,14 @@ const VenueFormModal: React.FC<{
   const [name, setName] = useState(editing?.name ?? '');
   const [city, setCity] = useState(editing?.city ?? '');
   const [state, setState] = useState(editing?.state ?? '');
+  // O gerador abre com os valores da grade salva: com os padrões (20 lugares, sem corredor) um
+  // clique em "Gerar prévia" apagava a planta real de um local já em uso (incidente de 2026-10-20).
+  const [genInicial] = useState(() => generatorDefaultsFrom(editing?.rows_config ?? []));
   const [numFileiras, setNumFileiras] = useState(editing?.rows_config.length || 10);
-  const [nomenclatura, setNomenclatura] = useState<'letras' | 'numeros'>('letras');
-  const [assentosPadrao, setAssentosPadrao] = useState(20);
-  const [corredoresGerador, setCorredoresGerador] = useState<number[]>([]);
-  const [espelhadoGerador, setEspelhadoGerador] = useState(false);
+  const [nomenclatura, setNomenclatura] = useState<'letras' | 'numeros'>(genInicial.nomenclatura);
+  const [assentosPadrao, setAssentosPadrao] = useState(genInicial.assentosPadrao);
+  const [corredoresGerador, setCorredoresGerador] = useState<number[]>(genInicial.corredores);
+  const [espelhadoGerador, setEspelhadoGerador] = useState(genInicial.espelhado);
   const [rows, setRows] = useState<RowConfig[]>((editing?.rows_config ?? []).map(normalizeRow));
   const [tool, setTool] = useState<VenuePaintTool>('cadeirante');
   const [saving, setSaving] = useState(false);
@@ -195,7 +198,13 @@ const VenueFormModal: React.FC<{
     const marcados = countTipos(rows);
     if (marcados.cadeirante + marcados.pcd_largo + marcados.acompanhante > 0
       && !window.confirm('Gerar uma nova grade apaga os lugares PCD, largos e de acompanhante já marcados. Continuar?')) return;
-    setRows(buildRows(numFileiras, nomenclatura, assentosPadrao, corredoresGerador, espelhadoGerador));
+    const nova = buildRows(numFileiras, nomenclatura, assentosPadrao, corredoresGerador, espelhadoGerador);
+    if (rows.length > 0) {
+      const atual = rows.reduce((s, r) => s + r.assentos, 0);
+      const depois = nova.reduce((s, r) => s + r.assentos, 0);
+      if (!window.confirm(`Gerar uma nova grade substitui a grade atual (${atual} lugares, ${rows.length} fileiras) por uma de ${depois} lugares e ${nova.length} fileiras, com todas as fileiras iguais. Continuar?`)) return;
+    }
+    setRows(nova);
   };
 
   const handlePaint = (rowIdx: number, seatNum: number) => {
@@ -248,6 +257,13 @@ const VenueFormModal: React.FC<{
   const handleSave = async () => {
     if (!name.trim()) { setError('Informe o nome do local.'); return; }
     if (rows.length === 0) { setError('Gere a prévia da grade antes de salvar.'); return; }
+    if (editing) {
+      // generate_event_seats só acrescenta assentos: o que a nova grade cria entra nos eventos
+      // ligados a este local, e o que deixa de existir fica lá, ainda à venda.
+      const { criados, removidos } = diffSeatIds(editing.rows_config, rows);
+      if ((criados > 0 || removidos > 0)
+        && !window.confirm(`Esta alteração muda os lugares do local: ${criados} lugares novos e ${removidos} lugares que deixam de existir na planta. Os eventos ligados a este local recebem os novos, mas os que deixam de existir NÃO são removidos deles. Continuar?`)) return;
+    }
     setSaving(true);
     setError(null);
     try {

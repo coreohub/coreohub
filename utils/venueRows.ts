@@ -152,3 +152,49 @@ export function countTipos(rows: RowConfig[]): { cadeirante: number; pcd_largo: 
   }
   return { cadeirante, pcd_largo, acompanhante };
 }
+
+/** Ids de assento ("C-7") que a grade gera. É o mesmo formato de event_seats.seat_id. */
+export function seatIdsOf(rows: Pick<RowConfig, 'codigo' | 'assentos'>[]): Set<string> {
+  const ids = new Set<string>();
+  for (const r of rows) for (let n = 1; n <= Math.max(0, r.assentos); n++) ids.add(`${r.codigo}-${n}`);
+  return ids;
+}
+
+/**
+ * O que mudar de uma grade para outra faz nos eventos já ligados ao local:
+ * generate_event_seats só ACRESCENTA assentos, nunca remove. Então `criados` entram e
+ * `removidos` ficam no evento mesmo deixando de existir na planta.
+ */
+export function diffSeatIds(
+  before: Pick<RowConfig, 'codigo' | 'assentos'>[],
+  after: Pick<RowConfig, 'codigo' | 'assentos'>[],
+): { criados: number; removidos: number } {
+  const a = seatIdsOf(before);
+  const b = seatIdsOf(after);
+  let criados = 0, removidos = 0;
+  for (const id of b) if (!a.has(id)) criados++;
+  for (const id of a) if (!b.has(id)) removidos++;
+  return { criados, removidos };
+}
+
+/**
+ * Valores iniciais do gerador de grade a partir da grade já salva. Sem isso o gerador abre com
+ * os padrões (20 lugares, sem corredor) e um clique em "Gerar prévia" apaga a planta real.
+ */
+export function generatorDefaultsFrom(rows: RowConfig[]): {
+  assentosPadrao: number; corredores: number[]; espelhado: boolean; nomenclatura: 'letras' | 'numeros';
+} {
+  if (rows.length === 0) return { assentosPadrao: 20, corredores: [], espelhado: false, nomenclatura: 'letras' };
+  const freq = new Map<number, number>();
+  for (const r of rows) freq.set(r.assentos, (freq.get(r.assentos) ?? 0) + 1);
+  let assentosPadrao = rows[0].assentos;
+  let best = 0;
+  for (const [n, c] of freq) if (c > best || (c === best && n > assentosPadrao)) { best = c; assentosPadrao = n; }
+  const ref = rows.find(r => r.assentos === assentosPadrao) ?? rows[0];
+  return {
+    assentosPadrao,
+    corredores: corredoresOf(ref),
+    espelhado: rows.every(r => r.espelhado),
+    nomenclatura: rows.every(r => /^\d+$/.test(r.codigo)) ? 'numeros' : 'letras',
+  };
+}
