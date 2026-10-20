@@ -4,6 +4,13 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-10-20 — Termo do Produtor v1.10 (sem antecipação do saldo retido) publicado ✅
+
+- **Main `9c17e83`:** 12.3 nova ("Transferência do saldo liberado"), 12.4 sem "mecanismo de antecipação", 11.12 remete à 11.11; versão '1.10', vigência 27/10/2026 (até lá só faixa de aviso; a vigência vale para todos, inclusive quem estava na tela obrigatória da 1.9). Tela de aceite por versão (`utils/termoResumo.ts`): quem está na 1.9 vê só a novidade; os demais veem tudo. FAQ de `LandingPage`, `LandingEspetaculo` e `og-marketing` alinhados. `ProducerBalanceCard` esconde "Antecipar também o que está a liberar" para quem aceitou a 1.10.
+- **Servidor:** `EARLY_PAYOUT_OFF_MIN_TERMS_VERSION='1.10'`, `manual-transfer-now` redeployado. Comparação de versão já era numérica (`terms-version.ts`).
+- **Aceites:** conta de teste (log rotulado). Lorrayne aceita pelo painel dela. Tamoios não fica isenta.
+- **Pendente:** e-mail `terms_update_producer` (template ajustado, `send-email` ainda sem redeploy, nada enviado); teste vivo de `scope:'all'` (só unitário); mensagem à Lorrayne e à Danielle.
+
 ### 2026-10-15 a 19 — Repasse de baixo valor parado na subconta (Tamoios) + card "Seus repasses" + transferir só o disponível ✅ (em produção)
 
 - **Causa real:** os repasses internos de baixo valor (`low_value_transfers`, evento com `absorve_taxa_baixo_valor`, hoje só a Tamoios) chegavam na SUBCONTA da produtora (status `transferido`), mas nenhuma rotina os levava ao PIX: `daily-release-funds` e `manual-transfer-now` sacam só o `amount` de `platform_commissions` (`sweepProducerBalance` com `amount`, de propósito, pra não arrastar dinheiro de fora). A produtora não acessa a subconta (white-label). R$ 85 ficaram parados; o sinal era o "+R$ 85" em verde no "Saldo real Asaas".
