@@ -26,13 +26,23 @@ export function suggestWorkshopSlug(name: string, professor: string): string {
   return slugify(`${name} com ${professor}`);
 }
 
-/** Alternativas quando o slug já está em uso (-2, -3), respeitando o tamanho máximo. */
-export function slugAlternatives(base: string, count = 2): string[] {
+const withSuffix = (base: string, suffix: string): string =>
+  `${base.slice(0, SLUG_MAX - suffix.length).replace(/-+$/, '')}${suffix}`;
+
+/** Ano (4 dígitos) de uma data ISO ou "YYYY-MM-DD"; null se ausente ou inválida. Sem fuso: usa o texto. */
+export function yearOf(date: string | null | undefined): number | null {
+  const m = /^(\d{4})-\d{2}-\d{2}/.exec(date ?? '');
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Alternativas quando o slug já está em uso: primeiro o ano no fim (edição seguinte do mesmo workshop,
+ * ex.: jazz-com-lucas-maia-2028), depois -2 e -3. O ano não é repetido se o slug já o contém.
+ */
+export function slugAlternatives(base: string, year?: number | null, count = 2): string[] {
   const out: string[] = [];
-  for (let n = 2; n < 2 + count; n++) {
-    const suffix = `-${n}`;
-    out.push(`${base.slice(0, SLUG_MAX - suffix.length).replace(/-+$/, '')}${suffix}`);
-  }
+  if (year && !base.includes(String(year))) out.push(withSuffix(base, `-${year}`));
+  for (let n = 2; n < 2 + count; n++) out.push(withSuffix(base, `-${n}`));
   return out;
 }
 

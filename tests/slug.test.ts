@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, suggestWorkshopSlug, slugAlternatives, slugValidity, SLUG_MAX } from '../utils/slug';
+import { slugify, suggestWorkshopSlug, slugAlternatives, slugValidity, yearOf, SLUG_MAX } from '../utils/slug';
 
 describe('slugify', () => {
   it('tira acento, caixa e símbolos', () => {
@@ -34,7 +34,12 @@ describe('suggestWorkshopSlug', () => {
 describe('slugAlternatives / slugValidity', () => {
   it('gera -2 e -3 dentro do limite', () => {
     expect(slugAlternatives('hip-hop')).toEqual(['hip-hop-2', 'hip-hop-3']);
-    for (const a of slugAlternatives('x'.repeat(60))) expect(a.length).toBeLessThanOrEqual(SLUG_MAX);
+    expect(slugAlternatives('jazz-com-lucas-maia', 2028)).toEqual(['jazz-com-lucas-maia-2028', 'jazz-com-lucas-maia-2', 'jazz-com-lucas-maia-3']);
+    expect(slugAlternatives('jazz-2028', 2028)).toEqual(['jazz-2028-2', 'jazz-2028-3']);
+    expect(yearOf('2028-03-05T14:00')).toBe(2028);
+    expect(yearOf('')).toBeNull();
+    expect(yearOf(null)).toBeNull();
+    for (const a of slugAlternatives('x'.repeat(60), 2028)) expect(a.length).toBeLessThanOrEqual(SLUG_MAX);
   });
   it('valida formato e tamanho', () => {
     expect(slugValidity('')).toBe('vazio');

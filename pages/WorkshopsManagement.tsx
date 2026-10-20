@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import FocalPointPicker from '../components/FocalPointPicker';
 import SlugField from '../components/SlugField';
-import { slugify, suggestWorkshopSlug, slugValidity } from '../utils/slug';
+import { slugify, suggestWorkshopSlug, slugValidity, slugAlternatives, yearOf } from '../utils/slug';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
 type FeeMode = 'repassar' | 'absorver';
@@ -1982,6 +1982,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
               suggestion={suggestWorkshopSlug(form.name, form.professor_name)}
               originalSlug={originalSlug}
               excludeId={editingId}
+              year={yearOf(form.data_inicio)}
               prefix="app.coreohub.com/workshop/"
             />
             <Field label="Descrição">
@@ -2770,9 +2771,15 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       // simples de workshops.slug, sem exigir loop de tentativas.
       const baseSlug = slugify(form.name.trim());
       let { data, error } = await supabase.from('workshop_passes').insert({ ...payload, slug: baseSlug || null }).select('id').single();
-      if (error?.code === '23505') {
-        const retrySlug = baseSlug ? `${baseSlug.slice(0, 43)}-${Math.random().toString(36).slice(2, 8)}` : null;
-        ({ data, error } = await supabase.from('workshop_passes').insert({ ...payload, slug: retrySlug }).select('id').single());
+      if (error?.code === '23505' && baseSlug) {
+        // Colisão (mesmo passe de uma edição anterior): tenta o ano do evento no fim (day-pass-2028), depois -2 e -3,
+        // e só por último um trecho aleatório.
+        const { data: evRow } = await supabase.from('events').select('start_date').eq('id', eventId).maybeSingle();
+        const candidates = [...slugAlternatives(baseSlug, yearOf(evRow?.start_date), 2), `${baseSlug.slice(0, 43)}-${Math.random().toString(36).slice(2, 8)}`];
+        for (const candidate of candidates) {
+          ({ data, error } = await supabase.from('workshop_passes').insert({ ...payload, slug: candidate }).select('id').single());
+          if (error?.code !== '23505') break;
+        }
       }
       if (error || !data) { setSaving(false); return setFormError(error?.message ?? 'Falha ao criar pass'); }
       passId = data.id;

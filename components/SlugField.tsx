@@ -13,6 +13,8 @@ interface Props {
   originalSlug: string | null;
   /** Id do workshop em edição, pra não contar o próprio slug como ocupado. */
   excludeId: string | null;
+  /** Ano da data do workshop; vira a primeira alternativa quando o endereço já existe (edição seguinte). */
+  year?: number | null;
   /** Prefixo mostrado antes do campo, ex: "app.coreohub.com/workshop/". */
   prefix: string;
 }
@@ -24,7 +26,7 @@ type Status = 'idle' | 'checking' | 'ok' | 'taken' | 'invalid' | 'error';
  * quando o endereço já existe. Em workshop novo o campo acompanha o nome até o produtor digitar nele;
  * em edição nunca muda sozinho (mudar quebraria link compartilhado) e avisa que o link antigo redireciona.
  */
-const SlugField: React.FC<Props> = ({ value, onChange, suggestion, originalSlug, excludeId, prefix }) => {
+const SlugField: React.FC<Props> = ({ value, onChange, suggestion, originalSlug, excludeId, year, prefix }) => {
   const [touched, setTouched] = useState<boolean>(!!originalSlug);
   const [status, setStatus] = useState<Status>('idle');
   const reqId = useRef(0);
@@ -89,7 +91,7 @@ const SlugField: React.FC<Props> = ({ value, onChange, suggestion, originalSlug,
         {status === 'taken' && (
           <span className="text-rose-600 dark:text-rose-400">
             Esse endereço já está em uso. Tente:{' '}
-            {slugAlternatives(value.trim()).map(alt => (
+            {slugAlternatives(value.trim(), year).map(alt => (
               <button key={alt} type="button" onClick={() => { setTouched(true); onChange(alt); }} className="mr-2 font-black underline underline-offset-2 hover:text-rose-800">
                 {alt}
               </button>
