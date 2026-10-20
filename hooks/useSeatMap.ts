@@ -10,6 +10,12 @@ export type SeatRow = {
   /** Vizinho de acompanhante -> assento especial que ele acompanha: {"7": 8}. */
   acompanhante?: Record<string, number>;
   corredor_apos?: number;
+  /** Vários corredores, pelo número do assento. Vence `corredor_apos` quando presente. */
+  corredores_apos?: number[];
+  /** Só desenho: numeração da direita para a esquerda (o número do assento não muda). */
+  espelhado?: boolean;
+  /** Só desenho: fileira alinhada à esquerda em vez de centralizada. */
+  alinhamento?: 'esquerda';
   /** Marca o início de um novo bloco (só afeta o espaçamento visual, nunca a geração de assentos). */
   espaco_antes?: boolean;
   /** Na última fileira: desenha a barra "Palco" logo abaixo da grade. */

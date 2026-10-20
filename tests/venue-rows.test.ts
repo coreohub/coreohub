@@ -71,3 +71,54 @@ describe('normalize/serialize', () => {
     expect(countTipos(nelson)).toEqual({ cadeirante: 7, pcd_largo: 6, acompanhante: 13 })
   })
 })
+
+// ── Vários corredores, espelhado e alinhamento (Teatro Merciol Viscardi) ─────
+import { corredoresOf, seatSide, displayOrder, parseCorredores } from '../utils/venueRows'
+
+describe('corredores múltiplos', () => {
+  it('legado vira lista de 1 e a lista vence o legado', () => {
+    expect(corredoresOf({ corredor_apos: 5 })).toEqual([5])
+    expect(corredoresOf({})).toEqual([])
+    expect(corredoresOf({ corredor_apos: 6, corredores_apos: [18, 6] })).toEqual([6, 18])
+  })
+  it('seatSide conta todos os corredores', () => {
+    const r = { corredores_apos: [6, 18] }
+    expect([1, 6, 7, 18, 19, 24].map(n => seatSide(r, n))).toEqual([0, 0, 1, 1, 2, 2])
+    expect(seatSide({ corredor_apos: 5 }, 5)).toBe(0)
+    expect(seatSide({ corredor_apos: 5 }, 6)).toBe(1)
+  })
+  it('acompanhante não atravessa nenhum dos dois corredores', () => {
+    const r = normalizeRow(row({ assentos: 24, corredor_apos: undefined, corredores_apos: [6, 18], tipos: { '7': 'cadeirante', '18': 'cadeirante' } }))
+    expect(suggestCompanion(r, 7)).toBe(8)   // 6 é do bloco ao lado
+    expect(suggestCompanion(r, 18)).toBe(17) // 19 é do bloco ao lado
+    expect(paintSeat(r, 6, 'acompanhante').error).toBeTruthy()
+  })
+  it('serialize: 1 corredor fica no formato legado; 2+ grava lista e o primeiro no legado', () => {
+    const um = serializeRow(row({ corredor_apos: undefined, corredores_apos: [5] }))
+    expect(um.corredor_apos).toBe(5)
+    expect(um.corredores_apos).toBeUndefined()
+    const dois = serializeRow(row({ assentos: 24, corredor_apos: undefined, corredores_apos: [18, 6] }))
+    expect(dois.corredores_apos).toEqual([6, 18])
+    expect(dois.corredor_apos).toBe(6)
+    const nenhum = serializeRow(row({ corredor_apos: undefined }))
+    expect('corredor_apos' in nenhum || 'corredores_apos' in nenhum).toBe(false)
+  })
+  it('descarta corredor fora da fileira', () => {
+    const s = serializeRow(row({ assentos: 10, corredor_apos: undefined, corredores_apos: [0, 5, 10, 40] }))
+    expect(s.corredor_apos).toBe(5)
+    expect(s.corredores_apos).toBeUndefined()
+  })
+  it('espelhado e alinhamento passam pela serialização; falso não grava', () => {
+    expect(serializeRow(row({ espelhado: true, alinhamento: 'esquerda' }))).toMatchObject({ espelhado: true, alinhamento: 'esquerda' })
+    expect('espelhado' in serializeRow(row({ espelhado: false }))).toBe(false)
+  })
+  it('displayOrder inverte só o desenho', () => {
+    expect(displayOrder({ assentos: 4 })).toEqual([1, 2, 3, 4])
+    expect(displayOrder({ assentos: 4, espelhado: true })).toEqual([4, 3, 2, 1])
+  })
+  it('parseCorredores aceita vírgula/espaço e ignora lixo', () => {
+    expect(parseCorredores('18, 6')).toEqual([6, 18])
+    expect(parseCorredores('6 18;6')).toEqual([6, 18])
+    expect(parseCorredores('abc, 0, -2, 3.5')).toEqual([])
+  })
+})

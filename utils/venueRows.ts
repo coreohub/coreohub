@@ -12,12 +12,48 @@ export interface RowConfig {
   tipos?: Record<string, VenueSeatTipo>;
   /** Vizinho de acompanhante -> assento especial que ele acompanha. */
   acompanhante?: Record<string, number>;
+  /** Legado: 1 corredor. Locais salvos antes dos corredores múltiplos só têm este campo. */
   corredor_apos?: number;
+  /** Corredores pelo NÚMERO do assento (um corredor entre n e n+1). Vence `corredor_apos` quando presente. */
+  corredores_apos?: number[];
+  /** Só desenho: numeração da direita para a esquerda. O número do assento não muda. */
+  espelhado?: boolean;
+  /** Só desenho: fileira curta alinhada à esquerda em vez de centralizada (padrão). */
+  alinhamento?: 'esquerda';
   espaco_antes?: boolean;
   palco_apos?: boolean;
 }
 
-const side = (row: RowConfig, n: number) => (row.corredor_apos != null && n > row.corredor_apos ? 1 : 0);
+/** Parte da fileira que o desenho do corredor e do espelhamento precisa (compartilhada com SeatRow). */
+export interface RowLayout {
+  assentos: number;
+  corredor_apos?: number;
+  corredores_apos?: number[];
+  espelhado?: boolean;
+}
+
+/** Corredores da fileira, ordenados e sem repetição. Cobre o campo legado `corredor_apos`. */
+export function corredoresOf(row: Pick<RowLayout, 'corredor_apos' | 'corredores_apos'>): number[] {
+  const raw = row.corredores_apos ?? (row.corredor_apos != null ? [row.corredor_apos] : []);
+  return [...new Set(raw.filter(c => Number.isFinite(c)))].sort((a, b) => a - b);
+}
+
+/** Lado (bloco) do assento: quantos corredores ficam antes dele. Mesmo valor = mesmo lado. */
+export const seatSide = (row: Pick<RowLayout, 'corredor_apos' | 'corredores_apos'>, n: number) =>
+  corredoresOf(row).filter(c => n > c).length;
+
+/** Números dos assentos na ordem em que aparecem na tela (invertida quando espelhado). */
+export function displayOrder(row: Pick<RowLayout, 'assentos' | 'espelhado'>): number[] {
+  const nums = Array.from({ length: Math.max(0, row.assentos) }, (_, i) => i + 1);
+  return row.espelhado ? nums.reverse() : nums;
+}
+
+/** Lê "6, 18" (vírgula, ponto e vírgula ou espaço) em lista de corredores válidos. */
+export function parseCorredores(text: string): number[] {
+  return [...new Set(text.split(/[,;\s]+/).map(Number).filter(n => Number.isInteger(n) && n >= 1))].sort((a, b) => a - b);
+}
+
+const side = seatSide;
 const key = (n: number) => String(n);
 
 /** Migra o campo legado `pcd` para `tipos` (cadeirante) sem perder nada. */
@@ -38,10 +74,17 @@ export function serializeRow(row: RowConfig): RowConfig {
     if (Number(k) >= 1 && Number(k) <= row.assentos && tipos[key(esp)] && !tipos[k]) acompanhante[k] = esp;
   }
   const pcd = Object.entries(tipos).filter(([, v]) => v === 'cadeirante').map(([k]) => Number(k)).sort((a, b) => a - b);
-  const { tipos: _t, acompanhante: _a, ...rest } = row;
+  const { tipos: _t, acompanhante: _a, corredor_apos: _c, corredores_apos: _cs, espelhado, alinhamento, ...rest } = row;
+  // 0 ou 1 corredor continua no formato legado (locais já salvos não mudam); 2+ grava a lista
+  // e mantém `corredor_apos` com o primeiro para clientes em cache.
+  const corredores = corredoresOf(row).filter(c => c >= 1 && c < row.assentos);
   return {
     ...rest,
     pcd,
+    ...(corredores.length ? { corredor_apos: corredores[0] } : {}),
+    ...(corredores.length > 1 ? { corredores_apos: corredores } : {}),
+    ...(espelhado ? { espelhado: true } : {}),
+    ...(alinhamento ? { alinhamento } : {}),
     ...(Object.keys(tipos).length ? { tipos } : {}),
     ...(Object.keys(acompanhante).length ? { acompanhante } : {}),
   };

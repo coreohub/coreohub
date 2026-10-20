@@ -199,3 +199,42 @@ describe('ingresso para pessoa obesa', () => {
     expect(seatsSatisfyRules(1, 0, 1, 0, 1, 1)).toBe(true)
   })
 })
+
+// ── Planta real do Teatro Municipal Merciol Viscardi (Fernandópolis, PDF do Festival Level Up) ──
+import { corredoresOf as corrOf, seatSide as sideOf, displayOrder as ordemTela } from '../utils/venueRows'
+type Fileira = { codigo: string; assentos: number; espelhado?: boolean; alinhamento?: string; palco_apos?: boolean; corredor_apos?: number; corredores_apos?: number[] }
+const fern: Fileira[] = JSON.parse(readFileSync('supabase/data/venue-merciol-viscardi.rows.json', 'utf-8'))
+
+describe('venue Merciol Viscardi == planta', () => {
+  it('317 lugares, O no topo e A colada no palco', () => {
+    expect(fern.reduce((s, r) => s + r.assentos, 0)).toBe(317)
+    expect(fern.map(r => r.codigo).join('')).toBe('ONMLKJIHGFEDCBA')
+    expect(fern.filter(r => r.palco_apos).map(r => r.codigo)).toEqual(['A'])
+  })
+  it('lugares e corredores por fileira', () => {
+    const por = (c: string) => fern.find(r => r.codigo === c)!
+    for (const c of 'MLKJIHGFEDC') { expect(por(c).assentos).toBe(24); expect(corrOf(por(c))).toEqual([6, 18]) }
+    for (const c of 'BA') { expect(por(c).assentos).toBe(20); expect(corrOf(por(c))).toEqual([4, 16]) }
+    expect(por('N').assentos).toBe(9); expect(corrOf(por('N'))).toEqual([3])
+    expect(por('O').assentos).toBe(4); expect(corrOf(por('O'))).toEqual([])
+  })
+  it('na tela: 24…19 | 18…7 | 6…1 (blocos 6/12/6), e N = 9…4 | 3…1', () => {
+    const blocos = (r: Fileira) => {
+      const out: number[][] = []
+      for (const n of ordemTela(r)) {
+        const b = sideOf(r, n)
+        ;(out[b] ??= []).push(n)
+      }
+      return out
+    }
+    const m = fern.find(r => r.codigo === 'M')!
+    expect(blocos(m).map(b => b.length)).toEqual([6, 12, 6].reverse())
+    expect(blocos(m)[2]).toEqual([24, 23, 22, 21, 20, 19])
+    expect(ordemTela(m).slice(0, 3)).toEqual([24, 23, 22])
+    expect(ordemTela(fern.find(r => r.codigo === 'N')!)).toEqual([9, 8, 7, 6, 5, 4, 3, 2, 1])
+  })
+  it('N e O alinhadas à esquerda; todas espelhadas', () => {
+    expect(fern.filter(r => r.alinhamento === 'esquerda').map(r => r.codigo)).toEqual(['O', 'N'])
+    expect(fern.every(r => r.espelhado)).toBe(true)
+  })
+})

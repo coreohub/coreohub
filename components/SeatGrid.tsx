@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2, Accessibility, Minus, Plus, Maximize2, ArrowLeftRight, Users, Ban } from 'lucide-react';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
+import { displayOrder, seatSide } from '../utils/venueRows';
 import { companionBySpecial, isSpecialTipo, seatBlockReason, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
 
 interface SeatGridProps {
@@ -230,7 +231,7 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
     <div ref={contentRef} className={`space-y-1.5 w-max ${canZoom ? '' : 'min-w-full mx-auto'} ${s.pad}`}
       style={canZoom ? { transform: `scale(${scale})`, transformOrigin: '0 0' } : undefined}>
       {rowsConfig.map(row => (
-        <div key={row.codigo} className={`relative flex items-center justify-center min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
+        <div key={row.codigo} className={`relative flex items-center ${row.alinhamento === 'esquerda' ? 'justify-start' : 'justify-center'} min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
           {mode === 'block' && onToggleRow ? (
             <button
               type="button"
@@ -245,7 +246,7 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
             <span className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500`}>{row.codigo}</span>
           )}
           <div className="flex items-center gap-1">
-            {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
+            {displayOrder(row).map((n, i, order) => {
               const seatId = `${row.codigo}-${n}`;
               const st = seatStatuses[seatId]?.status ?? 'livre';
               const tipo = tipoOf(row, n);
@@ -265,7 +266,7 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
               const Icon = showBlocked ? Ban : tipo === 'cadeirante' ? Accessibility : tipo === 'pcd_largo' ? ArrowLeftRight : tipo === 'acompanhante' ? Users : null;
               return (
                 <span key={seatId} className="flex items-center">
-                  {row.corredor_apos === n - 1 && <span className={`${s.spacer} shrink-0`} />}
+                  {i > 0 && seatSide(row, order[i - 1]) !== seatSide(row, n) && <span className={`${s.spacer} shrink-0`} />}
                   <button
                     type="button"
                     onClick={e => {
