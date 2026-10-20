@@ -77,6 +77,9 @@ Deno.serve(async () => {
       { loc: `${MARKETING_URL}/sobre`, lastmod: STATIC_LASTMOD, priority: 0.5, changefreq: 'yearly' },
       // Vertical de edital público: página real com meta/canonical de bot próprios (api/og-marketing.ts) e citada no llms.txt.
       { loc: `${MARKETING_URL}/governo`, lastmod: STATIC_LASTMOD, priority: 0.6, changefreq: 'monthly' },
+      // Documentos legais: canonical em coreohub.com (cliente e api/og-marketing.ts) e HTML estático pra bots.
+      { loc: `${MARKETING_URL}/termos`, lastmod: STATIC_LASTMOD, priority: 0.3, changefreq: 'yearly' },
+      { loc: `${MARKETING_URL}/privacidade`, lastmod: STATIC_LASTMOD, priority: 0.3, changefreq: 'yearly' },
     ];
 
     const eventEntries = (events ?? []).map((ev) => {

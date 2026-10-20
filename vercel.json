@@ -136,6 +136,28 @@
       "destination": "/api/og-marketing?page=governo"
     },
     {
+      "source": "/termos",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=termos"
+    },
+    {
+      "source": "/privacidade",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=privacidade"
+    },
+    {
       "source": "/planos",
       "has": [
         {

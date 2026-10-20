@@ -310,6 +310,20 @@ const PAGES: Record<string, PageMeta> = {
     description:
       'Descubra festivais e mostras de dança com inscrições abertas em todo o Brasil. Filtre por estado e mês e inscreva sua coreografia.',
   },
+  termos: {
+    path: '/termos',
+    title: 'Termos de Uso — CoreoHub',
+    description:
+      'Termos de Uso da CoreoHub: regras de uso da plataforma de gestão de festivais e mostras de dança, responsabilidades e condições de pagamento.',
+    bullets: ["1. Aceitação dos termos", "2. Descrição do serviço", "3. Cadastro e conta", "4. Modelo de cobrança", "5. Responsabilidades do produtor", "6. Pagamentos e reembolsos", "7. Compra de ingressos", "8. Propriedade intelectual", "9. Limitação de responsabilidade", "10. Privacidade", "11. Modificações", "12. Cancelamento", "13. Lei aplicável e foro", "14. Contato"],
+  },
+  privacidade: {
+    path: '/privacidade',
+    title: 'Política de Privacidade — CoreoHub',
+    description:
+      'Política de Privacidade da CoreoHub: como coletamos, usamos e protegemos os dados de produtores, jurados e bailarinos, em conformidade com a LGPD.',
+    bullets: ["1. Quem somos", "2. Dados que coletamos", "3. Como usamos seus dados", "4. Compartilhamento de dados", "5. Cookies", "6. Seus direitos (LGPD)", "7. Retenção de dados", "8. Segurança", "9. Transferência internacional", "10. Alterações nesta política", "11. Contato"],
+  },
   governo: {
     path: '/governo',
     title: 'Gestão de festivais e mostras de dança para o setor público — CoreoHub',

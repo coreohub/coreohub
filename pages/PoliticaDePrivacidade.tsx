@@ -21,7 +21,7 @@ const PoliticaDePrivacidade: React.FC = () => {
       canonical.rel = 'canonical';
       document.head.appendChild(canonical);
     }
-    canonical.href = 'https://www.coreohub.com/privacidade';
+    canonical.href = 'https://coreohub.com/privacidade';
     return () => {
       document.title = prevTitle;
       if (prevDesc !== null) setMeta('description', prevDesc);

@@ -21,7 +21,7 @@ const TermosDeUso: React.FC = () => {
       canonical.rel = 'canonical';
       document.head.appendChild(canonical);
     }
-    canonical.href = 'https://www.coreohub.com/termos';
+    canonical.href = 'https://coreohub.com/termos';
     return () => {
       document.title = prevTitle;
       if (prevDesc !== null) setMeta('description', prevDesc);
