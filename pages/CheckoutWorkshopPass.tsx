@@ -88,7 +88,7 @@ const CheckoutWorkshopPass: React.FC = () => {
   // Linha "Taxa de pagamento" (só quando events.processing_fee_enabled): forma escolhida no nosso checkout.
   const [payMethod, setPayMethod] = useState<PayMethod>('pix');
   const [installments, setInstallments] = useState(1);
-  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean }>({ enabled: false, uf: null, sandbox: false });
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean; maxInstallments: number }>({ enabled: false, uf: null, sandbox: false, maxInstallments: 1 });
   const [refundAccepted, setRefundAccepted] = useState(false);
 
   const [couponInput, setCouponInput] = useState('');
@@ -133,7 +133,7 @@ const CheckoutWorkshopPass: React.FC = () => {
         const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: p.event_id });
         if (infoErr) console.error('[CheckoutWorkshopPass] get_event_processing_info:', infoErr.message);
         const infoRow = Array.isArray(info) ? info[0] : info;
-        setEventFee({ enabled: Boolean(infoRow?.processing_fee_enabled), uf: infoRow?.state ?? null, sandbox: Boolean(infoRow?.payment_sandbox) });
+        setEventFee({ enabled: Boolean(infoRow?.processing_fee_enabled), uf: infoRow?.state ?? null, sandbox: Boolean(infoRow?.payment_sandbox), maxInstallments: Number(infoRow?.max_installments ?? 1) || 1 });
         setPass(p);
 
         if (p.selection_mode === 'a_la_carte') {
@@ -249,7 +249,7 @@ const CheckoutWorkshopPass: React.FC = () => {
     // (sem evento) ou chave desligada = cálculo de sempre, sem linha.
     const feeEnabled = Boolean(pass.event_id && eventFee.enabled);
     // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x).
-    const feeConfig = installmentConfigFor(eventFee.sandbox);
+    const feeConfig = installmentConfigFor(eventFee.sandbox, eventFee.maxInstallments);
     const computeFor = (method: PayMethod, n: number) => computeWorkshopCheckout({
       product: 'passe',
       itemShares: [baseAfterCoupon],

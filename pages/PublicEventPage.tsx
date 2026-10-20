@@ -1,3 +1,5 @@
+import PriceFeeNote from '../components/PriceFeeNote';
+import { computePriceDisclosure } from '../utils/priceDisclosure';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
@@ -99,6 +101,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     duracao_minutos: number | null; preco_padrao: number; gratis_para_inscritos: boolean;
     display_order: number | null; is_featured: boolean; featured_badge_text: string | null;
     hospedagem_delta: number | null;
+    workshop_commission_percent: number | null; workshop_fee_mode: string | null; processing_payer: string | null;
   }>>([]);
   // Lote vigente por workshop (id → {nome, preco}), pra exibir badge "1º lote"
   // + preço correto já na listagem (antes só a página de detalhe resolvia).
@@ -114,6 +117,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     workshop_names: string[]; workshop_ids: string[]; esgotado: boolean;
     selection_mode: 'fixed' | 'a_la_carte';
     min_selecionaveis: number | null; max_selecionaveis: number | null;
+    pass_commission_percent: number | null; pass_fee_mode: string | null; processing_payer: string | null;
   }>>([]);
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
   const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
@@ -173,7 +177,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
             sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original,
             audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent, payment_sandbox,
-            processing_fee_enabled, audience_processing_payer,
+            processing_fee_enabled, audience_processing_payer, max_installments,
             producer_ga4_id, producer_meta_pixel_id
           `)
           .eq(filterCol, idOrSlug)
@@ -282,7 +286,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         // RLS já filtra is_published=true pra anon. Carrega só campos exibidos.
         const { data: wsData } = await supabase
           .from('workshops')
-          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, professor_name, professor_bio, professor_photo_url, professor_photo_focal_x, professor_photo_focal_y, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text, hospedagem_delta')
+          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, professor_name, professor_bio, professor_photo_url, professor_photo_focal_x, professor_photo_focal_y, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text, hospedagem_delta, workshop_commission_percent, workshop_fee_mode, processing_payer')
           .eq('event_id', eventData.id)
           .eq('is_published', true)
           .order('data_inicio', { ascending: true });
@@ -344,7 +348,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           // Passes publicados do evento — pacote fixo, exibido em destaque.
           const { data: passesData } = await supabase
             .from('workshop_passes')
-            .select('id, slug, name, description, preco, preco_inscritos_mostra, selection_mode, min_selecionaveis, max_selecionaveis')
+            .select('id, slug, name, description, preco, preco_inscritos_mostra, selection_mode, min_selecionaveis, max_selecionaveis, pass_commission_percent, pass_fee_mode, processing_payer')
             .eq('event_id', eventData.id)
             .eq('is_published', true);
           if (Array.isArray(passesData) && passesData.length > 0) {
@@ -1512,24 +1516,24 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                               <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-[#ff0068]'}`}>
                                 {preco > 0 ? `R$ ${formatPrecoBR(preco)}` : 'Grátis'}
                               </p>
-                              {/* Taxa de serviço discriminada desde a oferta (Decreto 13.108/2026):
-                                  mesma conta do checkout (computeAudienceCart, repassar = base + comissão). */}
-                              {preco > 0 && salesEnabled && (() => {
-                                const repassar = (event.audience_fee_mode ?? 'repassar') === 'repassar';
-                                const taxa = repassar ? Math.round(preco * Number(event.audience_commission_percent ?? 10)) / 100 : 0;
-                                // Linha "Taxa de pagamento": o valor só fecha no checkout, depois de escolher Pix ou cartão
-                                // (varia por forma). Aqui só o aviso, sem número fechado (Decreto 13.108, art. 7).
-                                const payFeeNote = Boolean((event as any).processing_fee_enabled)
-                                  && (event as any).audience_processing_payer !== 'produtor'
-                                  && !getUfRule(event.state)?.forceAbsorb;
-                                if (taxa <= 0 && !payFeeNote) return null;
-                                return (
-                                  <p className="text-[10px] font-bold text-slate-400">
-                                    {taxa > 0 && <>+ taxa R$ {formatPrecoBR(taxa)} · total R$ {formatPrecoBR(preco + taxa)}</>}
-                                    {payFeeNote && <>{taxa > 0 ? ' ' : ''}+ taxa de pagamento conforme a forma escolhida</>}
-                                  </p>
-                                );
-                              })()}
+                              {/* "+ taxas" com "?" (Decreto 13.108/2026, art. 4º VI e 7º): mesma conta do checkout
+                                  (computeAudienceCheckout) — o total desde o primeiro contato vai no "?". */}
+                              {preco > 0 && salesEnabled && (
+                                <PriceFeeNote
+                                  className="text-[10px] font-bold text-slate-400"
+                                  disclosure={computePriceDisclosure({
+                                    product: 'plateia',
+                                    preco,
+                                    commissionPercent: Number(event.audience_commission_percent ?? 10),
+                                    feeMode: event.audience_fee_mode ?? 'repassar',
+                                    processingFeeEnabled: Boolean((event as any).processing_fee_enabled),
+                                    payer: (event as any).audience_processing_payer,
+                                    uf: event.state,
+                                    sandbox: Boolean((event as any).payment_sandbox),
+                                    maxInstallments: (event as any).max_installments,
+                                  })}
+                                />
+                              )}
                             </div>
                           </div>
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
@@ -1859,6 +1863,19 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                         {pass.preco_inscritos_mostra != null && (
                           <p className="text-xs text-violet-300">↓ {Number(pass.preco_inscritos_mostra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} p/ inscritos</p>
                         )}
+                        <PriceFeeNote
+                          disclosure={computePriceDisclosure({
+                            product: 'passe',
+                            preco: Number(pass.preco),
+                            commissionPercent: Number(pass.pass_commission_percent ?? 10),
+                            feeMode: pass.pass_fee_mode ?? 'repassar',
+                            processingFeeEnabled: Boolean((event as any).processing_fee_enabled),
+                            payer: pass.processing_payer,
+                            uf: event.state,
+                            sandbox: Boolean((event as any).payment_sandbox),
+                                    maxInstallments: (event as any).max_installments,
+                          })}
+                        />
                       </>
                     )}
                   </button>
@@ -1932,6 +1949,22 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                           ? 'Grátis'
                           : Number(preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
+                      {preco > 0 && (
+                        <PriceFeeNote
+                          className="text-[10px] font-bold text-slate-400"
+                          disclosure={computePriceDisclosure({
+                            product: 'workshop',
+                            preco: Number(preco),
+                            commissionPercent: Number(ws.workshop_commission_percent ?? 10),
+                            feeMode: ws.workshop_fee_mode ?? 'repassar',
+                            processingFeeEnabled: Boolean((event as any).processing_fee_enabled),
+                            payer: ws.processing_payer,
+                            uf: event.state,
+                            sandbox: Boolean((event as any).payment_sandbox),
+                                    maxInstallments: (event as any).max_installments,
+                          })}
+                        />
+                      )}
                       {loteAtivo?.proximo && (
                         <p className="text-[10px] font-bold text-[#ff0068]">
                           <AvisoViradaLote preco={loteAtivo.proximo.preco} dataVirada={loteAtivo.proximo.dataVirada} dias={loteAtivo.proximo.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />

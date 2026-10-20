@@ -175,7 +175,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state, max_installments')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -584,7 +584,7 @@ export default function CheckoutIngresso() {
   // bater centavo-a-centavo com a cobrança gerada. Fonte única em _shared. ───
   const feeEnabled = quote?.processingFeeEnabled ?? Boolean(event?.processing_fee_enabled);
   // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x).
-  const feeConfig = installmentConfigFor(Boolean((event as any)?.payment_sandbox));
+  const feeConfig = installmentConfigFor(Boolean((event as any)?.payment_sandbox), (event as any)?.max_installments);
   const computeFor = (method: 'pix' | 'card', n: number) => {
     const feeMode = quote?.feeMode ?? event.audience_fee_mode ?? 'repassar';
     return computeAudienceCheckout({

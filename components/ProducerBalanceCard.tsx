@@ -5,6 +5,9 @@ import {
   Clock, ShieldCheck, X, Info, RefreshCw, ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { groupReleaseByDay } from '../utils/releaseSchedule';
+import { termsVersionAtLeast } from '../supabase/functions/_shared/terms-version';
+import { TERMO_ANTECIPACAO_OFF_VERSION } from '../utils/termoVersion';
 
 interface PendingCommission {
   id:            string;
@@ -122,6 +125,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [lowValue, setLowValue]   = useState<LowValueTransfer[]>([]);
   const [sentComm, setSentComm]   = useState<SentCommission[]>([]);
   const [sentLow, setSentLow]     = useState<SentLowValue[]>([]);
+  // Quem aceitou o Termo 1.10 não antecipa mais o saldo retido (cláusula 12.3); o servidor também recusa.
+  const [anticipationOff, setAnticipationOff] = useState(false);
   const [modalScope, setModalScope] = useState<'available' | 'all' | null>(null);
   const [transferring, setTransferring] = useState(false);
   const [historyOpen, setHistoryOpen]   = useState(false);
@@ -134,6 +139,18 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   //   - 'force': sempre chama a API Asaas (botão refresh manual)
   //   - 'cached': usa cache da session se fresco (<5min); senão chama API
   //   - 'skip': só DB local (evita N chamadas Asaas)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from('profiles').select('producer_terms_version').eq('id', producerId).maybeSingle();
+      if (error) { console.error('[ProducerBalanceCard] erro ao ler versão do Termo:', error.message); return; }
+      if (!cancelled) setAnticipationOff(termsVersionAtLeast(data?.producer_terms_version, TERMO_ANTECIPACAO_OFF_VERSION));
+    })();
+    const onAccepted = () => { supabase.from('profiles').select('producer_terms_version').eq('id', producerId).maybeSingle().then(({ data }) => setAnticipationOff(termsVersionAtLeast(data?.producer_terms_version, TERMO_ANTECIPACAO_OFF_VERSION))); };
+    window.addEventListener('coreohub:termo-aceito', onAccepted);
+    return () => { cancelled = true; window.removeEventListener('coreohub:termo-aceito', onAccepted); };
+  }, [producerId]);
+
   const load = useCallback(async (withAsaas: 'force' | 'cached' | 'skip' = 'skip') => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -376,35 +393,9 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   }, [sentComm, sentLow]);
 
   // A liberar agrupado por DIA de liberação (comissões retidas + repasses internos
-  // da CoreoHub), pra o produtor ver quanto libera em cada data.
-  const releaseByDay = useMemo(() => {
-    const now = Date.now();
-    const dayKey = (ts: number) => {
-      const d = new Date(ts);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    };
-    const map = new Map<string, { key: string; ts: number; amount: number }>();
-    const add = (ts: number | null, amount: number) => {
-      if (amount <= 0) return;
-      // Sem data futura (repasse já na fila da CoreoHub): agrupa em "em processamento".
-      const future = ts !== null && ts > now;
-      const key = future ? dayKey(ts as number) : 'proc';
-      const cur = map.get(key);
-      if (cur) cur.amount += amount;
-      else map.set(key, { key, ts: future ? (ts as number) : 0, amount });
-    };
-    for (const c of pending) {
-      const releaseTs = c.release_at ? new Date(c.release_at).getTime() : 0;
-      const cardTs = c.card_credit_at ? new Date(c.card_credit_at).getTime() : 0;
-      const amt = Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0);
-      if (amt <= 0 || cardTs > now || releaseTs <= now) continue;
-      add(releaseTs, amt);
-    }
-    for (const t of lowValue) {
-      add(t.safety_release_at ? new Date(t.safety_release_at).getTime() : null, Number(t.value ?? 0));
-    }
-    return [...map.values()].sort((a, b) => (a.ts === 0 ? 1 : b.ts === 0 ? -1 : a.ts - b.ts));
-  }, [pending, lowValue]);
+  // da CoreoHub), pra o produtor ver quanto libera em cada data. Conta em
+  // utils/releaseSchedule.ts (pura, com teste).
+  const releaseByDay = useMemo(() => groupReleaseByDay(pending, lowValue), [pending, lowValue]);
 
   const aLiberar        = parseFloat((retido + aCaminho).toFixed(2));
   const totalAReceber   = parseFloat((retido + disponivel + aCaminho).toFixed(2));
@@ -597,7 +588,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             <ArrowDownToLine size={13} />
             {disponivel > 0 ? `Transferir ${fmtBRL(disponivel)} agora` : 'Nada disponível pra transferir'}
           </button>
-          {retido > 0 && (
+          {retido > 0 && !anticipationOff && (
             <button
               type="button"
               onClick={() => setModalScope('all')}

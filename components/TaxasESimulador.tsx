@@ -19,6 +19,7 @@ interface EventInfo {
   fee_mode: string | null;
   state: string | null;
   payment_sandbox: boolean | null;
+  max_installments: number | null;
 }
 interface PayerRow { id: string; name: string; processing_payer: string | null }
 
@@ -77,7 +78,7 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
       setLoadError(null);
       const [evRes, wsRes, psRes] = await Promise.all([
         supabase.from('events')
-          .select('billing_plan, processing_fee_enabled, inscricao_processing_mode, audience_processing_payer, commission_percent, fee_mode, state, payment_sandbox')
+          .select('billing_plan, processing_fee_enabled, inscricao_processing_mode, audience_processing_payer, commission_percent, fee_mode, state, payment_sandbox, max_installments')
           .eq('id', eventId).maybeSingle(),
         supabase.from('workshops').select('id, name, processing_payer').eq('event_id', eventId).order('created_at'),
         supabase.from('workshop_passes').select('id, name, processing_payer').eq('event_id', eventId).order('created_at'),
@@ -115,7 +116,7 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
   };
 
   // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x até o teste real).
-  const feeConfig = useMemo(() => installmentConfigFor(Boolean(ev?.payment_sandbox)), [ev]);
+  const feeConfig = useMemo(() => installmentConfigFor(Boolean(ev?.payment_sandbox), ev?.max_installments), [ev]);
   const canInstall = Boolean(ev) && feeConfig.maxInstallments > 1 && simMethod === 'card' && simProduct !== 'inscricao';
   const nParcelas = canInstall ? simInstallments : 1;
 
