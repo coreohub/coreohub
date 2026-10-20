@@ -28,6 +28,7 @@ const PwaUpdatePrompt = lazy(() => import('./components/PwaUpdatePrompt'));
 const RequirePermission = lazy(() => import('./components/RequirePermission'));
 const PlanFeeGateModal = lazy(() => import('./components/PlanFeeGateModal'));
 const PlanFeeReminderBanner = lazy(() => import('./components/PlanFeeReminderBanner'));
+const TermsUpdateGate = lazy(() => import('./components/TermsUpdateGate'));
 
 // Páginas internas (autenticadas) — lazy. Landing page é a única rota "/"
 // do domínio de marketing (coreohub.com), então fica eager: visitante da
@@ -341,6 +342,11 @@ const PrivateLayout: React.FC<{
               2026-09-25): antes do prazo lembra o que falta; depois dele o
               PlanFeeGateModal acima trava o painel. */}
           <PlanFeeReminderBanner producerId={profile.id} />
+          {/* Atualização do Termo do Produtor (estilo "vale para todos a partir de X"): aviso até a vigência,
+              tela obrigatória depois. Só produtor; fora do "Ver como" (o aceite gravaria o id do admin). */}
+          {activeRole === UserRole.ORGANIZER && (
+            <TermsUpdateGate producerId={profile.id} isImpersonating={isImpersonating} onLogout={handleLogout} />
+          )}
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}

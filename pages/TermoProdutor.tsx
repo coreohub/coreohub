@@ -64,12 +64,12 @@ const TermoProdutor: React.FC = () => {
   const [acceptedVersion, setAcceptedVersion] = useState<string | null>(null);
   const [accepting, setAccepting]         = useState(false);
   const [error, setError]                 = useState<string | null>(null);
-  const [checkbox, setCheckbox]           = useState(false);
 
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { navigate('/login'); return; }
+      // redirectTo: quem chega pelo botão "Ler e aceitar" do e-mail sem sessão volta pra cá depois do login.
+      if (!user) { navigate('/login?redirectTo=%2Ftermo-produtor'); return; }
       setUserId(user.id);
       const { data: profile } = await supabase
         .from('profiles')
@@ -87,10 +87,6 @@ const TermoProdutor: React.FC = () => {
 
   const handleAccept = async () => {
     if (!userId) return;
-    if (!checkbox) {
-      setError('Marque a caixa de aceite para prosseguir.');
-      return;
-    }
     setAccepting(true);
     setError(null);
     try {
@@ -109,6 +105,8 @@ const TermoProdutor: React.FC = () => {
       const ts = (acceptedTimestamp as string | null) ?? new Date().toISOString();
       setAcceptedAt(ts);
       setAcceptedVersion(TERMO_PRODUTOR_VERSION);
+      // Avisa o aviso/tela obrigatória do painel (TermsUpdateGate) para sumirem sem recarregar.
+      window.dispatchEvent(new Event('coreohub:termo-aceito'));
     } catch (e: any) {
       setError(e.message ?? 'Falha ao registrar aceite. Tente novamente.');
     } finally {
@@ -562,14 +560,8 @@ const TermoProdutor: React.FC = () => {
               </div>
             </div>
 
-            <label className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 cursor-pointer hover:border-[#ff0068]/40 transition-all">
-              <input
-                type="checkbox"
-                checked={checkbox}
-                onChange={e => setCheckbox(e.target.checked)}
-                className="mt-0.5 w-4 h-4 accent-[#ff0068] cursor-pointer"
-              />
-              <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
+            <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10">
+              <span className="block text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
                 incluindo a cláusula 5 (taxa fixa dos planos Essencial e Escala, prazo de 7 dias, bloqueio de vendas e do painel, multa e juros por atraso, exclusão do evento não pago e não reembolso da taxa),
                 a cláusula 6.2 (marcar corretamente meia-entrada e ingressos promocionais),
@@ -582,7 +574,7 @@ const TermoProdutor: React.FC = () => {
                 a cláusula 15.1 a 15.5 (venda exclusivamente pela Plataforma, comissão devida em venda por fora e suspensão) e
                 a cláusula 16.1 (acesso e retenção de 90 dias dos comentários de avaliação dos jurados).
               </span>
-            </label>
+            </div>
 
             {error && (
               <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-xl text-[11px] text-rose-700 dark:text-rose-400">
@@ -592,10 +584,10 @@ const TermoProdutor: React.FC = () => {
 
             <button
               onClick={handleAccept}
-              disabled={!checkbox || accepting}
+              disabled={accepting}
               className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
             >
-              {accepting ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle2 size={16} /> Aceitar e continuar</>}
+              {accepting ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle2 size={16} /> Li e aceito</>}
             </button>
           </div>
         )}
