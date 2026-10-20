@@ -110,6 +110,173 @@ type PageMeta = {
   bullets?: string[];
 };
 
+// JSON-LD da home (Organization, Person, WebSite, SoftwareApplication, VideoObject, FAQPage). Cópia EXATA do bloco
+// do index.html: bots de IA recebem este HTML e não o index.html. tests/marketing-faq-parity.test.ts garante que
+// as duas cópias não divergem; ao mudar um, mude o outro.
+const HOME_JSONLD: Record<string, any> = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://coreohub.com/#organization",
+      "name": "CoreoHub",
+      "url": "https://coreohub.com/",
+      "logo": "https://coreohub.com/coreohub-avatar.png",
+      "foundingDate": "2026",
+      "founder": {
+        "@id": "https://coreohub.com/sobre#ticko-bboy"
+      },
+      "parentOrganization": {
+        "@type": "Organization",
+        "name": "Cultural Estúdio",
+        "url": "https://culturalestudio.com.br/",
+        "taxID": "13.484.650/0001-00"
+      },
+      "description": "CoreoHub é a plataforma completa de gestão para produtores de festivais e mostras de dança, oferecendo inscrições, pagamentos, júri digital, cronograma inteligente, bilheteria, check-in e certificados automáticos. Fundada em 2026 por Ticko Bboy, artista com mais de 25 anos nas danças urbanas, é uma empresa do Cultural Estúdio (Votuporanga/SP).",
+      "sameAs": [
+        "https://www.instagram.com/coreohub/",
+        "https://www.youtube.com/@CoreoHub"
+      ],
+      "areaServed": "Brasil",
+      "knowsAbout": [
+        "gestão de festivais de dança",
+        "mostras de dança",
+        "júri digital",
+        "inscrições online para dança",
+        "cronograma de festival",
+        "certificados digitais"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer support",
+        "availableLanguage": "Portuguese",
+        "url": "https://wa.me/5517997936169"
+      }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://coreohub.com/sobre#ticko-bboy",
+      "name": "Ticko Bboy",
+      "jobTitle": "Fundador da CoreoHub",
+      "url": "https://ticko.com.br/",
+      "sameAs": [
+        "https://ticko.com.br/",
+        "https://usualdance.com/"
+      ],
+      "worksFor": {
+        "@id": "https://coreohub.com/#organization"
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://coreohub.com/#website",
+      "name": "CoreoHub",
+      "url": "https://coreohub.com/",
+      "inLanguage": "pt-BR",
+      "publisher": {
+        "@id": "https://coreohub.com/#organization"
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "CoreoHub",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "url": "https://coreohub.com/",
+      "description": "Plataforma de gestão de festivais e mostras de dança: inscrições online, pagamentos via split automático (Asaas), júri digital por tablet (funciona offline), cronograma inteligente, bilheteria, check-in por QR code e emissão automática de certificados.",
+      "featureList": [
+        "Inscrições online por modalidade",
+        "Pagamento via Pix, cartão e boleto com split automático",
+        "Júri digital por tablet (funciona sem Wi-Fi)",
+        "Cronograma inteligente com detecção de conflito de bailarino",
+        "Seletiva de vídeo pré-festival",
+        "Bilheteria e workshops integrados",
+        "Check-in por QR code",
+        "Certificados automáticos com QR de validação",
+        "Narração por IA",
+        "Configuração automática de evento por regulamento em PDF"
+      ],
+      "publisher": {
+        "@id": "https://coreohub.com/#organization"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "BRL",
+        "description": "Sem mensalidade e sem fidelidade. Plano Começo: 10% de comissão sobre as vendas, sem taxa fixa. Essencial e Escala: taxa de ativação por evento mais comissão menor. A taxa de pagamento (Pix ou cartão) aparece em linha separada no checkout, paga pelo comprador ou pelo produtor."
+      }
+    },
+    {
+      "@type": "VideoObject",
+      "name": "CoreoHub em 3 minutos",
+      "description": "Do regulamento em PDF ao certificado com QR Code — veja o festival inteiro rodando dentro da plataforma, sem planilha e sem apagar incêndio.",
+      "thumbnailUrl": "https://img.youtube.com/vi/bLqI7Icm_eI/hqdefault.jpg",
+      "uploadDate": "2026-08-19",
+      "embedUrl": "https://www.youtube.com/embed/bLqI7Icm_eI",
+      "publisher": {
+        "@id": "https://coreohub.com/#organization"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Como recebo o dinheiro das inscrições?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Quer o dinheiro assim que liberar? O botão \"Transferir agora\" envia na hora, sem taxa, o saldo que já passou dos 7 dias. O repasse é automático: cada pagamento sai com o split — a comissão do seu plano fica com a CoreoHub e o resto vai para a sua subconta. O Pix fica retido por até 7 dias (janela de segurança para estornos, a mesma ideia de Stripe e Sympla) e depois a CoreoHub transfere via Pix direto pra você, sem precisar clicar em nada. O cartão entra na subconta no prazo do Asaas, hoje cerca de 32 dias depois da confirmação, e só então segue o mesmo caminho. Custos à parte: a taxa única de R$ 12,90 da Asaas (nosso parceiro de pagamentos) pela abertura da subconta, cobrada uma vez só no seu primeiro recebimento; nos planos Essencial e Escala, a taxa de ativação por evento; e, quando ativada, a taxa de pagamento, que por padrão é paga pelo comprador."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Funciona mesmo offline?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim. Avaliação de jurados, cronograma, check-in por QR e narração funcionam mesmo sem internet no local — o app sincroniza automaticamente quando a conexão volta. Você só precisa de internet pra publicar o evento e receber pagamentos."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "E se eu quiser sair? Tem fidelidade?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Não. Não existe contrato de permanência nem multa de cancelamento — você usa enquanto fizer sentido pro seu festival. Se decidir sair, seu histórico de eventos, inscrições e certificados continua acessível e exportável, sem prazo de expiração."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Tem suporte técnico?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim, direto por WhatsApp com nossa equipe — sem ticket, sem fila de atendimento genérico. Na semana do seu festival, o suporte é prioritário: se algo travar no dia, você fala com a gente na hora, não espera resposta de central."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Quantos festivais por mês posso criar?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Quantos quiser. Não há limite de festivais, edições ou mostras — você paga só a comissão do seu plano sobre o que vender (nos planos Essencial e Escala, mais a taxa de ativação por evento), então pode rodar um evento por mês ou dez, sem mensalidade te travando."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Funciona pra evento gratuito ou edital público?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim — temos modelo específico para eventos gratuitos, mostras municipais e editais públicos. Como cada caso tem particularidades (tipo de evento, instituição, verba), fale com a gente pelo WhatsApp e montamos a proposta certa pro seu caso."
+          }
+        }
+      ]
+    }
+  ]
+};
+
+const HOME_FAQ: Faq[] = (HOME_JSONLD['@graph'].find((n: any) => n['@type'] === 'FAQPage').mainEntity as any[]).map(
+  (x) => ({ q: x.name, a: x.acceptedAnswer.text }),
+);
+
 const PAGES: Record<string, PageMeta> = {
   // Home: sem esta entrada, bots sem JS (GPTBot, ClaudeBot, PerplexityBot) recebiam o shell do
   // index.html (78 caracteres de texto, nenhum <h1>). Texto espelha index.html (meta + featureList).
@@ -132,6 +299,8 @@ const PAGES: Record<string, PageMeta> = {
       'Narração por IA',
       'Configuração automática de evento por regulamento em PDF',
     ],
+    faq: HOME_FAQ,
+    jsonLd: HOME_JSONLD,
   },
   festivais: {
     path: '/festivais',

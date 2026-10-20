@@ -64,6 +64,20 @@ describe('api/og-marketing — FAQ e JSON-LD espelham as páginas', () => {
     expect(ld.mainEntity.map((x: any) => x.name)).toEqual(PLANOS_FAQ_ITEMS.map(i => i.q));
   });
 
+  it('home: JSON-LD e FAQ dos bots são idênticos aos do index.html', async () => {
+    const indexHtml = readFileSync('index.html', 'utf-8');
+    const m = indexHtml.match(/<script type="application\/ld\+json">\s*(\{[\s\S]*?\})\s*<\/script>/);
+    expect(m).not.toBeNull();
+    const fromIndex = JSON.parse(m![1]);
+    const html = await render('home');
+    expect(jsonLdOf(html)).toEqual(fromIndex);
+    const faq = fromIndex['@graph'].find((n: any) => n['@type'] === 'FAQPage').mainEntity;
+    for (const x of faq) {
+      expect(html).toContain(escHtml(x.name));
+      expect(html).toContain(escHtml(x.acceptedAnswer.text));
+    }
+  });
+
   it('nenhuma promessa antiga de "tudo incluso" no HTML dos bots', async () => {
     for (const page of ['espetaculo', 'planos']) {
       const html = await render(page);

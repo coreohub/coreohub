@@ -20,7 +20,7 @@ const SITE_URL = 'https://app.coreohub.com';
 // Listar em app.* no sitemap gerava "página alternativa com tag canônica" no Search Console (2026-10-14).
 const MARKETING_URL = 'https://coreohub.com';
 // Data da última revisão das páginas institucionais (checklist SEO: sem lastmod o Google tem menos motivo pra re-rastrear). Atualizar quando o conteúdo mudar.
-const STATIC_LASTMOD = '2026-10-14';
+const STATIC_LASTMOD = '2026-10-20';
 
 Deno.serve(async () => {
   try {
@@ -75,6 +75,8 @@ Deno.serve(async () => {
       { loc: `${MARKETING_URL}/espetaculo`, lastmod: STATIC_LASTMOD, priority: 0.7, changefreq: 'monthly' },
       // Página institucional (quem está por trás, o que faz, para quem) — sinal de entidade pra IA/Google.
       { loc: `${MARKETING_URL}/sobre`, lastmod: STATIC_LASTMOD, priority: 0.5, changefreq: 'yearly' },
+      // Vertical de edital público: página real com meta/canonical de bot próprios (api/og-marketing.ts) e citada no llms.txt.
+      { loc: `${MARKETING_URL}/governo`, lastmod: STATIC_LASTMOD, priority: 0.6, changefreq: 'monthly' },
     ];
 
     const eventEntries = (events ?? []).map((ev) => {
@@ -93,11 +95,15 @@ Deno.serve(async () => {
 
     const staticEntries = staticPages.map((p) => `  <url>
     <loc>${p.loc}</loc>
+    <lastmod>${p.lastmod}</lastmod>
     <changefreq>${p.changefreq}</changefreq>
     <priority>${p.priority}</priority>
   </url>`);
 
-    const workshopEntries = (workshops ?? []).map((w) => {
+    // Slug fora do padrão (maiúscula, espaço, parênteses, acento) é dado legado: a URL não é a canônica e o
+    // Search Console reclama. Fica de fora do sitemap até o slug ser corrigido (sem mexer em dado aqui).
+    const SLUG_OK = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+    const workshopEntries = (workshops ?? []).filter((w) => !w.slug || SLUG_OK.test(w.slug)).map((w) => {
       // encodeURIComponent — achado 2026-09-14: nem todo workshop.slug em
       // prod passou pelo slugify() do frontend (dado legado/seed), alguns
       // têm espaço/parênteses/acento (ex.: "jazz-com-lucas-maia (Aula
