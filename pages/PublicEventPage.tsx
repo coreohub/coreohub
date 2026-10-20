@@ -80,8 +80,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const authedUrl = (path: string) => isMarketingHost ? `https://app.coreohub.com${path}` : path;
   // Link de desconto por coreografia (?discount_token=) precisa sobreviver
   // o salto evento → detalhe do workshop → checkout.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const discountToken = searchParams.get('discount_token');
+  // Espetáculo com várias sessões: a URL pública é a do evento principal e ?sessao=
+  // (slug ou id da sessão) escolhe qual sessão a vitrine mostra.
+  const sessaoParam = searchParams.get('sessao');
+  const selectSessao = (key: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('sessao', key);
+    setSearchParams(next, { replace: true });
+  };
   const [event, setEvent] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -159,9 +167,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
     const fetchData = async () => {
       setLoading(true);
+      setCart({});
       try {
         // UUID v4 tem 36 chars com hifens — se nao for UUID, trata como slug
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+        const isUuidKey = (k: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k);
+        // Com ?sessao=, carrega o evento da sessão escolhida; a URL continua a do principal.
+        const loadKey = sessaoParam ?? idOrSlug;
+        const isUuid = isUuidKey(loadKey);
         const filterCol = isUuid ? 'id' : 'slug';
 
         // Select explícito — evita vazar commission_percent/fee_mode/is_demo/
@@ -175,7 +187,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         const { data: eventData, error: eventError } = await supabase
           .from('events')
           .select(`
-            id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, created_by,
+            id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, created_by, session_group_id,
             location, city, state,
             start_date, end_date, event_time,
             instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
@@ -187,7 +199,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             processing_fee_enabled, audience_processing_payer, max_installments,
             producer_ga4_id, producer_meta_pixel_id
           `)
-          .eq(filterCol, idOrSlug)
+          .eq(filterCol, loadKey)
           .maybeSingle();
 
         // Lição 2026-07-08: `data` vem null tanto quando a row não existe
@@ -197,7 +209,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         // adivinhação. Loga sempre que error existir, mesmo seguindo pro
         // mesmo fallback de UX.
         if (eventError) {
-          console.error('[PublicEventPage] erro ao buscar evento (idOrSlug=' + idOrSlug + '):', eventError);
+          console.error('[PublicEventPage] erro ao buscar evento (idOrSlug=' + loadKey + '):', eventError);
+        }
+
+        // ?sessao= inválido (sessão apagada, slug errado): volta pro link principal puro.
+        if (!eventData && sessaoParam) {
+          const next = new URLSearchParams(searchParams);
+          next.delete('sessao');
+          setSearchParams(next, { replace: true });
+          return;
         }
 
         if (!eventData) {
@@ -208,7 +228,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             const { data: legacy } = await supabase
               .from('event_slug_history')
               .select('event_id, events(slug)')
-              .eq('old_slug', idOrSlug)
+              .eq('old_slug', loadKey)
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -219,6 +239,46 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             }
           }
           setEvent(null);
+          return;
+        }
+
+        // Espetáculo com sessões: o link público é o do evento principal (âncora do grupo,
+        // id = session_group_id). Entrou pelo slug de uma sessão irmã → redireciona pro
+        // principal com ?sessao=. Domínio próprio (forcedSlug) fica de fora.
+        if (!forcedSlug && eventData.session_group_id) {
+          if (!sessaoParam && eventData.id !== eventData.session_group_id) {
+            const { data: anchor } = await supabase
+              .from('events')
+              .select('slug')
+              .eq('id', eventData.session_group_id)
+              .eq('is_public', true)
+              .maybeSingle();
+            if (anchor?.slug) {
+              const next = new URLSearchParams(searchParams);
+              next.set('sessao', eventData.slug ?? eventData.id);
+              navigate(`/evento/${anchor.slug}?${next.toString()}`, { replace: true });
+              return;
+            }
+          }
+          // ?sessao= só vale se a sessão pertence ao mesmo grupo do link principal.
+          if (sessaoParam) {
+            const { data: principal } = await supabase
+              .from('events')
+              .select('id, session_group_id')
+              .eq(isUuidKey(idOrSlug) ? 'id' : 'slug', idOrSlug)
+              .maybeSingle();
+            if (!principal || (principal.session_group_id ?? principal.id) !== eventData.session_group_id) {
+              const next = new URLSearchParams(searchParams);
+              next.delete('sessao');
+              setSearchParams(next, { replace: true });
+              return;
+            }
+          }
+        } else if (sessaoParam) {
+          // Evento sem grupo de sessões: ?sessao= não faz sentido, ignora.
+          const next = new URLSearchParams(searchParams);
+          next.delete('sessao');
+          setSearchParams(next, { replace: true });
           return;
         }
 
@@ -255,7 +315,18 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         supabase.rpc('get_event_sessions_public', { p_event_id: eventData.id }).then(
           ({ data, error }) => {
             if (error) console.error('[PublicEventPage] erro ao buscar sessões:', error);
-            setEventSessions(Array.isArray(data) ? (data as any) : []);
+            const list = Array.isArray(data) ? (data as any[]) : [];
+            setEventSessions(list);
+            // Sem ?sessao=: abre na primeira sessão futura (a lista já vem ordenada por data).
+            if (!sessaoParam && !forcedSlug && list.length > 1) {
+              const today = todayISO();
+              const firstFuture = list.find(s => s.start_date && String(s.start_date) >= today);
+              if (firstFuture && !firstFuture.is_current) {
+                const next = new URLSearchParams(searchParams);
+                next.set('sessao', firstFuture.slug ?? firstFuture.id);
+                setSearchParams(next, { replace: true });
+              }
+            }
           },
           () => setEventSessions([]),
         );
@@ -410,7 +481,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     };
 
     fetchData();
-  }, [idOrSlug]);
+    // searchParams fica de fora de propósito: só a troca de ?sessao= recarrega a vitrine.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idOrSlug, sessaoParam]);
 
   // Fase 4B — view_event dispara só APÓS event carregado E ProducerPixels
   // ter chamado onReady. Garante que o GA4/Pixel do produtor recebem o
@@ -1152,7 +1225,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               </a>
             ) : (
               <Link
-                to={isLoggedIn ? '/inicio' : `/login?redirectTo=${encodeURIComponent(`/evento/${idOrSlug}`)}`}
+                to={isLoggedIn ? '/inicio' : `/login?redirectTo=${encodeURIComponent(`/evento/${idOrSlug}${sessaoParam ? `?sessao=${encodeURIComponent(sessaoParam)}` : ""}`)}`}
                 className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/30 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
               >
                 {isLoggedIn ? 'Minha conta' : 'Entrar'}
@@ -1366,7 +1439,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {eventSessions.length > 1 && (
           <div id="sessoes" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Calendar size={24} className="text-[#ff0068]" /> Sessões
+              <Calendar size={24} className="text-[#ff0068]" /> Escolha a sessão
             </h2>
             <div className="space-y-2">
               {eventSessions.map(s => {
@@ -1379,7 +1452,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     <div className="shrink-0 text-right">
                       <p className="text-2xl font-black text-[#ff0068] tabular-nums tracking-tighter">{s.event_time?.slice(0, 5) || '--:--'}</p>
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        {s.is_current ? 'Você está aqui' : 'Ver sessão'}
+                        {s.is_current ? 'Sessão escolhida' : 'Escolher'}
                       </p>
                     </div>
                   </>
@@ -1388,7 +1461,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 return s.is_current ? (
                   <div key={s.id} aria-current="true" className={base + 'bg-[#ff0068]/10 border-[#ff0068]/40'}>{inner}</div>
                 ) : (
-                  <a key={s.id} href={`/evento/${s.slug ?? s.id}`} className={base + 'bg-white/5 border-white/10 hover:border-[#ff0068]/30'}>{inner}</a>
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { selectSessao(s.slug ?? s.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className={base + 'w-full text-left bg-white/5 border-white/10 hover:border-[#ff0068]/30'}
+                  >{inner}</button>
                 );
               })}
             </div>
@@ -1722,7 +1800,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
                 // PR-B: usa rota nova do wizard de 4 passos. PrivateRoute
                 // redireciona pra login se necessário (preservando redirectTo).
-                const targetUrl = `/festival/${idOrSlug}/inscrever/${encodeURIComponent(mod.name)}`;
+                const targetUrl = `/festival/${event?.slug ?? idOrSlug}/inscrever/${encodeURIComponent(mod.name)}`;
                 const cardClassName = `block bg-white/5 border border-white/10 rounded-2xl p-5 transition-all group ${
                   isRegistrationOpen
                     ? 'hover:border-[#ff0068]/50 hover:bg-[#ff0068]/5 cursor-pointer'
