@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import AdvancedSection from '../components/AdvancedSection';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
 import { validateSlugInput, isSlugAvailable, buildEventSlugBase, generateEventSlug } from '../services/eventSlug';
@@ -1330,6 +1331,16 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Plano Espetáculo (events.billing_plan): Configurações mostra só o que faz sentido pra
   // venda de ingresso (sem gêneros/categorias/formações/avaliação/prêmios/fluxo de palco).
   const [isEspetaculo, setIsEspetaculo] = useState(false);
+  // Bloco "Avançado" (só espetáculo): as seções opcionais continuam no JSX de sempre, mas
+  // passam por adv(), que as monta via portal dentro do bloco recolhível. Fora do espetáculo
+  // adv() devolve o nó intacto, então o festival competitivo vê tudo como antes.
+  const [advHostGeral, setAdvHostGeral] = useState<HTMLDivElement | null>(null);
+  const [advHostPag, setAdvHostPag] = useState<HTMLDivElement | null>(null);
+  const adv = (node: React.ReactNode, host: HTMLDivElement | null, className = '') => {
+    if (!isEspetaculo) return node;
+    return host ? createPortal(<div className={className}>{node}</div>, host) : null;
+  };
+  const ADV_CARD = 'bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-6 rounded-3xl [&>div]:border-t-0 [&>div]:pt-0';
   useEffect(() => {
     if (isEspetaculo && !ESPETACULO_TABS.includes(activeTab)) setActiveTab('Geral');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2944,10 +2955,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             {/* Só pra evento que vende ao público (Espetáculo, ingresso interno/externo ou
                 workshops); quem já tem conteúdo salvo continua vendo, pra não perder
                 acesso ao que escreveu. */}
-            {(isEspetaculo || politicaIngressos === 'INTERNO' || politicaIngressos === 'EXTERNO' || hasWorkshops || hasInfoContent(infoConfig)) && (
+            {(isEspetaculo || politicaIngressos === 'INTERNO' || politicaIngressos === 'EXTERNO' || hasWorkshops || hasInfoContent(infoConfig)) && adv(
               <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
                 <EventInfoEditor value={infoConfig} onChange={setInfoConfig} inputClass={input} labelClass={label} />
-              </div>
+              </div>,
+              advHostGeral,
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3012,7 +3024,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
                 {/* Short Code (Fase 5 — Vanity URL) — link super curto pra
                     bio do Insta e cartão de visita. Independente do slug. */}
-                <div>
+                {adv(<div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className={label + ' mb-0'}>Link curto (opcional)</label>
                     {shortCodeStatus === 'valid' && (
@@ -3059,7 +3071,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </p>
                     </div>
                   )}
-                </div>
+                </div>, advHostGeral, ADV_CARD)}
               </div>
 
               {/* Data e horário */}
@@ -3197,6 +3209,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <label className={label}><Instagram size={11} className="inline mr-1" /> Instagram</label>
                   <input type="text" value={identity.instagram_event} onChange={e => setIdentity({ ...identity, instagram_event: e.target.value })} placeholder="@meufestival" className={input} />
                 </div>
+                {adv(<>
                 <div>
                   <label className={label}><Facebook size={11} className="inline mr-1" /> Facebook</label>
                   <input type="text" value={identity.facebook_event} onChange={e => setIdentity({ ...identity, facebook_event: e.target.value })} placeholder="https://facebook.com/meufestival" className={input} />
@@ -3209,6 +3222,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <label className={label}><Youtube size={11} className="inline mr-1" /> YouTube</label>
                   <input type="text" value={identity.youtube_event} onChange={e => setIdentity({ ...identity, youtube_event: e.target.value })} placeholder="@canalfestival" className={input} />
                 </div>
+                </>, advHostGeral, 'bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-6 rounded-3xl grid grid-cols-1 md:grid-cols-2 gap-4')}
                 <div>
                   <label className={label}><MessageCircle size={11} className="inline mr-1" /> WhatsApp</label>
                   <input
@@ -3221,7 +3235,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   />
                   <p className="text-[9px] text-slate-400 mt-1">DDI + DDD + número (até 13 dígitos)</p>
                 </div>
-                <div>
+                {adv(<div>
                   <label className={label}><Globe size={11} className="inline mr-1" /> Site oficial</label>
                   <input type="text" value={identity.website_event} onChange={e => setIdentity({ ...identity, website_event: e.target.value })} placeholder="https://meufestival.com.br" className={input} />
                   {/* Smart default: chip clicável sugerindo URL da vitrine.
@@ -3247,14 +3261,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </button>
                     );
                   })()}
-                </div>
+                </div>, advHostGeral, ADV_CARD)}
                 <div>
                   <label className={label}><Mail size={11} className="inline mr-1" /> E-mail de contato</label>
                   <input type="email" value={identity.email_event} onChange={e => setIdentity({ ...identity, email_event: e.target.value })} placeholder="contato@meufestival.com.br" className={input} />
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 dark:border-white/10 pt-5">
+              {/* Espetáculo: só aparece (dentro do Avançado) se já houver PDF salvo */}
+              {(!isEspetaculo || !!identity.regulation_pdf_url) && adv(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
                 <label className={label}><FileText size={11} className="inline mr-1" /> Regulamento ou Edital (PDF)</label>
                 {/* Input file nativo escondido — o próprio browser sempre
                     reseta o texto visível dele pra "Nenhum arquivo escolhido"
@@ -3337,14 +3352,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   Aceita regulamento privado ou edital público (prefeitura, JOMI, Bolsa Cultura). Máx {MAX_DOC_SIZE_MB}MB.
                   Disponibilizado pra download na vitrine. Lembra de "Salvar" no fim da página.
                 </p>
-              </div>
+              </div>, advHostGeral, ADV_CARD)}
 
               {/* Documentos extras — além do regulamento, produtor pode
                   disponibilizar outros PDFs (tabela de preços, termo de
                   imagem, ficha técnica) pra download na vitrine. Padrão
                   Sympla/Eventbrite: anexos com nome livre, quantidade
                   ilimitada. Reusa o bucket 'event-rules' (mesma política). */}
-              <div className="border-t border-slate-200 dark:border-white/10 pt-5">
+              {adv(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
                 <label className={label}><FileText size={11} className="inline mr-1" /> Outros documentos (opcional)</label>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
@@ -3411,14 +3426,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <p className="text-[10px] text-slate-400 mt-1">
                   Dê um nome, escolha o PDF (máx {MAX_DOC_SIZE_MB}MB). Aparece na vitrine ao lado do regulamento. Lembra de "Salvar" no fim da página.
                 </p>
-              </div>
+              </div>, advHostGeral, ADV_CARD)}
 
               {/* Link de destaque na vitrine — CTA genérico pra qualquer
                   destino externo relevante do dia do evento (ex: Voto
                   Popular do Usualdance em vote.usualdance.com). Campo
                   genérico (não hardcoded pra 1 produtor) pra qualquer
                   festival poder usar no futuro. */}
-              <div className="border-t border-slate-200 dark:border-white/10 pt-5">
+              {adv(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
                 <label className={label}><ChevronRight size={11} className="inline mr-1" /> Link de destaque na vitrine (opcional)</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input
@@ -3443,14 +3458,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   Vira um botão de destaque na página pública do evento — use pra apontar visitantes pro Voto Popular ou qualquer outra ação externa.
                   Some da vitrine se deixar em branco.
                 </p>
-              </div>
+              </div>, advHostGeral, ADV_CARD)}
             </div>
 
             {/* Integrações de Marketing (Fase 4B) — produtor pluga GA4 +
                 Pixel Meta próprios pra ver eventos do festival dele isolado.
                 IDs públicos por design (vão no HTML). Disparos paralelos
                 aos pixels master da CoreoHub. */}
-            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+            {adv(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Globe size={18} /></div>
                 <div>
@@ -3678,7 +3693,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </div>
                 );
               })()}
-            </div>
+            </div>, advHostGeral)}
 
             {/* Programação Detalhada */}
             {!isEspetaculo && (
@@ -4204,6 +4219,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           </p>
                         </div>
 
+                        {adv(<>
                         <div>
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
                             Máx ingressos por CPF
@@ -4245,6 +4261,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           />
                           <p className="text-[10px] text-slate-500 mt-1">Quanto o ingresso fica reservado pro comprador antes de auto-cancelar. Padrão 10min (Eventbrite).</p>
                         </div>
+                        </>, advHostGeral, 'bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-6 rounded-3xl grid grid-cols-1 md:grid-cols-3 gap-4')}
                       </div>
                     )}
                   </div>
@@ -4256,7 +4273,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             {activeEventId && (isEspetaculo || eventSeatMap) && <EventSessionsCard eventId={activeEventId} />}
 
             {/* Patrocinadores / Apoiadores */}
-            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+            {adv(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Award size={18} /></div>
@@ -4349,7 +4366,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   ))
                 )}
               </div>
-            </div>
+            </div>, advHostGeral)}
 
             {/* Formato do Evento */}
             {!isEspetaculo && (
@@ -4509,7 +4526,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             )}
 
             {/* Instalar como app — sempre disponível pro produtor (Linear/Figma pattern) */}
-            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 rounded-3xl">
+            {adv(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 rounded-3xl">
               <div className="flex items-start gap-4">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0">
                   <Smartphone size={18} />
@@ -4522,7 +4539,25 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <InstallPWAButton />
                 </div>
               </div>
-            </div>
+            </div>, advHostGeral)}
+
+            {/* Bloco Avançado do espetáculo (recebe os blocos opcionais acima via portal) */}
+            {isEspetaculo && (
+              <AdvancedSection
+                hostRef={setAdvHostGeral}
+                filledCount={[
+                  hasInfoContent(infoConfig),
+                  !!shortCodeExisting,
+                  !!(identity.facebook_event || identity.tiktok_event || identity.youtube_event),
+                  !!identity.website_event,
+                  !!identity.regulation_pdf_url,
+                  identity.documentos_extras.length > 0,
+                  !!identity.destaque_link_url,
+                  !!(marketing.producer_ga4_id || marketing.producer_meta_pixel_id),
+                  sponsors.length > 0,
+                ].filter(Boolean).length}
+              />
+            )}
 
             {/* Zona de perigo — excluir evento (achado #4, 2026-07-17).
                 Só habilitado quando o evento não tem nenhuma inscrição (a
@@ -5599,7 +5634,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             <ProducerDebtsCard />
 
             {/* Taxas de pagamento: quem paga em cada produto + simulador */}
-            <TaxasESimulador eventId={activeEventId} />
+            {adv(<TaxasESimulador eventId={activeEventId} />, advHostPag)}
 
             {/* Conexão Asaas */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
@@ -6244,7 +6279,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             </div>
 
             {/* Comissão e modo de repasse por evento */}
-            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
+            {adv(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-white/8">
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Percent size={16} /></div>
                 <div>
@@ -6267,7 +6302,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   ))
                 )}
               </div>
-            </div>
+            </div>, advHostPag)}
+
+            {isEspetaculo && (
+              <AdvancedSection
+                title="Avançado · taxas e comissão"
+                description="Simulador de taxas e modelo de comissão por evento."
+                hostRef={setAdvHostPag}
+              />
+            )}
           </div>
         );
 
