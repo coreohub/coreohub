@@ -149,9 +149,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // `let` porque ?sessao= troca pelo evento da sessão; o `as` mantém o tipo sem undefined dentro dos callbacks.
     let ev = events?.[0] as NonNullable<typeof events>[number];
+    if (!ev && filterCol === 'slug') {
+      // Slug renomeado: o slug antigo fica em event_slug_history. O redirect do React não roda pra bot
+      // (WhatsApp, Googlebot), então resolvemos aqui e servimos o evento já com o canonical do slug atual.
+      const authHeaders = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+      const histRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/event_slug_history?select=events(slug)&old_slug=eq.${encodeURIComponent(slug)}&order=created_at.desc&limit=1`,
+        { headers: authHeaders },
+      );
+      const hist = histRes.ok ? ((await histRes.json()) as Array<{ events: { slug: string | null } | null }>) : [];
+      const currentSlug = hist?.[0]?.events?.slug;
+      if (currentSlug) {
+        const curRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/events?select=${evCols}&slug=eq.${encodeURIComponent(currentSlug)}&limit=1`,
+          { headers: authHeaders },
+        );
+        const cur = curRes.ok ? ((await curRes.json()) as typeof events) : [];
+        if (cur?.[0]) ev = cur[0];
+      }
+    }
     if (!ev) {
-      // Slug não achado — pode ser que mudou (event_slug_history). Bot não
-      // segue redirect 301 de JS, mas devolvemos página genérica em vez de 404.
+      // Slug não achado nem no histórico: página genérica em vez de 404.
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.status(200).send(fallbackHtml(slug));
       return;
