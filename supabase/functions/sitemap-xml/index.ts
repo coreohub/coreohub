@@ -83,21 +83,24 @@ Deno.serve(async () => {
     ];
 
     // Espetáculo com sessões: o link público é o do evento principal (âncora do grupo: id = session_group_id)
-    // e cada sessão futura tem a sua URL própria `?sessao=AAAA-MM-DD-HHMM` (um Event por URL, regra do
-    // Google). O slug de uma sessão irmã não entra: ele só redireciona pro link do principal.
+    // e cada sessão futura tem a sua URL própria `?sessao=<chave>` (um Event por URL, regra do
+    // Google). O slug de uma sessão irmã não entra: ele só redireciona pro link do principal. A chave de
+    // `?sessao=` é o slug da sessão sem o prefixo do slug do principal (festival-x-sessao-2 → sessao-2).
     const anchorSlugById = new Map((events ?? []).map((e) => [e.id, e.slug ?? e.id]));
     const todayBR = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
-    const sessionCodeOf = (e: { start_date: string | null; event_time: string | null }): string | null => {
-      const t = /^(\d{1,2}):(\d{2})/.exec(e.event_time ?? '');
-      return e.start_date && t ? `${e.start_date.slice(0, 10)}-${t[1].padStart(2, '0')}${t[2]}` : null;
+    const sessionKeyOf = (e: { slug: string | null; id: string }, principalSlug: string): string => {
+      const sl = e.slug ?? '';
+      return sl && sl.startsWith(`${principalSlug}-`) && sl.length > principalSlug.length + 1
+        ? sl.slice(principalSlug.length + 1)
+        : (sl || e.id);
     };
 
     const eventEntries = (events ?? []).flatMap((ev) => {
       const isSibling = !!ev.session_group_id && ev.session_group_id !== ev.id;
       const anchorSlug = isSibling ? anchorSlugById.get(ev.session_group_id as string) : undefined;
-      const code = isSibling ? sessionCodeOf(ev) : null;
-      // Irmã com âncora pública e código válido: entra como ?sessao= (só sessões que ainda vão acontecer).
-      if (isSibling && anchorSlug && code && !ev.custom_domain) {
+      const key = isSibling && anchorSlug ? sessionKeyOf(ev, anchorSlug) : null;
+      // Irmã com âncora pública: entra como ?sessao= (só sessões que ainda vão acontecer).
+      if (isSibling && anchorSlug && key && !ev.custom_domain) {
         if ((ev.start_date ?? '') < todayBR) return [];
       }
       const slugOrId = encodeURIComponent(ev.slug ?? ev.id);
@@ -106,8 +109,8 @@ Deno.serve(async () => {
       // app.coreohub.com/evento/:slug — evita conteúdo duplicado no Google.
       const loc = ev.custom_domain
         ? `https://${ev.custom_domain}/`
-        : isSibling && anchorSlug && code
-          ? `${SITE_URL}/evento/${encodeURIComponent(anchorSlug)}?sessao=${code}`
+        : isSibling && anchorSlug && key
+          ? `${SITE_URL}/evento/${encodeURIComponent(anchorSlug)}?sessao=${encodeURIComponent(key)}`
           : `${SITE_URL}/evento/${slugOrId}`;
       return [`  <url>
     <loc>${loc}</loc>

@@ -34,7 +34,7 @@ import { companionBySpecial, isSpecialTipo, seatsSatisfyRules, tipoFromRow, type
 import { ticketSeatKind, type TicketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 import { isEventOver } from '../utils/eventStatus';
-import { sessionCode } from '../utils/sessionCode';
+import { sessionKey } from '../utils/sessionCode';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
 // create-audience-ticket). Garante que o total exibido bate com a cobrança.
 import { computeAudienceCheckout } from '../supabase/functions/_shared/audience-checkout';
@@ -202,8 +202,7 @@ export default function CheckoutIngresso() {
         if (ev.session_group_id && ev.session_group_id !== ev.id) {
           supabase.from('events').select('slug').eq('id', ev.session_group_id).eq('is_public', true).maybeSingle().then(
             ({ data: anchor }) => {
-              const code = sessionCode(ev.start_date, ev.event_time);
-              if (anchor?.slug && code) setBackPath(`/evento/${anchor.slug}?sessao=${code}`);
+              if (anchor?.slug) setBackPath(`/evento/${anchor.slug}?sessao=${encodeURIComponent(sessionKey(anchor.slug, ev))}`);
             },
             () => {},
           );

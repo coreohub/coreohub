@@ -176,12 +176,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Espetáculo com sessões (cada sessão é um evento; o link público é o do evento principal, a âncora
-    // do grupo: id = session_group_id). ?sessao=AAAA-MM-DD-HHMM escolhe a sessão e entrar pelo slug de uma
-    // irmã vira canonical do link principal + ?sessao=. Cada URL tem um único Event (regra do Google).
+    // do grupo: id = session_group_id). ?sessao=<chave> escolhe a sessão (chave = slug da sessão sem o prefixo
+    // do principal, ex. sessao-2; o código AAAA-MM-DD-HHMM também é aceito) e entrar pelo slug de uma irmã
+    // vira canonical do link principal + ?sessao=. Cada URL tem um único Event (regra do Google).
     // Duplicado de utils/sessionCode.ts pelo mesmo motivo do isEventOver acima (bundle isolado).
-    const sessionCodeOf = (e: { start_date: string | null; event_time: string | null }): string | null => {
-      const t = /^(\d{1,2}):(\d{2})/.exec(e.event_time ?? '');
-      return e.start_date && t ? `${e.start_date.slice(0, 10)}-${t[1].padStart(2, '0')}${t[2]}` : null;
+    const sessionKeyOf = (e: { slug: string | null; id: string }, principalSlug: string | null): string => {
+      const sl = e.slug ?? '';
+      return sl && principalSlug && sl.startsWith(`${principalSlug}-`) && sl.length > principalSlug.length + 1
+        ? sl.slice(principalSlug.length + 1)
+        : (sl || e.id);
     };
     const restGet = async <T,>(path: string): Promise<T[]> => {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -192,14 +195,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let pageUrl = `${SITE_URL}/evento/${ev.slug ?? ev.id}`;
     let sessionLabel: string | null = null;
     if (ev.session_group_id) {
-      const wanted = /^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})$/.exec(String(req.query.sessao ?? '').trim());
+      const rawKey = String(req.query.sessao ?? '').trim();
+      const wantedKey = /^[a-zA-Z0-9-]{1,120}$/.test(rawKey) ? rawKey : '';
+      const wantedCode = /^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})$/.exec(wantedKey);
       if (ev.id === ev.session_group_id) {
-        if (wanted) {
+        if (wantedKey) {
+          const principalSlug = ev.slug ?? ev.id;
+          const filter = wantedCode
+            ? `start_date=eq.${wantedCode[1]}&event_time=eq.${wantedCode[2]}:${wantedCode[3]}`
+            : `slug=in.(${wantedKey},${principalSlug}-${wantedKey})`;
           const sib = (await restGet<typeof ev>(
-            `events?select=${evCols}&session_group_id=eq.${ev.session_group_id}&start_date=eq.${wanted[1]}&event_time=eq.${wanted[2]}:${wanted[3]}&is_public=eq.true&limit=1`,
+            `events?select=${evCols}&session_group_id=eq.${ev.session_group_id}&${filter}&is_public=eq.true&limit=1`,
           ))[0];
           if (sib) {
-            pageUrl = `${SITE_URL}/evento/${ev.slug ?? ev.id}?sessao=${wanted[0]}`;
+            pageUrl = `${SITE_URL}/evento/${principalSlug}?sessao=${encodeURIComponent(sessionKeyOf(sib, principalSlug))}`;
             ev = sib;
           }
         }
@@ -207,8 +216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const anchor = (await restGet<{ slug: string | null }>(
           `events?select=slug&id=eq.${ev.session_group_id}&is_public=eq.true&limit=1`,
         ))[0];
-        const code = sessionCodeOf(ev);
-        if (anchor?.slug && code) pageUrl = `${SITE_URL}/evento/${anchor.slug}?sessao=${code}`;
+        if (anchor?.slug) pageUrl = `${SITE_URL}/evento/${anchor.slug}?sessao=${encodeURIComponent(sessionKeyOf(ev, anchor.slug))}`;
       }
       const hhmm = /^(\d{1,2}):(\d{2})/.exec(ev.event_time ?? '');
       if (ev.start_date && hhmm) {
