@@ -9,7 +9,9 @@ import { planToRows, type PlanConversion } from '../utils/seatMapFromPlan';
  * Nada é salvo aqui: o produtor revisa a prévia e confirma em "Salvar local".
  */
 
-const ACCEPT = 'application/pdf,image/png,image/jpeg,image/webp';
+const MIME_OK = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+// Por extensão no input: `accept` com tipos MIME deixa o diálogo de arquivo do Chrome no Windows lento (vários segundos).
+const ACCEPT_ATTR = '.pdf,.png,.jpg,.jpeg,.webp';
 const MAX_BYTES = 10 * 1024 * 1024;
 const labelCls = 'text-[10px] font-black text-slate-500 uppercase tracking-widest px-1';
 const inputCls = 'w-full p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-[#ff0068]';
@@ -36,7 +38,7 @@ const SeatMapImport: React.FC<{ onImported: (c: PlanConversion) => void }> = ({ 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
-    if (!ACCEPT.split(',').includes(file.type)) { setError('Formato não aceito. Envie PDF, PNG, JPG ou WEBP.'); return; }
+    if (!MIME_OK.includes(file.type)) { setError('Formato não aceito. Envie PDF, PNG, JPG ou WEBP.'); return; }
     if (file.size > MAX_BYTES) { setError('O arquivo passa de 10 MB. Reduza e tente de novo.'); return; }
     setBusy(true);
     try {
@@ -68,7 +70,7 @@ const SeatMapImport: React.FC<{ onImported: (c: PlanConversion) => void }> = ({ 
           />
         </div>
         <div className="sm:col-span-2">
-          <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={e => handleFile(e.target.files?.[0])} aria-label="Arquivo da planta" />
+          <input ref={inputRef} type="file" accept={ACCEPT_ATTR} className="hidden" onChange={e => handleFile(e.target.files?.[0])} aria-label="Arquivo da planta" />
           <button
             type="button"
             disabled={busy}
