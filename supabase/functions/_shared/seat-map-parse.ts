@@ -124,7 +124,7 @@ Para cada fileira, na ordem em que aparecem impressas de CIMA para BAIXO na imag
 
 "sugestoes": só para lugares marcados com ícone ou legenda de cadeirante/PCD, de pessoa obesa/obeso ou de acompanhante. Informe o código da fileira, o número do lugar, o tipo ("cadeirante", "pcd_largo" para pessoa obesa/lugar largo, "acompanhante", ou "desconhecido") e a confiança de 0 a 1. É só sugestão para revisão humana.
 
-"notas": qualquer dúvida concreta (trecho ilegível, número cortado, fileira parcialmente visível). Não invente lugares: se não conseguir ler, deixe de fora e explique em "notas".
+"notas": SOMENTE problemas concretos que exijam revisão humana: número ilegível ou cortado, número que parece erro de impressão (ex.: rótulo de outra fileira), lugar que não dá para ler, fileira parcialmente visível, ou palco/ordem realmente incerto. NÃO descreva o que está correto nem o que você ignorou (legendas, portas, medidas, equipamentos, formato da sala, alinhamento, ícones já listados em "sugestoes"). Se não há problema, devolva a lista vazia. Não invente lugares: se não conseguir ler, deixe de fora e explique em "notas".
 
 Não conte nem some lugares e não deduza números que não estão impressos.`
 
