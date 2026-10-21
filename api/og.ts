@@ -108,7 +108,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
+    const evCols = 'id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original,session_group_id';
+    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=${evCols}&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
       headers: {
@@ -143,15 +144,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessao_status: string | null;
       sessao_motivo: string | null;
       sessao_data_original: string | null;
+      session_group_id: string | null;
     }>;
 
-    const ev = events?.[0];
+    // `let` porque ?sessao= troca pelo evento da sessão; o `as` mantém o tipo sem undefined dentro dos callbacks.
+    let ev = events?.[0] as NonNullable<typeof events>[number];
     if (!ev) {
       // Slug não achado — pode ser que mudou (event_slug_history). Bot não
       // segue redirect 301 de JS, mas devolvemos página genérica em vez de 404.
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.status(200).send(fallbackHtml(slug));
       return;
+    }
+
+    // Espetáculo com sessões (cada sessão é um evento; o link público é o do evento principal, a âncora
+    // do grupo: id = session_group_id). ?sessao=AAAA-MM-DD-HHMM escolhe a sessão e entrar pelo slug de uma
+    // irmã vira canonical do link principal + ?sessao=. Cada URL tem um único Event (regra do Google).
+    // Duplicado de utils/sessionCode.ts pelo mesmo motivo do isEventOver acima (bundle isolado).
+    const sessionCodeOf = (e: { start_date: string | null; event_time: string | null }): string | null => {
+      const t = /^(\d{1,2}):(\d{2})/.exec(e.event_time ?? '');
+      return e.start_date && t ? `${e.start_date.slice(0, 10)}-${t[1].padStart(2, '0')}${t[2]}` : null;
+    };
+    const restGet = async <T,>(path: string): Promise<T[]> => {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      });
+      return r.ok ? ((await r.json()) as T[]) : [];
+    };
+    let pageUrl = `${SITE_URL}/evento/${ev.slug ?? ev.id}`;
+    let sessionLabel: string | null = null;
+    if (ev.session_group_id) {
+      const wanted = /^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})$/.exec(String(req.query.sessao ?? '').trim());
+      if (ev.id === ev.session_group_id) {
+        if (wanted) {
+          const sib = (await restGet<typeof ev>(
+            `events?select=${evCols}&session_group_id=eq.${ev.session_group_id}&start_date=eq.${wanted[1]}&event_time=eq.${wanted[2]}:${wanted[3]}&is_public=eq.true&limit=1`,
+          ))[0];
+          if (sib) {
+            pageUrl = `${SITE_URL}/evento/${ev.slug ?? ev.id}?sessao=${wanted[0]}`;
+            ev = sib;
+          }
+        }
+      } else {
+        const anchor = (await restGet<{ slug: string | null }>(
+          `events?select=slug&id=eq.${ev.session_group_id}&is_public=eq.true&limit=1`,
+        ))[0];
+        const code = sessionCodeOf(ev);
+        if (anchor?.slug && code) pageUrl = `${SITE_URL}/evento/${anchor.slug}?sessao=${code}`;
+      }
+      const hhmm = /^(\d{1,2}):(\d{2})/.exec(ev.event_time ?? '');
+      if (ev.start_date && hhmm) {
+        sessionLabel = `${ev.start_date.slice(8, 10)}/${ev.start_date.slice(5, 7)}/${ev.start_date.slice(0, 4)} às ${hhmm[1].padStart(2, '0')}:${hhmm[2]}`;
+      }
     }
 
     // Mesma fonte de prazo que PublicEventPage.tsx: configuracoes.id = event_id,
@@ -202,7 +246,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const fullDescription = (ev.description ?? '').replace(/\s+/g, ' ').trim();
-    const title = `${ev.name} — ${statusLabel} | CoreoHub`;
+    const title = `${ev.name}${sessionLabel ? ` — ${sessionLabel}` : ''} — ${statusLabel} | CoreoHub`;
+    // Preview do WhatsApp e snippet: a sessão (dia e horário) aparece no título e na descrição.
+    const ogTitle = sessionLabel ? `${ev.name} — ${sessionLabel}` : ev.name;
     // Meta description convencionalmente curta (~160 char, o que os buscadores
     // de fato exibem no snippet); o <body> abaixo carrega o texto INTEIRO —
     // é o que os crawlers de IA/Google realmente indexam como conteúdo.
@@ -211,9 +257,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? fullDescription
         : `${fullDescription.slice(0, 157).replace(/s+S*$/, '')}…`) ||
       `${statusLabel} — ${ev.name}, festival de dança no CoreoHub.`;
+    const metaDescription = sessionLabel ? `Sessão de ${sessionLabel}. ${shortDescription}` : shortDescription;
     const image = ev.cover_url || DEFAULT_IMAGE;
     const canonicalSlug = ev.slug ?? ev.id;
-    const url = `${SITE_URL}/evento/${canonicalSlug}`;
+    // Canonical/og:url: o link do evento principal (com ?sessao= nas sessões que não são a principal).
+    // canonicalSlug segue sendo o slug do evento da sessão, usado nas URLs de checkout dos ingressos.
+    const url = pageUrl;
     const locationParts = [ev.location, [ev.city, ev.state].filter(Boolean).join('/')].filter(Boolean);
     const dateRange = ev.start_date
       ? (ev.end_date && ev.end_date !== ev.start_date ? `${ev.start_date} a ${ev.end_date}` : ev.start_date)
@@ -295,6 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Fatos-chave em texto puro — corpo visível/indexável, não só meta tag.
     const factsLines = [
       dateRange ? `Data: ${dateRange}` : null,
+      sessionLabel ? `Sessão: ${sessionLabel}` : null,
       locationParts.length > 0 ? `Local: ${locationParts.join(' — ')}` : null,
       prazoInscricao ? `Inscrições até: ${prazoInscricao}` : null,
       formacoesAtivas.length > 0 ? `Formações: ${formacoesAtivas.join(', ')}` : null,
@@ -319,12 +369,12 @@ ${workshops.map((w) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
-<meta name="description" content="${esc(shortDescription)}">
+<meta name="description" content="${esc(metaDescription)}">
 <meta name="robots" content="${isCheckout || ev.payment_sandbox ? 'noindex, nofollow' : 'index, follow'}">
 
 <!-- Open Graph (WhatsApp, Telegram, Facebook, Instagram, LinkedIn) -->
-<meta property="og:title" content="${esc(ev.name)}">
-<meta property="og:description" content="${esc(shortDescription)}">
+<meta property="og:title" content="${esc(ogTitle)}">
+<meta property="og:description" content="${esc(metaDescription)}">
 <meta property="og:image" content="${esc(image)}">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:type" content="event">
@@ -333,8 +383,8 @@ ${workshops.map((w) => {
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${esc(ev.name)}">
-<meta name="twitter:description" content="${esc(shortDescription)}">
+<meta name="twitter:title" content="${esc(ogTitle)}">
+<meta name="twitter:description" content="${esc(metaDescription)}">
 <meta name="twitter:image" content="${esc(image)}">
 
 <link rel="canonical" href="${esc(url)}">

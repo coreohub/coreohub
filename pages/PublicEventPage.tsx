@@ -794,8 +794,17 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     .trim()
     .slice(0, 160) || `${seoStatusLabel} — ${event.name}, festival de dança no CoreoHub.`;
   const seoImage = event.cover_url || 'https://app.coreohub.com/coreohub-avatar.png';
-  const seoUrl = typeof window !== 'undefined' ? window.location.href : `https://app.coreohub.com/evento/${event.slug ?? event.id}`;
-  const seoTitle = `${event.name} — ${seoStatusLabel} | CoreoHub`;
+  // Canonical = link do evento principal; sessões que não são a principal levam ?sessao=. Sem utm e
+  // outros parâmetros (antes era window.location.href inteiro).
+  const seoUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname}${sessaoParam ? `?sessao=${encodeURIComponent(sessaoParam)}` : ''}`
+    : `https://app.coreohub.com/evento/${event.slug ?? event.id}`;
+  // Sessão de um espetáculo: dia e horário no título e na prévia (cada URL é um Event só).
+  const seoSession = event.session_group_id && event.start_date && event.event_time
+    ? `${String(event.start_date).slice(8, 10)}/${String(event.start_date).slice(5, 7)}/${String(event.start_date).slice(0, 4)} às ${String(event.event_time).slice(0, 5)}`
+    : null;
+  const seoOgTitle = seoSession ? `${event.name} — ${seoSession}` : event.name;
+  const seoTitle = `${seoOgTitle} — ${seoStatusLabel} | CoreoHub`;
 
   // Schema.org BreadcrumbList — sinaliza hierarquia "Festivais › Usualdance"
   // pro Google montar rich snippet de navegação nos resultados. URL canônica
@@ -1016,7 +1025,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       <title>{seoTitle}</title>
       <meta name="description" content={seoDescription} />
       {(event as any).payment_sandbox && <meta name="robots" content="noindex, nofollow" />}
-      <meta property="og:title" content={event.name} />
+      <meta property="og:title" content={seoOgTitle} />
       <meta property="og:description" content={seoDescription} />
       <meta property="og:image" content={seoImage} />
       <meta property="og:url" content={seoUrl} />
@@ -1024,7 +1033,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       <meta property="og:site_name" content="CoreoHub" />
       <meta property="og:locale" content="pt_BR" />
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={event.name} />
+      <meta name="twitter:title" content={seoOgTitle} />
       <meta name="twitter:description" content={seoDescription} />
       <meta name="twitter:image" content={seoImage} />
       <link rel="canonical" href={seoUrl} />

@@ -31,7 +31,7 @@ Deno.serve(async () => {
 
     const { data: events, error: eventsError } = await supabase
       .from('events')
-      .select('slug, id, created_at, custom_domain')
+      .select('slug, id, created_at, custom_domain, session_group_id, start_date, event_time')
       .eq('is_public', true)
       .eq('payment_sandbox', false)   // evento de teste (sandbox) fora do sitemap
       .eq('is_demo', false)           // evento demo fora do sitemap (Google já tinha achado coreohub-open-demo-ticko)
@@ -82,18 +82,39 @@ Deno.serve(async () => {
       { loc: `${MARKETING_URL}/privacidade`, lastmod: STATIC_LASTMOD, priority: 0.3, changefreq: 'yearly' },
     ];
 
-    const eventEntries = (events ?? []).map((ev) => {
+    // Espetáculo com sessões: o link público é o do evento principal (âncora do grupo: id = session_group_id)
+    // e cada sessão futura tem a sua URL própria `?sessao=AAAA-MM-DD-HHMM` (um Event por URL, regra do
+    // Google). O slug de uma sessão irmã não entra: ele só redireciona pro link do principal.
+    const anchorSlugById = new Map((events ?? []).map((e) => [e.id, e.slug ?? e.id]));
+    const todayBR = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const sessionCodeOf = (e: { start_date: string | null; event_time: string | null }): string | null => {
+      const t = /^(\d{1,2}):(\d{2})/.exec(e.event_time ?? '');
+      return e.start_date && t ? `${e.start_date.slice(0, 10)}-${t[1].padStart(2, '0')}${t[2]}` : null;
+    };
+
+    const eventEntries = (events ?? []).flatMap((ev) => {
+      const isSibling = !!ev.session_group_id && ev.session_group_id !== ev.id;
+      const anchorSlug = isSibling ? anchorSlugById.get(ev.session_group_id as string) : undefined;
+      const code = isSibling ? sessionCodeOf(ev) : null;
+      // Irmã com âncora pública e código válido: entra como ?sessao= (só sessões que ainda vão acontecer).
+      if (isSibling && anchorSlug && code && !ev.custom_domain) {
+        if ((ev.start_date ?? '') < todayBR) return [];
+      }
       const slugOrId = encodeURIComponent(ev.slug ?? ev.id);
       const lastmod = ev.created_at ? new Date(ev.created_at).toISOString().split('T')[0] : '';
       // Evento com domínio próprio: a URL canônica é o domínio custom, não
       // app.coreohub.com/evento/:slug — evita conteúdo duplicado no Google.
-      const loc = ev.custom_domain ? `https://${ev.custom_domain}/` : `${SITE_URL}/evento/${slugOrId}`;
-      return `  <url>
+      const loc = ev.custom_domain
+        ? `https://${ev.custom_domain}/`
+        : isSibling && anchorSlug && code
+          ? `${SITE_URL}/evento/${encodeURIComponent(anchorSlug)}?sessao=${code}`
+          : `${SITE_URL}/evento/${slugOrId}`;
+      return [`  <url>
     <loc>${loc}</loc>
     ${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
-  </url>`;
+  </url>`];
     });
 
     const staticEntries = staticPages.map((p) => `  <url>
