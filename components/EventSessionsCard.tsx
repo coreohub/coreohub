@@ -104,7 +104,7 @@ export const EventSessionsCard: React.FC<{ eventId: string }> = ({ eventId }) =>
           onClick={() => { setError(null); setModalOpen(true); }}
           className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20 shrink-0"
         >
-          <CalendarPlus size={12} /> Duplicar como nova sessão
+          <CalendarPlus size={12} /> Criar nova sessão
         </button>
       </div>
 
