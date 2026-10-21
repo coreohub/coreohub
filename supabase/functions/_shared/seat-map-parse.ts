@@ -4,7 +4,8 @@
 
 export const SEAT_MAP_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5'] as const
 export type SeatMapModel = (typeof SEAT_MAP_MODELS)[number]
-export const DEFAULT_SEAT_MAP_MODEL: SeatMapModel = 'claude-opus-5-5'
+// Sonnet 5.5 acertou o mesmo que o Opus 5.5 na avaliação de 2026-10-20 por cerca da metade do custo.
+export const DEFAULT_SEAT_MAP_MODEL: SeatMapModel = 'claude-sonnet-5-5'
 
 export const MAX_FILE_BYTES = 10 * 1024 * 1024
 export const DEFAULT_DAILY_LIMIT = 5

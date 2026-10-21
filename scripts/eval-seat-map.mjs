@@ -68,12 +68,23 @@ function compareHints(sugestoes, gab) {
 }
 
 const report = [];
-for (const plant of PLANTS) {
-  const bytes = readFileSync(plant.file);
-  const check = checkFile('application/pdf', bytes.length, new Uint8Array(bytes.subarray(0, 16)));
-  if (!check.ok) { console.error(plant.id, check.error); continue; }
+// --variants=print,foto-ruim usa as imagens degradadas geradas em D:/tmp/seatmap-eval/variants (teste de robustez).
+const variants = arg('variants', '');
+const MEDIA = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+const EXT = { 'print': 'png', 'foto-ruim': 'jpg' };
+const sourcesOf = plant => variants
+  ? variants.split(',').map(v => ({ label: `${plant.id}-${v}`, path: `${OUT}/variants/${plant.id}-${v}.${EXT[v]}` }))
+  : [{ label: plant.id, path: plant.file }];
+
+for (const plant of PLANTS) for (const src of sourcesOf(plant)) {
+  const bytes = readFileSync(src.path);
+  const mediaType = MEDIA[src.path.split('.').pop().toLowerCase()];
+  const check = checkFile(mediaType, bytes.length, new Uint8Array(bytes.subarray(0, 16)));
+  if (!check.ok) { console.error(src.label, check.error); continue; }
   const gab = JSON.parse(readFileSync(plant.gabarito, 'utf-8'));
-  const fileBlock = { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: bytes.toString('base64') } };
+  const fileBlock = check.kind === 'pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: bytes.toString('base64') } }
+    : { type: 'image', source: { type: 'base64', media_type: mediaType, data: bytes.toString('base64') } };
   const content = [fileBlock, { type: 'text', text: PLAN_USER_PROMPT }];
 
   for (const model of models) {
@@ -84,7 +95,7 @@ for (const plant of PLANTS) {
 
     for (let run = 1; run <= runs; run++) {
       const started = Date.now();
-      const row = { plant: plant.id, model, run, tokensEntrada };
+      const row = { plant: src.label, model, run, tokensEntrada };
       try {
         const params = {
           model, max_tokens: 32000,
@@ -101,7 +112,7 @@ for (const plant of PLANTS) {
         row.usage = { in: msg.usage.input_tokens, out: msg.usage.output_tokens };
         row.custoUsd = estimateCostUsd(model, msg.usage);
         const text = (msg.content ?? []).find(b => b.type === 'text')?.text ?? '';
-        writeFileSync(`${OUT}/${plant.id}-${model}-run${run}.json`, text);
+        writeFileSync(`${OUT}/${src.label}-${model}-run${run}.json`, text);
         if (msg.stop_reason === 'refusal' || !text) { row.erro = `stop_reason=${msg.stop_reason}`; }
         else {
           const conv = planToRows(JSON.parse(text), plant.total);
@@ -122,5 +133,5 @@ for (const plant of PLANTS) {
     }
   }
 }
-writeFileSync(`${OUT}/relatorio.json`, JSON.stringify(report, null, 2));
+writeFileSync(`${OUT}/relatorio${variants ? '-' + variants.replace(',', '_') : ''}.json`, JSON.stringify(report, null, 2));
 console.log(`\nCusto total estimado: US$ ${report.reduce((s, r) => s + (r.custoUsd ?? 0), 0).toFixed(4)}  (${basename(OUT)}/relatorio.json)`);
