@@ -858,6 +858,20 @@ const PrecoInput: React.FC<{
   );
 };
 
+// Nomes legíveis das colunas que sync_session_group_shared copia pras sessões irmãs.
+const SYNC_COLUMN_LABELS: Record<string, string> = {
+  name: 'Título', description: 'Descrição', descricao: 'Descrição',
+  cover_url: 'Banner', cover_focal_x: 'Enquadramento do banner', cover_focal_y: 'Enquadramento do banner',
+  location: 'Local', city: 'Cidade', state: 'UF',
+  whatsapp_event: 'WhatsApp', instagram_event: 'Instagram', tiktok_event: 'TikTok', youtube_event: 'YouTube',
+  facebook_event: 'Facebook', website_event: 'Site', email_event: 'E-mail',
+  info_config: 'Informações e regras', documentos_extras: 'Documentos', regulation_pdf_url: 'Regulamento (PDF)',
+  destaque_link_url: 'Link de destaque', destaque_link_label: 'Link de destaque',
+  patrocinadores_config: 'Patrocinadores', patrocinadores: 'Patrocinadores',
+  producer_ga4_id: 'Google Analytics', producer_meta_pixel_id: 'Pixel Meta',
+  politica_ingressos: 'Política de ingressos', links: 'Links', entrada_gratuita_nota: 'Nota de entrada gratuita',
+};
+
 const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSettingsProps) => {
   // Permite deep-link com ?tab=<nome> pra atalhos de outras telas (ex:
   // Sidebar -> Narração IA aponta pra ?tab=Fluxo do Evento)
@@ -1346,6 +1360,21 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEspetaculo]);
   const [activeEventId,   setActiveEventId]   = useState<string | null>(null);
+  // Sessões do mesmo espetáculo: o evento principal (id = session_group_id) é a fonte dos campos
+  // compartilhados; nas irmãs eles ficam somente leitura. Ao salvar no principal, a RPC
+  // sync_session_group_shared copia pras irmãs depois de um aviso com o que vai mudar.
+  const [sessionGroupId, setSessionGroupId] = useState<string | null>(null);
+  const [sessionSiblingCount, setSessionSiblingCount] = useState(0);
+  const [syncPrompt, setSyncPrompt] = useState<Array<{ session_slug: string; changed_columns: string[] }> | null>(null);
+  const [syncApplying, setSyncApplying] = useState(false);
+  const isSessionSibling = !!sessionGroupId && !!activeEventId && sessionGroupId !== activeEventId;
+  const isSessionAnchor = !!sessionGroupId && !!activeEventId && sessionGroupId === activeEventId;
+  // Trava (fieldset disabled) os campos compartilhados numa sessão irmã. Conteúdo que vai pro
+  // bloco Avançado via portal precisa ser travado antes de ir (disabled segue o DOM, não o React).
+  const lock = (node: React.ReactNode, className = '') => isSessionSibling
+    ? <fieldset disabled className={`min-w-0 border-0 p-0 m-0 opacity-70 ${className}`}>{node}</fieldset>
+    : (className ? <div className={className}>{node}</div> : node);
+  const advShared = (node: React.ReactNode, host: HTMLDivElement | null, className = '') => adv(lock(node), host, className);
   // Picker de evento (achado #5, 2026-07-17) — antes esta tela sempre
   // resolvia "o evento mais recente" sozinha, sem escolha. Produtor com 2+
   // eventos reais não tinha como configurar o mais antigo depois de criar um
@@ -2069,7 +2098,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, seat_map_enabled, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, seat_map_enabled, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan, session_group_id')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2085,6 +2114,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             setActiveEventSlug((myEvent as any).slug ?? myEvent.id);
             setActiveEventId(myEvent.id);
             setIsEspetaculo((myEvent as any).billing_plan === 'espetaculo');
+            const groupId: string | null = (myEvent as any).session_group_id ?? null;
+            setSessionGroupId(groupId);
+            if (groupId && groupId === myEvent.id) {
+              const { count } = await supabase.from('events').select('id', { count: 'exact', head: true }).eq('session_group_id', groupId).neq('id', groupId);
+              setSessionSiblingCount(count ?? 0);
+            } else {
+              setSessionSiblingCount(0);
+            }
             // Inicializa draft de edição do slug com o valor atual.
             setSlugDraft((myEvent as any).slug ?? '');
             setInfoConfig(parseInfoConfig(myEvent.info_config));
@@ -2723,6 +2760,18 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       }
 
       if (onSaveSuccess) onSaveSuccess();
+      // Evento principal de um espetáculo com sessões: o que mudou nos campos compartilhados só
+      // vai pras irmãs depois de o produtor ver a lista e confirmar (a RPC em dry-run não grava nada).
+      if (isSessionAnchor && sessionSiblingCount > 0 && activeEventId) {
+        try {
+          const { data: preview, error: previewErr } = await supabase.rpc('sync_session_group_shared', { p_anchor_id: activeEventId, p_dry_run: true });
+          if (previewErr) throw previewErr;
+          const pending = ((preview ?? []) as Array<{ session_slug: string; changed_columns: string[] }>).filter(r => r.changed_columns?.length > 0);
+          if (pending.length > 0) setSyncPrompt(pending);
+        } catch (syncErr: any) {
+          console.error('[AccountSettings] falha ao conferir sessões irmãs:', syncErr?.message ?? syncErr);
+        }
+      }
       // Snapshot do estado salvo → o selo de status passa de "Não salvo" pra
       // "Salvo" só agora (não ao digitar).
       setSavedMarketing({
@@ -2837,8 +2886,33 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       case 'Geral':
         return (
           <div className="space-y-6">
+            {/* Sessões do espetáculo: quem edita o quê */}
+            {isSessionSibling && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+                <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                  <strong>Esta é uma sessão do espetáculo.</strong> Título, banner, descrição, local, contatos, regras e documentos valem para todas as
+                  sessões e são editados no evento principal. Aqui você muda data, horário, ingressos e assentos desta sessão.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => sessionGroupId && setSelectedEventId(sessionGroupId)}
+                  className="shrink-0 px-4 py-2 rounded-xl bg-[#ff0068] hover:bg-[#e0005c] text-white text-[10px] font-black uppercase tracking-widest transition-colors"
+                >
+                  Editar no evento principal
+                </button>
+              </div>
+            )}
+            {isSessionAnchor && sessionSiblingCount > 0 && (
+              <div className="p-4 rounded-2xl border border-sky-500/30 bg-sky-500/10">
+                <p className="text-xs text-sky-700 dark:text-sky-300 leading-relaxed">
+                  <strong>Evento principal com {sessionSiblingCount} {sessionSiblingCount === 1 ? 'outra sessão' : 'outras sessões'}.</strong>{' '}
+                  Título, banner, descrição, local, contatos, regras e documentos valem para todas as sessões. Ao salvar, mostro o que vai mudar nas outras
+                  antes de aplicar. Data, horário, ingressos e assentos continuam por sessão.
+                </p>
+              </div>
+            )}
             {/* Vitrine Pública: banner + descrição */}
-            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
+            {lock(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><ImageIcon size={18} /></div>
@@ -2949,13 +3023,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </div>
                 </div>
               </div>
-            </div>
+            </div>)}
 
             {/* Informações e regras (seções fixas + FAQ) — seção pública no fim da vitrine */}
             {/* Só pra evento que vende ao público (Espetáculo, ingresso interno/externo ou
                 workshops); quem já tem conteúdo salvo continua vendo, pra não perder
                 acesso ao que escreveu. */}
-            {(isEspetaculo || politicaIngressos === 'INTERNO' || politicaIngressos === 'EXTERNO' || hasWorkshops || hasInfoContent(infoConfig)) && adv(
+            {(isEspetaculo || politicaIngressos === 'INTERNO' || politicaIngressos === 'EXTERNO' || hasWorkshops || hasInfoContent(infoConfig)) && advShared(
               <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
                 <EventInfoEditor value={infoConfig} onChange={setInfoConfig} inputClass={input} labelClass={label} />
               </div>,
@@ -2969,10 +3043,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Settings size={18} /></div>
                   <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Identidade</h3>
                 </div>
-                <div>
+                {lock(<div>
                   <label className={label}>Nome do Festival</label>
                   <input type="text" value={general.eventName} onChange={e => setGeneral({ ...general, eventName: e.target.value })} placeholder="Ex: CoreoHub Festival" className={input} />
-                </div>
+                </div>)}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className={label + ' mb-0'}>Link público do festival</label>
@@ -3124,7 +3198,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
 
               {/* Local */}
-              <div className={`bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5${isEspetaculo ? ' md:col-span-2' : ''}`}>
+              {lock(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><MapPin size={18} /></div>
                   <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Local</h3>
@@ -3173,7 +3247,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     </p>
                   )}
                 </div>
-              </div>
+              </div>, isEspetaculo ? 'md:col-span-2' : '')}
 
               {/* Prazos */}
               {!isEspetaculo && (
@@ -3195,7 +3269,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             </div>
 
             {/* Identidade & Contato — exibido na vitrine pública */}
-            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-6">
+            {lock(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Globe size={18} /></div>
                 <div>
@@ -3209,7 +3283,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <label className={label}><Instagram size={11} className="inline mr-1" /> Instagram</label>
                   <input type="text" value={identity.instagram_event} onChange={e => setIdentity({ ...identity, instagram_event: e.target.value })} placeholder="@meufestival" className={input} />
                 </div>
-                {adv(<>
+                {advShared(<>
                 <div>
                   <label className={label}><Facebook size={11} className="inline mr-1" /> Facebook</label>
                   <input type="text" value={identity.facebook_event} onChange={e => setIdentity({ ...identity, facebook_event: e.target.value })} placeholder="https://facebook.com/meufestival" className={input} />
@@ -3235,7 +3309,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   />
                   <p className="text-[9px] text-slate-400 mt-1">DDI + DDD + número (até 13 dígitos)</p>
                 </div>
-                {adv(<div>
+                {advShared(<div>
                   <label className={label}><Globe size={11} className="inline mr-1" /> Site oficial</label>
                   <input type="text" value={identity.website_event} onChange={e => setIdentity({ ...identity, website_event: e.target.value })} placeholder="https://meufestival.com.br" className={input} />
                   {/* Smart default: chip clicável sugerindo URL da vitrine.
@@ -3269,7 +3343,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
 
               {/* Espetáculo: só aparece (dentro do Avançado) se já houver PDF salvo */}
-              {(!isEspetaculo || !!identity.regulation_pdf_url) && adv(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
+              {(!isEspetaculo || !!identity.regulation_pdf_url) && advShared(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
                 <label className={label}><FileText size={11} className="inline mr-1" /> Regulamento ou Edital (PDF)</label>
                 {/* Input file nativo escondido — o próprio browser sempre
                     reseta o texto visível dele pra "Nenhum arquivo escolhido"
@@ -3359,7 +3433,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   imagem, ficha técnica) pra download na vitrine. Padrão
                   Sympla/Eventbrite: anexos com nome livre, quantidade
                   ilimitada. Reusa o bucket 'event-rules' (mesma política). */}
-              {adv(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
+              {advShared(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
                 <label className={label}><FileText size={11} className="inline mr-1" /> Outros documentos (opcional)</label>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
@@ -3433,7 +3507,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   Popular do Usualdance em vote.usualdance.com). Campo
                   genérico (não hardcoded pra 1 produtor) pra qualquer
                   festival poder usar no futuro. */}
-              {adv(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
+              {advShared(<div className="border-t border-slate-200 dark:border-white/10 pt-5">
                 <label className={label}><ChevronRight size={11} className="inline mr-1" /> Link de destaque na vitrine (opcional)</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input
@@ -3459,13 +3533,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   Some da vitrine se deixar em branco.
                 </p>
               </div>, advHostGeral, ADV_CARD)}
-            </div>
+            </div>)}
 
             {/* Integrações de Marketing (Fase 4B) — produtor pluga GA4 +
                 Pixel Meta próprios pra ver eventos do festival dele isolado.
                 IDs públicos por design (vão no HTML). Disparos paralelos
                 aos pixels master da CoreoHub. */}
-            {adv(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+            {advShared(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Globe size={18} /></div>
                 <div>
@@ -4273,7 +4347,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             {activeEventId && (isEspetaculo || eventSeatMap) && <EventSessionsCard eventId={activeEventId} />}
 
             {/* Patrocinadores / Apoiadores */}
-            {adv(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+            {advShared(<div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Award size={18} /></div>
@@ -7774,6 +7848,68 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       {/* Modal de confirmação — excluir evento (achado #4, 2026-07-17).
           createPortal pra escapar do stacking context de <main z-10> do
           PrivateLayout — lição documentada após bug real em 2026-05-26. */}
+      {syncPrompt && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="sync-sessoes-titulo">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 id="sync-sessoes-titulo" className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Aplicar às outras sessões?</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              Salvei o evento principal. Estes campos ainda estão diferentes nas outras sessões e seriam trocados pelos do principal.
+              Data, horário, ingressos, preços e assentos não mudam.
+            </p>
+            <ul className="space-y-2">
+              {syncPrompt.map(s => {
+                const labels = Array.from(new Set(s.changed_columns.map(c => SYNC_COLUMN_LABELS[c.replace(/^cfg:/, '')] ?? c.replace(/^cfg:/, ''))));
+                return (
+                  <li key={s.session_slug} className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 break-all">{s.session_slug}</p>
+                    <p className="text-xs text-slate-800 dark:text-slate-200 mt-1">{labels.join(', ')}</p>
+                  </li>
+                );
+              })}
+            </ul>
+            {syncPrompt.some(s => s.changed_columns.some(c => c === 'location' || c === 'city' || c === 'state')) && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                Atenção: o local de alguma sessão será trocado pelo do evento principal. Se uma sessão acontece em outro teatro, não aplique.
+              </p>
+            )}
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setSyncPrompt(null)}
+                disabled={syncApplying}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 disabled:opacity-50"
+              >
+                Agora não
+              </button>
+              <button
+                type="button"
+                disabled={syncApplying}
+                onClick={async () => {
+                  if (!activeEventId) return;
+                  setSyncApplying(true);
+                  try {
+                    const { error: applyErr } = await supabase.rpc('sync_session_group_shared', { p_anchor_id: activeEventId, p_dry_run: false });
+                    if (applyErr) throw applyErr;
+                    setSyncPrompt(null);
+                    setSuccess(true);
+                    setTimeout(() => setSuccess(false), 3000);
+                  } catch (applyErr: any) {
+                    setError(humanizeSupabaseError(applyErr, 'aplicar às outras sessões'));
+                    setSyncPrompt(null);
+                  } finally {
+                    setSyncApplying(false);
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl bg-[#ff0068] hover:bg-[#e0005c] text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+              >
+                {syncApplying ? 'Aplicando...' : `Aplicar a ${syncPrompt.length} ${syncPrompt.length === 1 ? 'sessão' : 'sessões'}`}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {deleteModalOpen && createPortal(
         <div
           role="dialog"
