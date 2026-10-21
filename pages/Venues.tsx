@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
+import SeatMapImport from '../components/SeatMapImport';
+import type { PlanConversion, PlanHint } from '../utils/seatMapFromPlan';
 import {
   MapPin, Plus, Loader2, X, AlertCircle, CheckCircle2, Trash2, Pencil,
   Armchair, LayoutGrid, Link2, Link2Off, Accessibility, ArrowLeftRight, Users,
@@ -193,6 +195,35 @@ const VenueFormModal: React.FC<{
   const [tool, setTool] = useState<VenuePaintTool>('cadeirante');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Resultado da importação por IA: avisos e sugestões de PCD ficam visíveis até o produtor descartar ou gerar de novo.
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [hints, setHints] = useState<PlanHint[]>([]);
+
+  const handleImported = (c: PlanConversion) => {
+    if (c.rows.length === 0) {
+      setError(c.warnings[0] ?? 'Nenhuma fileira foi lida da planta.');
+      return;
+    }
+    if (rows.length > 0) {
+      const atual = rows.reduce((s, r) => s + r.assentos, 0);
+      if (!window.confirm(`Importar a planta substitui a grade atual (${atual} lugares, ${rows.length} fileiras) por uma de ${c.total} lugares e ${c.rows.length} fileiras. Continuar?`)) return;
+    }
+    setError(null);
+    setRows(c.rows.map(normalizeRow));
+    setImportWarnings(c.warnings);
+    setHints(c.sugestoes);
+  };
+
+  const hintKey = (h: PlanHint) => `${h.codigo}-${h.numero}`;
+  const handleApplyHint = (h: PlanHint) => {
+    const idx = rows.findIndex(r => r.codigo === h.codigo);
+    if (idx < 0 || h.tipo === 'desconhecido') return;
+    const res = paintSeat(rows[idx], h.numero, h.tipo);
+    if (res.error) { setError(res.error); return; }
+    setError(null);
+    setRows(prev => prev.map((r, i) => (i === idx ? res.row : r)));
+    setHints(prev => prev.filter(x => hintKey(x) !== hintKey(h)));
+  };
 
   const handleGerar = () => {
     const marcados = countTipos(rows);
@@ -205,6 +236,8 @@ const VenueFormModal: React.FC<{
       if (!window.confirm(`Gerar uma nova grade substitui a grade atual (${atual} lugares, ${rows.length} fileiras) por uma de ${depois} lugares e ${nova.length} fileiras, com todas as fileiras iguais. Continuar?`)) return;
     }
     setRows(nova);
+    setImportWarnings([]);
+    setHints([]);
   };
 
   const handlePaint = (rowIdx: number, seatNum: number) => {
@@ -333,6 +366,9 @@ const VenueFormModal: React.FC<{
           </div>
         </div>
 
+        {/* Só em local novo: importar numa grade salva substituiria a planta real de um local em uso. */}
+        {!editing && <SeatMapImport onImported={handleImported} />}
+
         <div className="pt-2 border-t border-slate-100 dark:border-white/5">
           <p className={`${labelCls} mb-3`}>Gerador de grade</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
@@ -368,6 +404,40 @@ const VenueFormModal: React.FC<{
             <LayoutGrid size={14} /> Gerar prévia
           </button>
         </div>
+
+        {importWarnings.length > 0 && (
+          <div role="status" className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <AlertCircle size={12} className="shrink-0" /> Confira antes de salvar ({importWarnings.length})
+            </p>
+            <ul className="list-disc pl-5 space-y-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+              {importWarnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {hints.length > 0 && (
+          <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-xl space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+              <Accessibility size={12} className="shrink-0" /> Lugares especiais sugeridos pela IA — revisar
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {hints.map(h => (
+                <button
+                  key={hintKey(h)}
+                  type="button"
+                  disabled={h.tipo === 'desconhecido'}
+                  onClick={() => handleApplyHint(h)}
+                  title={h.tipo === 'desconhecido' ? 'A IA não soube o tipo; marque na prévia com a ferramenta certa.' : 'Aplicar este tipo ao lugar'}
+                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-300 border border-sky-300/60 dark:border-sky-400/30 hover:border-sky-500 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:border-slate-200 dark:disabled:border-white/10 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {h.codigo}-{h.numero} · {h.tipo === 'pcd_largo' ? 'obeso (largo)' : h.tipo} · {Math.round(h.confianca * 100)}%
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-sky-700/80 dark:text-sky-300/80">Nada foi marcado ainda. Clique para aplicar uma sugestão ou use as ferramentas na prévia.</p>
+          </div>
+        )}
 
         {rows.length > 0 && (
           <div className="space-y-2">
