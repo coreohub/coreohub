@@ -4,6 +4,17 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-10-20 (noite) — Leitura de planta de assentos por IA em /locais ("Importar de PDF ou imagem") ✅ (em produção, main `122a116`)
+
+- **O que é:** no modal "Novo local" (só local novo, nunca edição), o produtor envia PDF/PNG/JPG/WEBP (até 10 MB) e a IA da Anthropic monta a grade na prévia existente. Nada salva sozinho; avisos em âmbar e sugestões de PCD/obeso só aplicam com clique ("revisar").
+- **Arquitetura:** a IA só TRANSCREVE a planta (fileiras, blocos de números na ordem impressa, alinhamento, palco, sugestões com confiança); o conversor determinístico `utils/seatMapFromPlan.ts` (testado) vira `RowConfig` (corredores pelo fim de cada bloco, `espelhado` pelo sentido da numeração, palco, avisos de repetido/buraco/total). Edge function `parse-seat-map` (Deno, `@anthropic-ai/sdk`), só ORGANIZER/COREOHUB_ADMIN/super admin, multipart, confere os primeiros bytes do arquivo, 5 leituras/dia por produtor (fuso SP), saída estruturada, `fallbacks: "default"`, sem registrar o conteúdo do arquivo. Prompt e custo em `_shared/seat-map-parse.ts`.
+- **Modelo:** `claude-sonnet-5-5` por padrão (`SEAT_MAP_MODEL` troca, sem deploy). Avaliação (`scripts/eval-seat-map.mjs`, `node --env-file=.env.local`): Merciol Viscardi e Nelson Camargo, PDF + print + "foto ruim" (JPEG 40%, torta, borrada), 100% fileira por fileira, 13/13 PCD do Nelson, US$ 0,02–0,07 por leitura. Opus 5.5 também 100% nos PDFs, ~2x o custo. Prompt das `notas` apertado depois da staging (de 8 avisos descritivos para 0–3 relevantes, acerto intacto).
+- **Banco:** `seat_map_parse_usage` (tokens, custo estimado, duração; só authenticated SELECT próprio e service_role), migration `20261021e` com `REVOKE` dos grants padrão excedentes.
+- **Limites conhecidos:** só 2 plantas × 1 leitura cada, números já impressos em cada lugar; 2 leituras simultâneas podem passar de 5/dia.
+- **Crédito:** candidatura Claude Startups recusada (2026-10-11); US$ 5 comprados no Console (org individual contato@coreohub.com). A assinatura Pro do Claude é separada da API.
+- **Processo:** commits só meus levados por cherry-pick em worktree (dev compartilhada, 5 commits à frente na origin/dev). Seletor de arquivo demorando ~7 s no Windows do produtor: medido ~40 ms no app, causa fora do repositório (suspeita: pasta de rede no Acesso rápido).
+- **Pendente:** apagar a chave temporária `coreohub-avaliacao-local` (Console) e a linha do `.env.local`; migrar `gemini-analysis` (regulamento PDF) para a Anthropic (plano proposto, aguardando aprovação). Memória: `leitura_planta_ia_locais_2026_10_20.md`.
+
 ### 2026-10-20 — Termo do Produtor v1.10 (sem antecipação do saldo retido) publicado ✅
 
 - **Main `9c17e83`:** 12.3 nova ("Transferência do saldo liberado"), 12.4 sem "mecanismo de antecipação", 11.12 remete à 11.11; versão '1.10', vigência 27/10/2026 (até lá só faixa de aviso; a vigência vale para todos, inclusive quem estava na tela obrigatória da 1.9). Tela de aceite por versão (`utils/termoResumo.ts`): quem está na 1.9 vê só a novidade; os demais veem tudo. FAQ de `LandingPage`, `LandingEspetaculo` e `og-marketing` alinhados. `ProducerBalanceCard` esconde "Antecipar também o que está a liberar" para quem aceitou a 1.10.
