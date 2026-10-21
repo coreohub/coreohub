@@ -2210,14 +2210,16 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           const descriptionFromDb = data.descricao || evt.description || DEFAULT_GENERAL.description;
           const cityFromDb = data.cidade_estado || cityStateFromEvent || DEFAULT_GENERAL.city;
           setGeneral({
-            eventName:          data.nome_evento      || evt.name        || DEFAULT_GENERAL.eventName,
-            location:           data.local_evento     || evt.location    || DEFAULT_GENERAL.location,
+            // events é a fonte real por evento/sessão; configuracoes (legado) pode ficar defasada — ex.: sessão
+            // criada por duplicação guarda aí o horário/local da origem e o salvamento gravava de volta.
+            eventName:          evt.name              || data.nome_evento  || DEFAULT_GENERAL.eventName,
+            location:           evt.location          || data.local_evento || DEFAULT_GENERAL.location,
             city:               cityFromDb,
             // data_evento (configuracoes) é o campo editado aqui; evt.start_date
             // (events) é a fonte real usada pela vitrine pública — cai pra ele
             // só se configuracoes nunca foi salva (evita mostrar vazio quando
             // já existe data real só que na outra tabela).
-            eventDate:          data.data_evento      || evt.start_date  || DEFAULT_GENERAL.eventDate,
+            eventDate:          evt.start_date        || data.data_evento  || DEFAULT_GENERAL.eventDate,
             endDate:            evt.end_date          || data.data_evento || evt.start_date || DEFAULT_GENERAL.endDate,
             regDeadline:        data.prazo_inscricao  || DEFAULT_GENERAL.regDeadline,
             trackDeadline:      data.prazo_trilhas    || DEFAULT_GENERAL.trackDeadline,
@@ -2244,7 +2246,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             coverFocalX: evt.cover_focal_x ?? DEFAULT_GENERAL.coverFocalX,
             coverFocalY: evt.cover_focal_y ?? DEFAULT_GENERAL.coverFocalY,
             description: descriptionFromDb,
-            eventTime:   data.hora_evento || evt.event_time || DEFAULT_GENERAL.eventTime,
+            eventTime:   evt.event_time || data.hora_evento || DEFAULT_GENERAL.eventTime,
           });
           setSavedDescription(descriptionFromDb);
           setSavedEventName(data.nome_evento || evt.name || DEFAULT_GENERAL.eventName);

@@ -28,6 +28,12 @@ import { BLOCK_REASON_SUGGESTIONS, expandRange, expandRow, partitionSelection, r
 import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 
+const sessionLabel = (d?: string | null, t?: string | null) => {
+  const dia = d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '';
+  const hora = t && t.includes(':') ? t.slice(0, 5) : '';
+  return [dia, hora].filter(Boolean).join(' ') || 'outra sessão';
+};
+
 interface TicketTypeConfig {
   nome: string;
   preco?: number;
@@ -185,6 +191,10 @@ const VendasIngressos: React.FC = () => {
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockMsg, setBlockMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [blockConfirm, setBlockConfirm] = useState<'block' | 'unblock' | null>(null);
+  // Outras sessões do mesmo espetáculo que usam o mesmo local: o bloqueio pode ser repetido nelas
+  // (mesmo código de lugar, ex. A-1). Só do mesmo dono, com mapa ligado e o mesmo local.
+  const [siblingSessions, setSiblingSessions] = useState<Array<{ id: string; label: string }>>([]);
+  const [applyToSiblings, setApplyToSiblings] = useState(true);
   // Motivos dos lugares bloqueados (leitura direta, so o dono passa na RLS). A LISTA vem do status ao vivo.
   const [blockedRows, setBlockedRows] = useState<Array<{ seat_id: string; block_reason: string | null }>>([]);
 
@@ -193,11 +203,22 @@ const VendasIngressos: React.FC = () => {
     setErr(null);
     try {
       setEventId(targetEventId);
-      const { data: ev, error: evErr } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time').eq('id', targetEventId).maybeSingle();
+      const { data: ev, error: evErr } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time, venue_id, session_group_id').eq('id', targetEventId).maybeSingle();
       if (evErr) console.error('[VendasIngressos] leitura do evento:', evErr.message);
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
+      setSiblingSessions([]);
+      if ((ev as any)?.session_group_id && (ev as any)?.seat_map_enabled && (ev as any)?.venue_id) {
+        const { data: sibs, error: sibErr } = await supabase.from('events')
+          .select('id, start_date, event_time, venue_id, seat_map_enabled, created_by')
+          .eq('session_group_id', (ev as any).session_group_id).neq('id', targetEventId)
+          .order('start_date', { ascending: true }).order('event_time', { ascending: true });
+        if (sibErr) console.error('[VendasIngressos] sessões irmãs:', sibErr.message);
+        setSiblingSessions((sibs ?? [])
+          .filter((x: any) => x.seat_map_enabled && x.venue_id === (ev as any).venue_id && x.created_by === (ev as any).created_by)
+          .map((x: any) => ({ id: x.id as string, label: sessionLabel(x.start_date, x.event_time) })));
+      }
       // Dono do evento ou super admin pode bloquear lugares e vender lugar bloqueado no PDV.
       try {
         const { data: { user: me } } = await supabase.auth.getUser();
@@ -381,7 +402,27 @@ const VendasIngressos: React.FC = () => {
       if (invErr) throw new Error(await edgeErrorMessage(invErr, 'Não foi possível concluir. Tente de novo.'));
       if (data?.error) throw new Error(data.error);
       const results = (data?.results ?? []) as SeatBlockResult[];
-      setBlockMsg({ kind: 'ok', text: summarizeOutcomes(results) });
+      let msgText = summarizeOutcomes(results);
+      let msgKind: 'ok' | 'err' = 'ok';
+      if (applyToSiblings && siblingSessions.length > 0) {
+        // Repete a mesma ação nas outras sessões, uma por vez; cada uma diz o que fez ou por que falhou.
+        const parts: string[] = [`Esta sessão: ${msgText}`];
+        for (const sib of siblingSessions) {
+          try {
+            const { data: d2, error: e2 } = await supabase.functions.invoke('block-seats', {
+              body: { event_id: sib.id, action, seat_ids: ids, reason: action === 'block' ? blockReason : undefined },
+            });
+            if (e2) throw new Error(await edgeErrorMessage(e2, 'Não foi possível concluir.'));
+            if (d2?.error) throw new Error(d2.error);
+            parts.push(`${sib.label}: ${summarizeOutcomes((d2?.results ?? []) as SeatBlockResult[])}`);
+          } catch (e2: any) {
+            msgKind = 'err';
+            parts.push(`${sib.label}: NÃO aplicado (${e2.message ?? e2}). Refaça nessa sessão.`);
+          }
+        }
+        msgText = parts.join(' | ');
+      }
+      setBlockMsg({ kind: msgKind, text: msgText });
       setBlockSelected([]);
       if (action === 'block') setBlockReason('');
       refreshSeats();
@@ -1167,6 +1208,15 @@ const VendasIngressos: React.FC = () => {
                 : `${blockPartition.toUnblock.length} lugar(es) voltam para a venda.`}
               {blockPartition.ignored.length > 0 && ` ${blockPartition.ignored.length} lugar(es) selecionado(s) não podem ser alterados e serão ignorados.`}
             </p>
+            {siblingSessions.length > 0 && (
+              <label className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={applyToSiblings} onChange={e => setApplyToSiblings(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#ff0068]" />
+                <span>
+                  Aplicar também às outras sessões ({siblingSessions.map(x => x.label).join(', ')}). Vale o mesmo lugar (ex. A-1) em cada
+                  sessão; lugares vendidos, em compra ou PCD são ignorados lá também.
+                </span>
+              </label>
+            )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setBlockConfirm(null)} disabled={blockBusy} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer">
                 Cancelar

@@ -34,6 +34,7 @@ import { companionBySpecial, isSpecialTipo, seatsSatisfyRules, tipoFromRow, type
 import { ticketSeatKind, type TicketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 import { isEventOver } from '../utils/eventStatus';
+import { sessionCode } from '../utils/sessionCode';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
 // create-audience-ticket). Garante que o total exibido bate com a cobrança.
 import { computeAudienceCheckout } from '../supabase/functions/_shared/audience-checkout';
@@ -114,6 +115,8 @@ export default function CheckoutIngresso() {
   }, []); // só no mount
 
   const [event, setEvent] = useState<any>(null);
+  // Pra onde o "voltar" leva: o link do evento principal já na sessão que está sendo comprada.
+  const [backPath, setBackPath] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, number>>(initialCart);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +178,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state, max_installments')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state, max_installments, event_time, session_group_id')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -195,6 +198,16 @@ export default function CheckoutIngresso() {
           return;
         }
         setEvent(ev);
+        setBackPath(`/evento/${ev.slug ?? idOrSlug}`);
+        if (ev.session_group_id && ev.session_group_id !== ev.id) {
+          supabase.from('events').select('slug').eq('id', ev.session_group_id).eq('is_public', true).maybeSingle().then(
+            ({ data: anchor }) => {
+              const code = sessionCode(ev.start_date, ev.event_time);
+              if (anchor?.slug && code) setBackPath(`/evento/${anchor.slug}?sessao=${code}`);
+            },
+            () => {},
+          );
+        }
         // Sanitiza o cart contra os tipos válidos do evento (descarta idx morto).
         const ingressos: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [];
         setCart(prev => {
@@ -732,7 +745,7 @@ export default function CheckoutIngresso() {
           <p className="text-white font-bold mb-2">Seu carrinho está vazio</p>
           <p className="text-sm text-slate-400 mb-4">Escolha os ingressos na página do evento.</p>
           <button
-            onClick={() => navigate(`/evento/${idOrSlug}`)}
+            onClick={() => navigate(backPath ?? `/evento/${idOrSlug}`)}
             className="inline-flex items-center gap-2 text-xs font-black text-[#ff0068] uppercase tracking-widest"
           >
             <ArrowLeft size={14} /> Ver ingressos
@@ -756,7 +769,7 @@ export default function CheckoutIngresso() {
 
       <div className={`max-w-2xl mx-auto px-4 py-6 relative ${event?.cover_url ? '-mt-8' : ''}`}>
         <button
-          onClick={() => navigate(`/evento/${idOrSlug}`)}
+          onClick={() => navigate(backPath ?? `/evento/${idOrSlug}`)}
           className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-6"
         >
           <ArrowLeft size={14} /> Voltar pro evento
@@ -769,7 +782,18 @@ export default function CheckoutIngresso() {
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter mb-1">
           Seu carrinho
         </h1>
-        <p className="text-sm text-slate-400 mb-6">{event.name}</p>
+        <p className="text-sm text-slate-400">{event.name}</p>
+        {event.start_date && (
+          <p className="text-sm font-bold text-slate-200 mb-6">
+            Sessão: {(() => {
+              const dt = new Date(`${String(event.start_date).slice(0, 10)}T12:00:00`);
+              const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(dt).replace('.', '');
+              const dia = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+              return `${wd.charAt(0).toUpperCase()}${wd.slice(1)}, ${dia}`;
+            })()}
+            {event.event_time ? ` às ${String(event.event_time).slice(0, 5)}` : ''}
+          </p>
+        )}
 
         {/* Cotação travada: preço e taxa garantidos durante a reserva */}
         {quoteRemainingSec != null && (
