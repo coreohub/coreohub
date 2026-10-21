@@ -192,7 +192,8 @@ const VenueFormModal: React.FC<{
   const [corredoresGerador, setCorredoresGerador] = useState<number[]>(genInicial.corredores);
   const [espelhadoGerador, setEspelhadoGerador] = useState(genInicial.espelhado);
   const [rows, setRows] = useState<RowConfig[]>((editing?.rows_config ?? []).map(normalizeRow));
-  const [tool, setTool] = useState<VenuePaintTool>('cadeirante');
+  // Abre em Comum: nenhum clique marca PCD sem o produtor escolher a ferramenta antes.
+  const [tool, setTool] = useState<VenuePaintTool>('comum');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Resultado da importação por IA: avisos e sugestões de PCD ficam visíveis até o produtor descartar ou gerar de novo.
@@ -241,7 +242,7 @@ const VenueFormModal: React.FC<{
   };
 
   const handlePaint = (rowIdx: number, seatNum: number) => {
-    const res = paintSeat(rows[rowIdx], seatNum, tool);
+    const res = paintSeat(rows[rowIdx], seatNum, tool, { toggle: true });
     if (res.error) { setError(res.error); return; }
     setError(null);
     setRows(prev => prev.map((r, i) => (i === rowIdx ? res.row : r)));
@@ -682,7 +683,7 @@ const Venues: React.FC = () => {
       />
 
       <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
-        Cadastre um local com poltronas numeradas de verdade (teatro, auditório, centro de convenções) UMA VEZ e reaproveite em quantos eventos precisar — o mapa fica salvo aqui, não por evento. Locais sem assento fixo (salão, tatame, plateia em pé) não precisam de nada disso: continuam vendendo por setor/quantidade normalmente.
+        Cadastre um local com poltronas numeradas de verdade (teatro, auditório, centro de convenções) UMA VEZ e reaproveite em quantos eventos precisar — o mapa fica salvo aqui, não por evento. Locais sem assento fixo (salão, tatame, plateia em pé) não precisam de nada disso: continuam vendendo por setor/quantidade normalmente. Aqui você define só a planta do local. Para tirar lugares da venda (por exemplo, os que não serão usados), vá em Vendas → Ingressos → Bloquear lugares: o bloqueio é feito por evento e pode ser repetido nas outras sessões.
       </p>
 
       {notice && (

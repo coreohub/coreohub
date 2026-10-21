@@ -106,12 +106,25 @@ export function suggestCompanion(row: RowConfig, n: number): number | null {
   return null;
 }
 
-/** Aplica a ferramenta de pintura num assento. Erro = mensagem para o produtor, fileira intacta. */
-export function paintSeat(rowIn: RowConfig, n: number, tool: VenuePaintTool): { row: RowConfig; error?: string } {
+/**
+ * Aplica a ferramenta de pintura num assento. Erro = mensagem para o produtor, fileira intacta.
+ * Com `toggle`, clicar de novo num assento que já é do tipo da ferramenta (cadeirante ou largo) desfaz:
+ * o lugar volta a ser comum, igual ao "Acompanhante". Fora do clique do produtor (ex.: aplicar uma
+ * sugestão da IA) fica desligado, pra não desmarcar um lugar sem querer.
+ */
+export function paintSeat(
+  rowIn: RowConfig,
+  n: number,
+  toolIn: VenuePaintTool,
+  opts: { toggle?: boolean } = {},
+): { row: RowConfig; error?: string } {
   const row = normalizeRow(rowIn);
   const tipos = { ...row.tipos! };
   const acomp = { ...row.acompanhante! };
   const done = (): { row: RowConfig } => ({ row: { ...row, tipos, acompanhante: acomp } });
+  const tool: VenuePaintTool = opts.toggle && (toolIn === 'cadeirante' || toolIn === 'pcd_largo') && tipos[key(n)] === toolIn
+    ? 'comum'
+    : toolIn;
 
   if (tool === 'comum') {
     const wasSpecial = !!tipos[key(n)];

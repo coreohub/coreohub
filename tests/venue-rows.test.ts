@@ -32,6 +32,23 @@ describe('paintSeat', () => {
     expect(r.tipos).toEqual({})
     expect(r.acompanhante).toEqual({})
   })
+  it('com toggle, clicar de novo no mesmo tipo desfaz (inclusive o acompanhante sugerido)', () => {
+    let r = paintSeat(row(), 3, 'cadeirante', { toggle: true }).row
+    expect(r.tipos).toEqual({ '3': 'cadeirante' })
+    r = paintSeat(r, 3, 'cadeirante', { toggle: true }).row
+    expect(r.tipos).toEqual({})
+    expect(r.acompanhante).toEqual({})
+  })
+  it('com toggle, trocar de cadeirante para largo continua trocando (não desfaz)', () => {
+    let r = paintSeat(row(), 3, 'cadeirante', { toggle: true }).row
+    r = paintSeat(r, 3, 'pcd_largo', { toggle: true }).row
+    expect(r.tipos).toEqual({ '3': 'pcd_largo' })
+  })
+  it('sem toggle (sugestão da IA) repintar o mesmo tipo não desmarca', () => {
+    let r = paintSeat(row(), 3, 'cadeirante').row
+    r = paintSeat(r, 3, 'cadeirante').row
+    expect(r.tipos).toEqual({ '3': 'cadeirante' })
+  })
   it('acompanhante só ao lado de PCD sem acompanhante', () => {
     const semLado = paintSeat(row(), 7, 'acompanhante')
     expect(semLado.error).toBeTruthy()
