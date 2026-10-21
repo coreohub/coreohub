@@ -2,6 +2,7 @@ import PriceFeeNote from '../components/PriceFeeNote';
 import { computePriceDisclosure } from '../utils/priceDisclosure';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { sessionCode, parseSessionCode } from '../utils/sessionCode';
 import { supabase } from '../services/supabase';
 import { trackViewEvent, trackBeginCheckout } from '../services/producerAnalytics';
 import ProducerPixels from '../components/ProducerPixels';
@@ -85,9 +86,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Espetáculo com várias sessões: a URL pública é a do evento principal e ?sessao=
   // (slug ou id da sessão) escolhe qual sessão a vitrine mostra.
   const sessaoParam = searchParams.get('sessao');
-  const selectSessao = (key: string) => {
+  const selectSessao = (key: string | null) => {
     const next = new URLSearchParams(searchParams);
-    next.set('sessao', key);
+    if (key) next.set('sessao', key); else next.delete('sessao');
     setSearchParams(next, { replace: true });
   };
   const [event, setEvent] = useState<any>(null);
@@ -147,6 +148,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const [eventSessions, setEventSessions] = useState<Array<{
     id: string; slug: string | null; name: string; start_date: string | null; event_time: string | null; is_current: boolean;
   }>>([]);
+  // Escolher uma sessão no seletor: a sessão padrão (primeira futura) fica sem ?sessao= quando é a
+  // do próprio link principal; as demais levam o código dia-hora. Sempre explícito se não for a padrão,
+  // senão a regra de abrir na primeira sessão futura devolveria o comprador pra outra.
+  const pickSession = (s: { id: string; slug: string | null; start_date: string | null; event_time: string | null }) => {
+    const today = todayISO();
+    const firstFuture = eventSessions.find(x => x.start_date && String(x.start_date) >= today);
+    const isPrincipal = !!event?.session_group_id && s.id === event.session_group_id;
+    selectSessao(isPrincipal && firstFuture?.id === s.id ? null : (sessionCode(s.start_date, s.event_time) ?? s.slug ?? s.id));
+  };
   // Página pública do produtor — preenche o espaço vazio da coluna da foto
   // no hero (abaixo dos ícones de rede social) só quando o produtor ativou
   // a própria página em /profile. null = não tem página pública ativa.
@@ -172,7 +182,25 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         // UUID v4 tem 36 chars com hifens — se nao for UUID, trata como slug
         const isUuidKey = (k: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k);
         // Com ?sessao=, carrega o evento da sessão escolhida; a URL continua a do principal.
-        const loadKey = sessaoParam ?? idOrSlug;
+        let loadKey = sessaoParam ?? idOrSlug;
+        // ?sessao=AAAA-MM-DD-HHMM: acha a sessão do grupo do link principal com esse dia e horário.
+        const parsedCode = parseSessionCode(sessaoParam);
+        if (parsedCode) {
+          const { data: pr } = await supabase.from('events').select('id, session_group_id')
+            .eq(isUuidKey(idOrSlug) ? 'id' : 'slug', idOrSlug).maybeSingle();
+          const gid = pr?.session_group_id ?? null;
+          const { data: sib } = gid
+            ? await supabase.from('events').select('id').eq('session_group_id', gid)
+                .eq('start_date', parsedCode.date).eq('event_time', parsedCode.time).eq('is_public', true).maybeSingle()
+            : { data: null };
+          if (!sib?.id) {
+            const next = new URLSearchParams(searchParams);
+            next.delete('sessao');
+            setSearchParams(next, { replace: true });
+            return;
+          }
+          loadKey = sib.id;
+        }
         const isUuid = isUuidKey(loadKey);
         const filterCol = isUuid ? 'id' : 'slug';
 
@@ -255,7 +283,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               .maybeSingle();
             if (anchor?.slug) {
               const next = new URLSearchParams(searchParams);
-              next.set('sessao', eventData.slug ?? eventData.id);
+              next.set('sessao', sessionCode(eventData.start_date, eventData.event_time) ?? eventData.slug ?? eventData.id);
               navigate(`/evento/${anchor.slug}?${next.toString()}`, { replace: true });
               return;
             }
@@ -328,7 +356,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 && !!firstFuture && sortKey(current) <= sortKey(firstFuture);
               if (firstFuture && !firstFuture.is_current && !currentIsEarliest) {
                 const next = new URLSearchParams(searchParams);
-                next.set('sessao', firstFuture.slug ?? firstFuture.id);
+                next.set('sessao', sessionCode(firstFuture.start_date, firstFuture.event_time) ?? firstFuture.slug ?? firstFuture.id);
                 setSearchParams(next, { replace: true });
               }
             }
@@ -1469,7 +1497,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => { selectSessao(s.slug ?? s.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    onClick={() => { pickSession(s); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                     className={base + 'w-full text-left bg-white/5 border-white/10 hover:border-[#ff0068]/30'}
                   >{inner}</button>
                 );

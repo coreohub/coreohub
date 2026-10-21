@@ -566,6 +566,7 @@ const LinkEventModal: React.FC<{
         </div>
         <p className="text-xs text-slate-500">
           Escolha o evento que vai usar <strong className="text-slate-700 dark:text-slate-300">{venue.name}</strong> ({venue.total_seats} assentos).
+          Cada sessão de um espetáculo é um evento próprio: vincule uma por vez, identificadas por dia e horário.
         </p>
 
         {error && (
@@ -580,6 +581,12 @@ const LinkEventModal: React.FC<{
         )}
 
         <EventPickerSheet events={events} selectedEventId={selectedEventId} onSelect={setSelectedEventId} emptyLabel="Selecionar evento" />
+
+        {alreadyLinked && (
+          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+            <CheckCircle2 size={12} /> Este evento já usa este local. O botão abaixo desativa o mapa nele.
+          </p>
+        )}
 
         {selectedEvent && selectedEvent.venue_id && selectedEvent.venue_id !== venue.id && (
           <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
@@ -624,7 +631,7 @@ const Venues: React.FC = () => {
       if (!user) return;
       const [{ data: v }, { data: e }] = await Promise.all([
         supabase.from('venues').select('*').eq('created_by', user.id).order('created_at', { ascending: false }),
-        supabase.from('events').select('id,name,edition_year,is_demo,start_date,venue_id,seat_map_enabled').eq('created_by', user.id).eq('is_demo', false).order('created_at', { ascending: false }),
+        supabase.from('events').select('id,name,edition_year,is_demo,start_date,event_time,venue_id,seat_map_enabled').eq('created_by', user.id).eq('is_demo', false).order('created_at', { ascending: false }),
       ]);
       setVenues((v ?? []) as Venue[]);
       setEvents((e ?? []) as any);
@@ -649,7 +656,14 @@ const Venues: React.FC = () => {
     }
   };
 
-  const linkedEventName = (venueId: string) => events.find(e => e.venue_id === venueId && e.seat_map_enabled)?.name ?? null;
+  // Eventos (inclusive cada sessão de um espetáculo) que usam o mapa deste local, com dia e hora.
+  const linkedEventLabels = (venueId: string) => events
+    .filter(e => e.venue_id === venueId && e.seat_map_enabled)
+    .map(e => {
+      const dia = e.start_date ? `${e.start_date.slice(8, 10)}/${e.start_date.slice(5, 7)}` : '';
+      const hora = e.event_time && /^\d{1,2}:\d{2}/.test(e.event_time) ? e.event_time.slice(0, 5) : '';
+      return { id: e.id, label: `${e.name}${dia || hora ? ` · ${[dia, hora].filter(Boolean).join(' ')}` : ''}` };
+    });
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -689,7 +703,7 @@ const Venues: React.FC = () => {
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
           {venues.map(v => {
-            const linkedTo = linkedEventName(v.id);
+            const linkedTo = linkedEventLabels(v.id);
             return (
               <div key={v.id} className="p-5 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-2xl space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -713,9 +727,12 @@ const Venues: React.FC = () => {
                   <Armchair size={14} className="text-slate-400" /> {v.total_seats} assentos · {v.rows_config.length} fileiras
                 </div>
 
-                {linkedTo ? (
-                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
-                    <Link2 size={12} /> Ativo em: {linkedTo}
+                {linkedTo.length > 0 ? (
+                  <div className="space-y-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                    <div className="flex items-center gap-1.5"><Link2 size={12} /> Ativo em {linkedTo.length === 1 ? '1 evento' : `${linkedTo.length} eventos`}:</div>
+                    <ul className="pl-5 space-y-0.5">
+                      {linkedTo.map(l => <li key={l.id} className="break-words">{l.label}</li>)}
+                    </ul>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">

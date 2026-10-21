@@ -192,10 +192,10 @@ const EventPickerSheet: React.FC<Props> = ({
                               : 'hover:bg-slate-50 dark:hover:bg-white/5'
                           }`}
                         >
-                          <span className={`text-sm font-bold truncate flex items-center gap-2 min-w-0 ${
+                          <span className={`text-sm font-bold flex items-center gap-2 min-w-0 ${
                             isSelected ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'
                           }`}>
-                            <span className="truncate">{formatLabel(ev)}</span>
+                            <span className="break-words min-w-0">{formatLabel(ev)}</span>
                             {ev.is_demo && (
                               <span className="shrink-0 px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 text-[8px] font-black uppercase tracking-widest">DEMO</span>
                             )}
@@ -264,8 +264,8 @@ const EventPickerSheet: React.FC<Props> = ({
                               : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'
                           }`}
                         >
-                          <span className="text-[11px] font-black uppercase tracking-widest truncate flex items-center gap-1.5 min-w-0">
-                            <span className="truncate">{formatLabel(ev)}</span>
+                          <span className="text-[11px] font-black uppercase tracking-widest flex items-center gap-1.5 min-w-0">
+                            <span className="break-words min-w-0">{formatLabel(ev)}</span>
                             {ev.is_demo && (
                               <span className="shrink-0 px-1 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 text-[7px] font-black tracking-wider">DEMO</span>
                             )}

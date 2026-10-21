@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CalendarPlus, Copy, ExternalLink, Loader2, X } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { humanizeSupabaseError } from '../utils/supabaseErrors';
+import { sessionPath } from '../utils/sessionCode';
 
 interface SessionRow {
   id: string;
@@ -11,6 +12,7 @@ interface SessionRow {
   start_date: string | null;
   event_time: string | null;
   is_public: boolean | null;
+  session_group_id?: string | null;
 }
 
 const fmtDate = (d?: string | null) => {
@@ -48,7 +50,7 @@ export const EventSessionsCard: React.FC<{ eventId: string }> = ({ eventId }) =>
     const gid = (cur as any).session_group_id;
     if (gid) {
       const { data: group, error: gErr } = await supabase.from('events').select(cols).eq('session_group_id', gid)
-        .order('start_date', { ascending: true });
+        .order('start_date', { ascending: true }).order('event_time', { ascending: true });
       if (gErr) console.error('[EventSessionsCard] erro ao ler sessões:', gErr.message);
       if (group?.length) rows = group as SessionRow[];
     }
@@ -57,6 +59,13 @@ export const EventSessionsCard: React.FC<{ eventId: string }> = ({ eventId }) =>
   }, [eventId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Link público de cada sessão: o do evento principal; as demais levam ?sessao=<dia-hora> (sem o slug comprido).
+  const groupId = sessions.find(s => s.id === eventId)?.session_group_id ?? sessions[0]?.session_group_id ?? null;
+  const principal = groupId ? sessions.find(s => s.id === groupId) ?? null : null;
+  const pathFor = (s: SessionRow) => principal
+    ? sessionPath(principal.slug ?? principal.id, s, groupId)
+    : `/evento/${s.slug ?? s.id}`;
 
   const submit = async () => {
     setError(null);
@@ -102,7 +111,7 @@ export const EventSessionsCard: React.FC<{ eventId: string }> = ({ eventId }) =>
       {created && (
         <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-700 dark:text-emerald-300">
           Sessão criada. Ela aparece no seletor de eventos do topo.{' '}
-          <a className="font-black underline" href={`/evento/${created.slug ?? created.id}`} target="_blank" rel="noreferrer">Ver vitrine da nova sessão</a>
+          <a className="font-black underline" href={(() => { const row = sessions.find(x => x.id === created.id); return row ? pathFor(row) : `/evento/${created.slug ?? created.id}`; })()} target="_blank" rel="noreferrer">Ver vitrine da nova sessão</a>
         </div>
       )}
 
@@ -117,11 +126,11 @@ export const EventSessionsCard: React.FC<{ eventId: string }> = ({ eventId }) =>
                   {fmtDate(s.start_date)}{s.event_time ? ` · ${s.event_time.slice(0, 5)}` : ''}
                 </p>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 truncate">
-                  {s.name}{s.id === eventId ? ' · sessão aberta' : ''}{s.is_public ? '' : ' · privada'}
+                  {s.name}{principal && s.id === principal.id ? ' · principal' : ''}{s.id === eventId ? ' · sessão aberta' : ''}{s.is_public ? '' : ' · privada'}
                 </p>
               </div>
               <a
-                href={`/evento/${s.slug ?? s.id}`} target="_blank" rel="noreferrer"
+                href={pathFor(s)} target="_blank" rel="noreferrer"
                 className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] shrink-0" aria-label="Abrir vitrine da sessão"
               >
                 <ExternalLink size={14} />
