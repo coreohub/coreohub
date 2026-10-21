@@ -140,7 +140,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
         setProgress('Lendo PDF...');
         const base64 = await fileToBase64(selectedFile);
 
-        setProgress('Enviando ao Gemini...');
+        setProgress('Enviando para análise...');
         extracted = await extractRegulationFromPdf(base64);
 
         // Upload to Supabase storage and link no evento selecionado (não-bloqueante)
@@ -173,7 +173,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       trackFeatureUsed('analisar_regulamento_ia', { input_mode: inputMode });
     } catch (err: any) {
       console.error(err);
-      setError('Falha ao analisar. Verifique a chave Gemini e tente novamente.');
+      setError('Falha ao analisar o regulamento. Tente novamente em instantes.');
       setStep('upload');
     } finally {
       setProgress('');

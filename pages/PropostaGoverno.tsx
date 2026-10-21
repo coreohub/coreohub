@@ -141,7 +141,7 @@ const PropostaGoverno: React.FC = () => {
 
           <SubSection title="3.2 Funcionalidades principais">
             <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
-              <li>Configuração assistida por IA (Google Gemini) a partir do regulamento em PDF</li>
+              <li>Configuração assistida por IA a partir do regulamento em PDF</li>
               <li>Vitrine pública oficial com regulamento, jurados, programação e ingressos</li>
               <li>Sistema de inscrição com lotes progressivos, cupons e meia-entrada</li>
               <li>Pagamento integrado via Asaas (regulamentado pelo Banco Central) com split transparente</li>

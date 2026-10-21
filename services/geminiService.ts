@@ -234,7 +234,7 @@ async function callGeminiEdge(body: Record<string, unknown>): Promise<any> {
   if (!session) throw new Error('Usuário não autenticado')
 
   const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL as string
-  const res = await fetch(`${supabaseUrl}/functions/v1/gemini-analysis`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/parse-regulation`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${session.access_token}`,
@@ -244,7 +244,7 @@ async function callGeminiEdge(body: Record<string, unknown>): Promise<any> {
   })
 
   const data = await res.json()
-  if (!res.ok) throw new Error(data?.error ?? `Gemini Edge Function falhou (${res.status})`)
+  if (!res.ok) throw new Error(data?.error ?? `A análise do regulamento falhou (${res.status})`)
   return data
 }
 
