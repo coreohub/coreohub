@@ -2,6 +2,20 @@
 # Permite crawlers indexarem vitrines públicas + landing.
 # Bloqueia rotas privadas/internas pra economizar crawl budget.
 
+# Bots de busca/IA listados no mesmo grupo do * pra herdar os Disallow das rotas privadas.
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Googlebot
+User-agent: bingbot
+User-agent: Applebot-Extended
+User-agent: CCBot
 User-agent: *
 Allow: /
 Disallow: /qg-organizador
