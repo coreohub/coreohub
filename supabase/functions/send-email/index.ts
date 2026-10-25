@@ -1814,6 +1814,74 @@ function buildPlanFeeDeletionWarning(p: PlanFeeDeletionWarningPayload) {
   }
 }
 
+// ─── Fatura da taxa de plano recém-criada (produtor) ─────────────────
+// A cobrança nasce com notificationDisabled (a Asaas não avisa o produtor),
+// então este e-mail é o único aviso ativo. O botão principal vai pro painel
+// (o "Pagar agora" de lá é idempotente e sempre gera fatura válida); o link da
+// fatura da Asaas morre no vencimento, por isso só aparece enquanto no prazo.
+
+interface PlanFeeInvoicePayload {
+  produtorEmail:  string
+  produtorNome?:  string
+  eventoNome:     string
+  planoLabel:     string
+  /** Valor da taxa (R$). */
+  valor:          number
+  /** Vencimento YYYY-MM-DD (horário de Brasília). */
+  dueDate:        string
+  invoiceUrl?:    string | null
+  /** Fatura refeita: vence hoje e o pagamento é por Pix ou cartão. */
+  regenerated?:   boolean
+  appUrl?:        string
+}
+
+const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+const MONTHS_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
+/** YYYY-MM-DD → "Qua, 28 de outubro de 2026" (T12:00 evita cruzar fuso). */
+function fmtDateWeekday(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00`)
+  if (isNaN(d.getTime())) return ymd
+  return `${WEEKDAYS_SHORT[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')} de ${MONTHS_LONG[d.getMonth()]} de ${d.getFullYear()}`
+}
+
+function buildPlanFeeInvoice(p: PlanFeeInvoicePayload) {
+  const appUrl = p.appUrl ?? 'https://app.coreohub.com'
+  const dueFmt = fmtDateWeekday(p.dueDate)
+  const todayBrt = new Date(Date.now() - 3 * 3600_000).toISOString().split('T')[0]
+  const invoiceValid = !!p.invoiceUrl && p.dueDate >= todayBrt
+  const venceHoje = !!p.regenerated || p.dueDate === todayBrt
+  const row = (label: string, value: string) => `
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">${label}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-size:14px;color:#0b0b0f;text-align:right;"><strong>${value}</strong></td>
+      </tr>`
+  const contentHtml = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:4px;">
+      ${row('Evento', escape(p.eventoNome))}
+      ${row('Plano', escape(p.planoLabel))}
+      ${row('Valor', money(p.valor))}
+      ${row(venceHoje ? 'Vence hoje' : 'Vencimento', escape(dueFmt))}
+    </table>
+    ${venceHoje ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">O pagamento é por <strong>Pix ou cartão</strong>.</p>` : ''}
+    <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Sem o pagamento, as vendas do evento ficam fechadas e o painel é travado a partir do vencimento. Pagando, tudo é liberado na hora.
+    </p>
+    ${invoiceValid ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#64748b;text-align:center;">Prefere a fatura da Asaas? <a href="${escape(p.invoiceUrl)}" style="color:#ff0068;">Abrir fatura</a> (válida até o vencimento).</p>` : ''}`
+  return {
+    subject: `[${p.eventoNome}] Fatura da taxa do plano ${p.planoLabel} — ${venceHoje ? 'vence hoje' : `vence ${dueFmt}`}`,
+    html: baseLayout({
+      preheader: `Taxa do plano ${p.planoLabel} de ${money(p.valor)}, ${venceHoje ? 'vence hoje' : `vencimento ${dueFmt}`}.`,
+      title: 'Fatura da taxa do plano',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, a CoreoHub gerou a fatura de ativação do plano <strong>${escape(p.planoLabel)}</strong> do seu evento.`,
+      contentHtml,
+      ctaLabel: 'Pagar agora',
+      ctaUrl: `${appUrl}/qg-organizador`,
+      footerNote: 'Você está recebendo este e-mail porque a Asaas não envia avisos de cobrança a você. Em caso de dúvidas, responda esta mensagem.',
+    }),
+  }
+}
+
 interface PlanFeeOverdueAdminPayload {
   eventos: Array<{
     nome:           string
@@ -2183,6 +2251,7 @@ interface SendEmailRequest {
     | 'payout_released'
     | 'lead_reengagement'
     | 'plan_fee_deletion_warning'
+    | 'plan_fee_invoice'
     | 'plan_fee_overdue_admin'
     | 'producer_debt_notice'
     | 'producer_debt_admin'
@@ -2622,6 +2691,18 @@ Deno.serve(async (req) => {
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         if (!p.eventoNome) throw new Error('eventoNome é obrigatório')
         const tpl = buildPlanFeeDeletionWarning(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        break
+      }
+      case 'plan_fee_invoice': {
+        const p = payload as unknown as PlanFeeInvoicePayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        if (!p.eventoNome) throw new Error('eventoNome é obrigatório')
+        if (typeof p.valor !== 'number' || !p.dueDate) throw new Error('valor e dueDate são obrigatórios')
+        const tpl = buildPlanFeeInvoice(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html

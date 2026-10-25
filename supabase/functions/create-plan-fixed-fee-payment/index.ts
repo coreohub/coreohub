@@ -263,6 +263,37 @@ Deno.serve(async (req) => {
       throw updErr
     }
 
+    // ── 6. Avisa o produtor por e-mail (a Asaas não avisa: notificationDisabled).
+    //       Best-effort: falha ou lentidão do e-mail nunca derruba a criação. ──
+    if (producerProfile?.email) {
+      try {
+        const mailRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'plan_fee_invoice',
+            payload: {
+              produtorEmail: producerProfile.email,
+              produtorNome:  producerProfile.full_name ?? undefined,
+              eventoNome:    event.name,
+              planoLabel,
+              valor:         valorCobrar,
+              dueDate:       dueDateStr,
+              invoiceUrl:    payData.invoiceUrl ?? null,
+              regenerated,
+            },
+          }),
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!mailRes.ok) console.warn('[create-plan-fixed-fee-payment] e-mail da fatura falhou:', mailRes.status, (await mailRes.text().catch(() => '')).slice(0, 200))
+      } catch (mailErr: any) {
+        console.warn('[create-plan-fixed-fee-payment] e-mail da fatura falhou:', mailErr?.message ?? mailErr)
+      }
+    }
+
     return json(corsHeaders, {
       payment_id:    payData.id,
       invoice_url:   payData.invoiceUrl,
