@@ -4,6 +4,16 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-10-25 — E-mail da fatura da taxa de plano + lembretes antes/depois do vencimento ✅ (edges em produção)
+
+- **Por quê:** a fatura da taxa de plano (Essencial R$ 250 / Escala R$ 1.490) é criada com `notificationDisabled: true`, então a Asaas não avisa o produtor. O link só aparecia num modal na criação e no banner do painel (caso Lorrayne: só percebeu depois de vencida).
+- **Template `plan_fee_invoice` (`send-email`):** evento, plano, valor, vencimento com dia da semana, botão "Pagar agora" para `app.coreohub.com/qg-organizador` (idempotente, sempre gera fatura válida; o link da fatura da Asaas morre no vencimento) e link secundário da fatura só dentro do prazo. Fatura refeita sai como "Vence hoje" com aviso de Pix ou cartão. Campo `lembrete: 'antes' | 'depois'` troca título, assunto e texto para os lembretes do cron.
+- **Envio na criação (`create-plan-fixed-fee-payment`):** só em fatura nova (não no `reused:true`), depois de gravar o plano no evento, best-effort com timeout de 8 s. Falha de e-mail vira `console.warn` e não afeta a resposta. Destinatário: `profiles.email` do `created_by`.
+- **Lembretes (`notify-unpaid-plan-fee-events`, cron diário 13:00 UTC):** estágio `pre2` (vence em 1-2 dias corridos de Brasília) e `post1` (venceu há 1-2 dias), 1x por estágio por evento via `notifications` tipo `plan_fee_reminder`. Vale também para evento com movimento financeiro (a exclusão, não). Antes só avisava a partir de 30 dias de atraso.
+- **Validado no sandbox** (conta `teste.produtor@coreohub.com`, e-mail trocado temporariamente por alias `tickobboy+teste@gmail.com`): e-mail de fatura nova chegou e renderizou certo; `reused` não reenvia; destinatário inválido não derruba a criação; cron mandou os 2 lembretes (antes e depois) e na 2ª rodada mandou 0. Dados de teste apagados.
+- **Não testado ao vivo:** fatura refeita (`regenerated:true`) — exigiria desabilitar o trigger `protect_commission_columns_trigger` em produção, o que foi recusado; só o template foi conferido. Duas faturas sandbox órfãs ficaram na Asaas (`pay_j79mpc1vjxupw07e`, `pay_88006cpuvuniwf1x`), inofensivas.
+- **Descartado:** anexar PDF da fatura — só o boleto tem PDF, é cancelado no vencimento e Pix/cartão não têm anexo. Se o produtor precisar de comprovante, o caminho é um "demonstrativo" próprio.
+
 ### 2026-10-21 — Leitura de regulamento migrada do Gemini para a Anthropic (`parse-regulation`) ✅ (em produção)
 
 - **O que mudou:** `services/geminiService.ts` (`callGeminiEdge`) chama `parse-regulation` no lugar de `gemini-analysis`. Mesmo contrato (entrada `{ text }` ou `{ pdf_base64 }`, mesmos limites ~20 MB / 500 mil caracteres, 15 análises/24 h por usuário via `ai_usage_log`, `feature='parse-regulation'`), saída = o JSON da extração. As 3 telas que usam (`RegulationAIParser`, `CreateEvent`, `OnboardingWizard`) trocam de uma vez. Textos de UI sem "Gemini" (`RegulationAIParser`, `PropostaGoverno`). `gemini-analysis` continua DEPLOYADA como reserva; desligar depois de algumas semanas sem problema.

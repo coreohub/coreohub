@@ -7,6 +7,12 @@
 //   - Aviso ao PRODUTOR (e-mail + notificação in-app), 1x por estágio por evento:
 //       d30 → vencido há 30-52 dias  (primeiro aviso; faltam até 30 dias)
 //       d53 → vencido há 53+ dias    (aviso final; faltam ~7 dias)
+//   - Lembrete de pagamento ao PRODUTOR (e-mail + notificação in-app), 1x por estágio:
+//       pre2  → vencimento daqui a 1-2 dias (dias corridos, horário de Brasília)
+//       post1 → venceu há 1-2 dias (vendas fechadas e painel travado)
+//     A fatura da Asaas é criada sem aviso ao produtor (notificationDisabled), então
+//     o e-mail é o único lembrete ativo. Vale pra qualquer evento com taxa pendente,
+//     com ou sem movimento financeiro (diferente da exclusão, que ignora quem vendeu).
 //   - Resumo semanal (segunda-feira) ao ADMIN com os eventos vencidos há 60+ dias.
 //
 // O que NÃO faz (de propósito): excluir evento. Exclusão é irreversível — fica
@@ -82,6 +88,65 @@ Deno.serve(async (req) => {
   if (pendErr) return respond(500, { error: pendErr.message })
 
   const now = Date.now()
+
+  // 1b. Lembretes curtos (antes/depois do vencimento), em dias corridos de Brasília.
+  const brtDay = (ms: number) => new Date(ms - 3 * 3600_000).toISOString().split('T')[0]
+  const dayDiff = (a: string, b: string) => Math.round((new Date(`${a}T12:00:00Z`).getTime() - new Date(`${b}T12:00:00Z`).getTime()) / 86_400_000)
+  const todayBrt = brtDay(now)
+  const reminders = (pending ?? []).flatMap((ev: any) => {
+    const dueMs = ev.billing_plan_fee_due_at
+      ? new Date(ev.billing_plan_fee_due_at).getTime()
+      : ev.billing_plan_set_at ? new Date(ev.billing_plan_set_at).getTime() + GRACE_DAYS * 86_400_000 : null
+    if (dueMs === null) return []
+    const dueDay = brtDay(dueMs)
+    const untilDue = dayDiff(dueDay, todayBrt)
+    const stage = untilDue >= 1 && untilDue <= 2 ? 'pre2' : untilDue <= -1 && untilDue >= -2 ? 'post1' : null
+    return stage ? [{ ...ev, stage, dueDay }] : []
+  })
+  let reminded = 0
+  if (reminders.length > 0) {
+    const rids = reminders.map((e: any) => e.id)
+    const [{ data: sentRem }, { data: remProfiles }] = await Promise.all([
+      supabase.from('notifications').select('event_id, metadata').eq('type', 'plan_fee_reminder').in('event_id', rids),
+      supabase.from('profiles').select('id, email, full_name').in('id', [...new Set(reminders.map((e: any) => e.created_by).filter(Boolean))] as string[]),
+    ])
+    const remSent = new Set((sentRem ?? []).map((n: any) => `${n.event_id}:${n.metadata?.stage}`))
+    const remProfileById = Object.fromEntries((remProfiles ?? []).map((p: any) => [p.id, p]))
+    for (const ev of reminders as any[]) {
+      if (remSent.has(`${ev.id}:${ev.stage}`)) continue
+      const prod = remProfileById[ev.created_by]
+      if (!prod?.email) continue
+      const planoLabel = PLAN_LABEL[ev.billing_plan] ?? ev.billing_plan
+      const depois = ev.stage === 'post1'
+      // Marcador primeiro (mesmo padrão do aviso de exclusão): e-mail que falha não vira loop.
+      const { error: remErr } = await supabase.from('notifications').insert({
+        user_id: ev.created_by,
+        event_id: ev.id,
+        type: 'plan_fee_reminder',
+        severity: depois ? 'warning' : 'info',
+        title: depois ? `Taxa do plano ${planoLabel} venceu` : `Taxa do plano ${planoLabel} vence em breve`,
+        body: depois
+          ? `A taxa de ativação de "${ev.name}" venceu. As vendas estão fechadas até o pagamento.`
+          : `A taxa de ativação de "${ev.name}" vence em breve. Sem o pagamento, as vendas fecham no vencimento.`,
+        cta_url: '/qg-organizador',
+        cta_label: 'Pagar agora',
+        metadata: { stage: ev.stage },
+      })
+      if (remErr) { errors.push({ event: ev.id, error: remErr.message }); continue }
+      await sendEmail('plan_fee_invoice', {
+        produtorEmail: prod.email,
+        produtorNome: prod.full_name ?? undefined,
+        eventoNome: ev.name,
+        planoLabel,
+        valor: PLAN_FIXED_FEE[ev.billing_plan] ?? 0,
+        dueDate: ev.dueDay,
+        lembrete: depois ? 'depois' : 'antes',
+        appUrl,
+      })
+      reminded++
+    }
+  }
+
   const overdue = (pending ?? []).flatMap((ev: any) => {
     const due = ev.billing_plan_fee_due_at
       ? new Date(ev.billing_plan_fee_due_at).getTime()
@@ -90,7 +155,7 @@ Deno.serve(async (req) => {
     const daysOver = Math.floor((now - due) / 86_400_000)
     return daysOver >= WARN_FROM_DAYS ? [{ ...ev, daysOver }] : []
   })
-  if (overdue.length === 0) return respond(200, { status: 'ok', message: 'Nenhum evento vencido há 30+ dias', pending: pending?.length ?? 0 })
+  if (overdue.length === 0) return respond(200, { status: 'ok', message: 'Nenhum evento vencido há 30+ dias', pending: pending?.length ?? 0, payment_reminders_sent: reminded, errors })
 
   const ids = overdue.map((e: any) => e.id)
 
@@ -170,12 +235,13 @@ Deno.serve(async (req) => {
     if (ok) adminDigest = eligible.length
   }
 
-  console.log(`[notify-unpaid-plan-fee-events] overdue30=${overdue.length} semMovimento=${candidates.length} avisos=${warned} resumoAdmin=${adminDigest} erros=${errors.length}`)
+  console.log(`[notify-unpaid-plan-fee-events] overdue30=${overdue.length} semMovimento=${candidates.length} avisos=${warned} lembretes=${reminded} resumoAdmin=${adminDigest} erros=${errors.length}`)
   return respond(200, {
     status: 'ok',
     overdue_30plus: overdue.length,
     with_movement_skipped: overdue.length - candidates.length,
     producer_warnings_sent: warned,
+    payment_reminders_sent: reminded,
     admin_digest_events: adminDigest,
     errors,
   })

@@ -112,6 +112,7 @@ Pagamentos:
 - `refund-asaas-payment`, `refund-audience-ticket`, `process-video-refund`
 - `daily-release-funds` (cron 03:00 UTC — Settlement D+7), `manual-transfer-now` (botão "Transferir agora")
 - `expire-pending-payments`, `send-payment-reminders`
+- `create-plan-fixed-fee-payment` (taxa de plano Essencial/Escala; manda e-mail `plan_fee_invoice` ao produtor quando cria fatura nova, a Asaas não avisa) e `notify-unpaid-plan-fee-events` (cron 13:00 UTC: lembrete 2 dias antes e 1 dia depois do vencimento + aviso de exclusão a partir de 30 dias de atraso). Detalhe em `docs/HISTORICO.md` 2026-10-25.
 
 Operacional:
 - `judge-login` (PIN + offline-aware), `seed-demo-event`, `seed-voice-samples`, `check-producer-kyc`, `disable-asaas-notifications`, `admin-impersonate`
