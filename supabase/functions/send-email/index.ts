@@ -1832,6 +1832,8 @@ interface PlanFeeInvoicePayload {
   invoiceUrl?:    string | null
   /** Fatura refeita: vence hoje e o pagamento é por Pix ou cartão. */
   regenerated?:   boolean
+  /** Lembrete do cron: 'antes' = vence em breve; 'depois' = já venceu (vendas fechadas, painel travado). */
+  lembrete?:      'antes' | 'depois'
   appUrl?:        string
 }
 
@@ -1850,7 +1852,8 @@ function buildPlanFeeInvoice(p: PlanFeeInvoicePayload) {
   const dueFmt = fmtDateWeekday(p.dueDate)
   const todayBrt = new Date(Date.now() - 3 * 3600_000).toISOString().split('T')[0]
   const invoiceValid = !!p.invoiceUrl && p.dueDate >= todayBrt
-  const venceHoje = !!p.regenerated || p.dueDate === todayBrt
+  const depois = p.lembrete === 'depois'
+  const venceHoje = !depois && (!!p.regenerated || p.dueDate === todayBrt)
   const row = (label: string, value: string) => `
       <tr>
         <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">${label}</td>
@@ -1861,19 +1864,27 @@ function buildPlanFeeInvoice(p: PlanFeeInvoicePayload) {
       ${row('Evento', escape(p.eventoNome))}
       ${row('Plano', escape(p.planoLabel))}
       ${row('Valor', money(p.valor))}
-      ${row(venceHoje ? 'Vence hoje' : 'Vencimento', escape(dueFmt))}
+      ${row(depois ? 'Venceu em' : venceHoje ? 'Vence hoje' : 'Vencimento', escape(dueFmt))}
     </table>
-    ${venceHoje ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">O pagamento é por <strong>Pix ou cartão</strong>.</p>` : ''}
+    ${venceHoje || depois ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">O pagamento é por <strong>Pix ou cartão</strong>.</p>` : ''}
     <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">
-      Sem o pagamento, as vendas do evento ficam fechadas e o painel é travado a partir do vencimento. Pagando, tudo é liberado na hora.
+      ${depois
+        ? 'As vendas do evento estão fechadas e o painel está travado até o pagamento. Pagando, tudo é liberado na hora.'
+        : 'Sem o pagamento, as vendas do evento ficam fechadas e o painel é travado a partir do vencimento. Pagando, tudo é liberado na hora.'}
     </p>
     ${invoiceValid ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#64748b;text-align:center;">Prefere a fatura da Asaas? <a href="${escape(p.invoiceUrl)}" style="color:#ff0068;">Abrir fatura</a> (válida até o vencimento).</p>` : ''}`
   return {
-    subject: `[${p.eventoNome}] Fatura da taxa do plano ${p.planoLabel} — ${venceHoje ? 'vence hoje' : `vence ${dueFmt}`}`,
+    subject: depois
+      ? `[${p.eventoNome}] Taxa do plano ${p.planoLabel} venceu — vendas fechadas`
+      : p.lembrete === 'antes'
+        ? `[${p.eventoNome}] Lembrete: taxa do plano ${p.planoLabel} vence ${dueFmt}`
+        : `[${p.eventoNome}] Fatura da taxa do plano ${p.planoLabel} — ${venceHoje ? 'vence hoje' : `vence ${dueFmt}`}`,
     html: baseLayout({
-      preheader: `Taxa do plano ${p.planoLabel} de ${money(p.valor)}, ${venceHoje ? 'vence hoje' : `vencimento ${dueFmt}`}.`,
-      title: 'Fatura da taxa do plano',
-      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, a CoreoHub gerou a fatura de ativação do plano <strong>${escape(p.planoLabel)}</strong> do seu evento.`,
+      preheader: `Taxa do plano ${p.planoLabel} de ${money(p.valor)}, ${depois ? `venceu em ${dueFmt}` : venceHoje ? 'vence hoje' : `vencimento ${dueFmt}`}.`,
+      title: depois ? 'Taxa do plano vencida' : p.lembrete === 'antes' ? 'Lembrete da taxa do plano' : 'Fatura da taxa do plano',
+      intro: p.lembrete
+        ? `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, a taxa de ativação do plano <strong>${escape(p.planoLabel)}</strong> do seu evento ${depois ? 'venceu e ainda não foi paga' : 'está perto de vencer'}.`
+        : `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, a CoreoHub gerou a fatura de ativação do plano <strong>${escape(p.planoLabel)}</strong> do seu evento.`,
       contentHtml,
       ctaLabel: 'Pagar agora',
       ctaUrl: `${appUrl}/qg-organizador`,
