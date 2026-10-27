@@ -375,3 +375,29 @@ Achados novos:
 - Prazos: pedido no domingo 18/10, crédito na segunda 19/10 (mais rápido que "2 dias úteis + 4h").
 - Regra de produção: pagador sócio da empresa não antecipa (`cannotAnticipate`).
 - Sem prova: chargeback real, percentuais da multa/juros de recompra, liberação rotativa do limite na data de compensação (D+32...), estorno depois dos 7 dias, estorno parcial de carnê antecipado.
+
+## 18. Teste real em produção, cartão 6x COMPLETO (2026-10-24 a 27)
+
+Carnê de R$ 180 em 6x de R$ 30 (CREDIT_CARD), split fixo R$ 100 ao Hemer (`totalFixedValue`), pagadora sem vínculo societário (Vitória, cartão próprio, pago na página da Asaas), antecipação por API (POST /anticipations pelo id do carnê, 24/10, sábado), creditada em 26/10, estornada em 27/10 (POST /installments/{id}/refund). `externalReference` sem prefixo conhecido (`TESTE-REAL-PARCELADO-6X-<timestamp>`): o webhook cai no ramo legado, só loga erros e responde 200, nada gravado (conferido lendo o código). Função temporária `temp-real-card-6x` apagada (local e remota, 404). Custo real do teste: R$ 10,82 (taxa de antecipação).
+
+| Item | Esperado | Medido |
+|---|---|---|
+| 1. Taxa de cartão | ~R$ 6,77 (3,49% + R$ 0,49 uma vez) | R$ 6,72 (R$ 1,12 x 6; líquido R$ 28,88 por parcela). R$ 0,49 uma vez, como no 3x |
+| 2. Taxa de antecipação | ~R$ 11 (1,70% a.m., prazo médio ~112 dias) | R$ 10,82 (190 dias na data do crédito; simulou R$ 11,00 em 24/10), só da master (RECEIVABLE_ANTICIPATION_FEE) |
+| 3. Split na subconta | integral no crédito | R$ 100 transferidos em 26/10 (6 x INTERNAL_TRANSFER_DEBIT: 16,66 x 5 + 16,70), mesmo dia do crédito; os 6 splits DONE |
+| 4. Limite | consome R$ 180 e volta | R$ 70.000 para R$ 69.820 no crédito; voltou a R$ 70.000 no estorno |
+| 5. Elegibilidade | `anticipable` true, POST aceito | true nas 6 parcelas; POST aceito (PENDING 24/10, CREDITED 26/10, 1 dia útil) |
+| 6. Estorno do carnê antecipado | master debitada, taxa de cartão volta? | Ver abaixo |
+
+Estorno (item 6):
+- **Primeira tentativa (27/10) recusada**: HTTP 400 `invalid_action`, "para cancelar esta venda, é necessário ter saldo disponível em conta... seu saldo não é suficiente", com a master em R$ 102,07. Nada mudou. A reversão do split NÃO conta para esse pré-requisito: a Asaas exige saldo na master para o adiantamento antes de começar. O limiar exato está entre R$ 162,46 (líquido adiantado) e R$ 202,07 (saldo da segunda tentativa); não foi isolado.
+- **Segunda tentativa, com R$ 100 de reserva em Pix (master R$ 202,07): aceita**. 6 refunds DONE, parcelas REFUNDED, splits REFUNDED.
+- Por parcela no extrato da master: +R$ 1,12 (PAYMENT_FEE_REVERSAL, taxa de cartão DEVOLVIDA, como no 3x), +R$ 16,66 (INTERNAL_TRANSFER_CREDIT, estorno da comissão: o split voltou da subconta), −R$ 30 (RECEIVABLE_ANTICIPATION_DEBIT, baixa da parcela). Efeito líquido: −R$ 12,22 por parcela, −R$ 73,28 no total. Master de R$ 202,07 para R$ 128,79 (= saldo anterior à reserva menos o Pix de R$ 50 do dia 25 menos R$ 10,82 da taxa de antecipação, mais a reserva de R$ 100).
+- Sem multa nem juros de recompra no extrato (como no 3x). Só a taxa de antecipação (R$ 10,82) não volta.
+- A subconta do Hemer estava em −R$ 2,00 antes; o split de R$ 100 saiu e voltou (saldo final esperado −R$ 2,00, não conferido em tela depois do estorno).
+
+Regra de produção que o 6x acrescenta: **antes de estornar um carnê antecipado, a master precisa ter saldo livre maior que o valor líquido adiantado (R$ 162,46 de R$ 180), não só a baixa líquida do estorno**. No 3x o saldo livre (R$ 79) cobria o bruto de R$ 60 com folga e não apareceu. Em produção, um estorno de passe antecipado de R$ 500+ em 6x com a master baixa FALHA até haver caixa (a Asaas confirmou por escrito a regra de saldo da principal, seção 14). A CoreoHub precisa manter reserva na master proporcional à soma dos carnês antecipados ainda estornáveis (7 dias), ou travar o estorno com aviso.
+
+Custo real (6x): R$ 10,82 sobre R$ 180 (6,0% do bruto; 6,25% do valor após o MDR). Medido contra esperado: dentro de 2%.
+
+Sem prova (continua): chargeback real, percentuais da multa e dos juros da recompra, liberação rotativa do limite em D+32 em diante, estorno depois dos 7 dias, estorno parcial de carnê antecipado, limiar exato do saldo exigido no estorno.
