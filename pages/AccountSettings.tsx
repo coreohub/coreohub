@@ -924,6 +924,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     city: '',
     state: '',
     mobile_phone: '',
+    account_email: '',
   });
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError]     = useState<string | null>(null);
@@ -1104,6 +1105,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     if (asaasForm.state.trim().length !== 2) { setAsaasFormError('Informe a UF (2 letras, ex.: SP).'); return; }
     if (phoneDigits.length < 10 || phoneDigits.length > 11) { setAsaasFormError('Celular inválido. Informe DDD + número.'); return; }
 
+    const accountEmail = asaasForm.account_email.trim();
+    if (accountEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail)) { setAsaasFormError('E-mail da conta de recebimento inválido.'); return; }
+
     setAsaasLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -1114,6 +1118,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
+          account_email:  accountEmail || undefined,
           cpf_cnpj:       cpfCnpjDigits,
           pix_key:        asaasForm.pix_key,
           company_type:   isCnpj ? asaasForm.company_type : undefined,
@@ -6216,6 +6221,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                         />
                         <p className="text-[9px] text-slate-400 mt-1">Exigido pelo Asaas para validação cadastral (KYC).</p>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">E-mail da conta de recebimento (opcional)</label>
+                        <input
+                          type="email"
+                          value={asaasForm.account_email}
+                          onChange={e => setAsaasForm(f => ({ ...f, account_email: e.target.value }))}
+                          placeholder="Deixe vazio para usar o e-mail do seu login"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                        <p className="text-[9px] text-slate-400 mt-1">Use só se der erro de e-mail já em uso. A Asaas aceita um e-mail por conta; informe um que nunca tenha sido usado lá. Seu login na CoreoHub não muda.</p>
                       </div>
 
                       <div>
