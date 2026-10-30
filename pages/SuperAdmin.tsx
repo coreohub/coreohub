@@ -1272,6 +1272,10 @@ const SuperAdmin = () => {
           event={eventEdit}
           onClose={() => setEventEdit(null)}
           onSave={handleSaveEventCommission}
+          onPlanInvoiced={(patch) => {
+            const id = eventEdit.id;
+            setEventsList(list => list.map(e => e.id === id ? { ...e, ...patch } : e));
+          }}
         />
       )}
 
@@ -1426,7 +1430,8 @@ const EventCommissionModal: React.FC<{
   event: EventRow;
   onClose: () => void;
   onSave: (patch: Partial<EventRow>) => void;
-}> = ({ event, onClose, onSave }) => {
+  onPlanInvoiced: (patch: Partial<EventRow>) => void;
+}> = ({ event, onClose, onSave, onPlanInvoiced }) => {
   // Literais minúsculos batendo com o que o banco sempre guarda em
   // commission_type ('percent'/'fixed') — antes eram 'PERCENT'/'FIXED'
   // maiúsculo, e como o valor lido do banco já vem minúsculo, a comparação
@@ -1469,6 +1474,26 @@ const EventCommissionModal: React.FC<{
       });
   };
   useEffect(fetchFeeStatus, [event.id]);
+
+  // Troca com cobrança: mesmo fluxo que o produtor teria na criação do evento
+  // (create-plan-fixed-fee-payment grava o plano, gera a fatura e manda o
+  // e-mail). Só vale pra evento ainda em Começo indo pra Essencial/Escala.
+  const [invoicing, setInvoicing] = useState(false);
+  const [invoiceErr, setInvoiceErr] = useState<string | null>(null);
+  const [invoiceDone, setInvoiceDone] = useState<{ invoice_url: string; due_date: string; valor: number; label: string } | null>(null);
+  const canInvoice = event.billing_plan === 'comeco' && (billingPlan === 'essencial' || billingPlan === 'escala');
+
+  const handleChangeAndInvoice = async () => {
+    setInvoicing(true);
+    setInvoiceErr(null);
+    const { data, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
+      body: { event_id: event.id, plano: billingPlan },
+    });
+    setInvoicing(false);
+    if (fnError || data?.error) { setInvoiceErr(data?.error ?? fnError?.message ?? 'Erro ao gerar a fatura.'); return; }
+    setInvoiceDone({ invoice_url: data.invoice_url, due_date: data.due_date, valor: data.valor_cobrado, label: data.plano_label });
+    onPlanInvoiced({ billing_plan: billingPlan, commission_percent: BILLING_PLAN_COMMISSION[billingPlan] });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -1601,6 +1626,34 @@ const EventCommissionModal: React.FC<{
               </p>
             )}
 
+            {canInvoice && !invoiceDone && (
+              <div className="mt-2 rounded-xl border border-[#ff0068]/30 bg-[#ff0068]/5 p-3 space-y-2">
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  Para cobrar a taxa fixa: troca o plano, gera a fatura de R$ {billingPlan === 'escala' ? '1.490,00' : '250,00'} e manda o e-mail pra produtora (prazo de 7 dias, igual ao fluxo normal). A comissão cai quando ela pagar.
+                </p>
+                <button
+                  onClick={handleChangeAndInvoice}
+                  disabled={invoicing}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:bg-slate-300 dark:disabled:bg-white/10 disabled:text-slate-500 text-white rounded-xl font-black text-xs uppercase tracking-widest"
+                >
+                  {invoicing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Trocar e gerar fatura
+                </button>
+                {invoiceErr && <p className="text-xs text-rose-500">{invoiceErr}</p>}
+              </div>
+            )}
+            {invoiceDone && (
+              <div className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-1">
+                <p className="text-xs font-bold text-emerald-500">
+                  Plano {invoiceDone.label} ativado. Fatura de R$ {Number(invoiceDone.valor).toFixed(2)} gerada (vence {invoiceDone.due_date}) e e-mail enviado.
+                </p>
+                <a href={invoiceDone.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:underline">
+                  <ExternalLink size={11} /> Abrir fatura
+                </a>
+                <p className="text-[10px] text-slate-500">A comissão desse evento já está no novo plano. Pode fechar esta janela.</p>
+              </div>
+            )}
+
             {/* Status real da fatura pendente do componente fixo — não existe
                 pro Plano Espetáculo (é só % sobre GMV, sem fixo adiantado),
                 então o bloco inteiro não faz sentido pra esse plano. */}
@@ -1654,7 +1707,7 @@ const EventCommissionModal: React.FC<{
             />
           </div>
 
-          <button
+          {!invoiceDone && <button
             onClick={() => onSave({
               commission_type:    type,
               commission_percent: billingPlan !== event.billing_plan ? BILLING_PLAN_COMMISSION[billingPlan] : (type === 'percent' ? percent : 0),
@@ -1667,7 +1720,7 @@ const EventCommissionModal: React.FC<{
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-sm uppercase tracking-widest"
           >
             <Check size={16} /> Salvar Comissão
-          </button>
+          </button>}
         </div>
       </div>
     </div>
