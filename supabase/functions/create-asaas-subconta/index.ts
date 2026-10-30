@@ -120,8 +120,14 @@ Deno.serve(async (req) => {
       .eq('id', user.id)
       .single()
 
-    // email vem de auth.users (user.email), não de profiles
-    const email = user.email ?? ''
+    // email vem de auth.users (user.email), não de profiles. O produtor pode informar
+    // outro e-mail só pra conta Asaas (a Asaas aceita 1 conta por e-mail no sistema todo;
+    // se o e-mail do login já tem conta fora da CoreoHub, o cadastro é recusado).
+    const altEmail = String(body.account_email ?? '').trim().toLowerCase()
+    if (altEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altEmail)) {
+      throw new Error('E-mail da conta de recebimento inválido.')
+    }
+    const email = altEmail || (user.email ?? '')
     if (!profile?.full_name || !email) {
       throw new Error('Perfil incompleto. Preencha nome e email antes de continuar.')
     }
@@ -211,7 +217,7 @@ Deno.serve(async (req) => {
       if (!existing) {
         console.error('[create-asaas-subconta] subconta duplicada mas não recuperável. email:', email, 'cpf:', cpfLimpo)
         throw new Error(
-          `${errMsg || 'Conflito detectado'} Não conseguimos recuperar a subconta existente automaticamente. Entre em contato com o suporte WhatsApp: https://wa.me/5517997936169`
+          `${errMsg || 'Conflito detectado'} Esse e-mail já tem conta na Asaas fora da CoreoHub. Informe outro e-mail no campo "E-mail da conta de recebimento" e tente de novo. Se continuar, chame o suporte WhatsApp: https://wa.me/5517997936169`
         )
       }
       // GET /accounts não retorna apiKey/accessToken — vai recorrer ao que estiver
