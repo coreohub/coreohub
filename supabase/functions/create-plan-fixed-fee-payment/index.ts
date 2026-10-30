@@ -140,7 +140,11 @@ Deno.serve(async (req) => {
       const oldRes = await fetch(`${ASAAS_BASE_URL}/payments/${oldId}`, { headers: asaasHeaders })
       const old = oldRes.ok ? await oldRes.json() : null
 
-      if (old && !old.deleted && old.status === 'PENDING') {
+      // Só reaproveita se a fatura em aberto é MESMO deste plano e valor — senão
+      // (ex.: sobrou uma de Escala e agora escolheu Essencial) cai no ramo que
+      // apaga e refaz, em vez de devolver o link do plano errado.
+      const sameInvoice = old && old.externalReference === `PLANFEE:${event_id}:${plano}` && Number(old.value) === valorCobrar
+      if (old && !old.deleted && old.status === 'PENDING' && sameInvoice) {
         if (isFirstCharge) {
           // Fatura antiga do fluxo anterior (evento ainda em Começo): só
           // promove o plano, sem mexer no prazo já combinado.
@@ -270,7 +274,9 @@ Deno.serve(async (req) => {
       await activatePlan(
         supabase, event_id, plano, payData.id,
         // Prazo do gate só na 1ª fatura de verdade (não na refeita).
-        !regenerated && !event.billing_plan_fee_due_at ? `${graceDate}T23:59:59-03:00` : null,
+        // (1ª escolha vinda do Começo sempre regrava, senão um prazo velho de
+        // um plano anterior sobrevive e trava o painel antes da hora.)
+        !regenerated && (isFirstCharge || !event.billing_plan_fee_due_at) ? `${graceDate}T23:59:59-03:00` : null,
       )
     } catch (updErr) {
       await fetch(`${ASAAS_BASE_URL}/payments/${payData.id}`, { method: 'DELETE', headers: asaasHeaders }).catch(() => {})

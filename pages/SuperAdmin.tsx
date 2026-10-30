@@ -1480,20 +1480,32 @@ const EventCommissionModal: React.FC<{
   // e-mail). Só vale pra evento ainda em Começo indo pra Essencial/Escala.
   const [invoicing, setInvoicing] = useState(false);
   const [invoiceErr, setInvoiceErr] = useState<string | null>(null);
-  const [invoiceDone, setInvoiceDone] = useState<{ invoice_url: string; due_date: string; valor: number; label: string } | null>(null);
+  const [invoiceDone, setInvoiceDone] = useState<{ invoice_url: string; due_date: string; valor: number; label: string; reused: boolean } | null>(null);
   const INVOICE_GRACE_DAYS = 3;
   const canInvoice = event.billing_plan === 'comeco' && (billingPlan === 'essencial' || billingPlan === 'escala');
 
   const handleChangeAndInvoice = async () => {
     setInvoicing(true);
     setInvoiceErr(null);
-    const { data, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
-      body: { event_id: event.id, plano: billingPlan, grace_days: INVOICE_GRACE_DAYS },
-    });
-    setInvoicing(false);
-    if (fnError || data?.error) { setInvoiceErr(data?.error ?? fnError?.message ?? 'Erro ao gerar a fatura.'); return; }
-    setInvoiceDone({ invoice_url: data.invoice_url, due_date: data.due_date, valor: data.valor_cobrado, label: data.plano_label });
-    onPlanInvoiced({ billing_plan: billingPlan, commission_percent: BILLING_PLAN_COMMISSION[billingPlan] });
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
+        body: { event_id: event.id, plano: billingPlan, grace_days: INVOICE_GRACE_DAYS },
+      });
+      // Resposta 400 vem como FunctionsHttpError com data nulo — o motivo real
+      // está no corpo (error.context), não em fnError.message.
+      let msg: string | null = data?.error ?? null;
+      if (!msg && fnError) {
+        msg = fnError.message ?? 'Erro ao gerar a fatura.';
+        try { const body = await (fnError as any).context?.json?.(); if (body?.error) msg = body.error; } catch { /* corpo não-JSON: fica a mensagem genérica */ }
+      }
+      if (msg) { setInvoiceErr(msg); return; }
+      setInvoiceDone({ invoice_url: data.invoice_url, due_date: data.due_date, valor: data.valor_cobrado, label: data.plano_label, reused: Boolean(data.reused) });
+      onPlanInvoiced({ billing_plan: billingPlan, commission_percent: BILLING_PLAN_COMMISSION[billingPlan] });
+    } catch (e: any) {
+      setInvoiceErr(e?.message ?? 'Falha de rede ao gerar a fatura. Confira em "Cobrança do componente fixo" se ela foi criada.');
+    } finally {
+      setInvoicing(false);
+    }
   };
 
   return (
@@ -1607,6 +1619,7 @@ const EventCommissionModal: React.FC<{
               {(['comeco', 'essencial', 'escala', 'espetaculo'] as const).map(p => (
                 <button
                   key={p}
+                  disabled={!!invoiceDone}
                   onClick={() => {
                     setBillingPlan(p);
                     setPercent(p === event.billing_plan ? Number(event.commission_percent ?? 10) : BILLING_PLAN_COMMISSION[p]);
@@ -1621,7 +1634,7 @@ const EventCommissionModal: React.FC<{
                 </button>
               ))}
             </div>
-            {billingPlan !== event.billing_plan && (
+            {billingPlan !== event.billing_plan && !invoiceDone && (
               <p className="text-[10px] text-amber-500 font-bold mt-1.5 flex items-start gap-1.5">
                 <AlertCircle size={12} className="shrink-0 mt-0.5" />
                 {billingPlan === 'espetaculo'
@@ -1649,7 +1662,7 @@ const EventCommissionModal: React.FC<{
             {invoiceDone && (
               <div className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-1">
                 <p className="text-xs font-bold text-emerald-500">
-                  Plano {invoiceDone.label} ativado. Fatura de R$ {Number(invoiceDone.valor).toFixed(2)} gerada (vence {invoiceDone.due_date}) e e-mail enviado.
+                  Plano {invoiceDone.label} ativado. Fatura de R$ {Number(invoiceDone.valor).toFixed(2)} {invoiceDone.reused ? 'já existia em aberto (reaproveitada, sem novo e-mail)' : 'gerada e e-mail enviado'} — vence {invoiceDone.due_date}.
                 </p>
                 <a href={invoiceDone.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:underline">
                   <ExternalLink size={11} /> Abrir fatura
