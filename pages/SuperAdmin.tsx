@@ -1481,13 +1481,14 @@ const EventCommissionModal: React.FC<{
   const [invoicing, setInvoicing] = useState(false);
   const [invoiceErr, setInvoiceErr] = useState<string | null>(null);
   const [invoiceDone, setInvoiceDone] = useState<{ invoice_url: string; due_date: string; valor: number; label: string } | null>(null);
+  const INVOICE_GRACE_DAYS = 3;
   const canInvoice = event.billing_plan === 'comeco' && (billingPlan === 'essencial' || billingPlan === 'escala');
 
   const handleChangeAndInvoice = async () => {
     setInvoicing(true);
     setInvoiceErr(null);
     const { data, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
-      body: { event_id: event.id, plano: billingPlan },
+      body: { event_id: event.id, plano: billingPlan, grace_days: INVOICE_GRACE_DAYS },
     });
     setInvoicing(false);
     if (fnError || data?.error) { setInvoiceErr(data?.error ?? fnError?.message ?? 'Erro ao gerar a fatura.'); return; }
@@ -1606,7 +1607,10 @@ const EventCommissionModal: React.FC<{
               {(['comeco', 'essencial', 'escala', 'espetaculo'] as const).map(p => (
                 <button
                   key={p}
-                  onClick={() => setBillingPlan(p)}
+                  onClick={() => {
+                    setBillingPlan(p);
+                    setPercent(p === event.billing_plan ? Number(event.commission_percent ?? 10) : BILLING_PLAN_COMMISSION[p]);
+                  }}
                   className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                     billingPlan === p
                       ? 'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/40'
@@ -1629,7 +1633,7 @@ const EventCommissionModal: React.FC<{
             {canInvoice && !invoiceDone && (
               <div className="mt-2 rounded-xl border border-[#ff0068]/30 bg-[#ff0068]/5 p-3 space-y-2">
                 <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                  Para cobrar a taxa fixa: troca o plano, gera a fatura de R$ {billingPlan === 'escala' ? '1.490,00' : '250,00'} e manda o e-mail pra produtora (prazo de 7 dias, igual ao fluxo normal). A comissão cai quando ela pagar.
+                  Para cobrar a taxa fixa: troca o plano, gera a fatura de R$ {billingPlan === 'escala' ? '1.490,00' : '250,00'} e manda o e-mail pra produtora (vence em {INVOICE_GRACE_DAYS} dias). A comissão já muda pra {BILLING_PLAN_COMMISSION[billingPlan]}% agora; se ela não pagar em {INVOICE_GRACE_DAYS} dias, o painel dela trava até pagar.
                 </p>
                 <button
                   onClick={handleChangeAndInvoice}
@@ -1650,7 +1654,7 @@ const EventCommissionModal: React.FC<{
                 <a href={invoiceDone.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:underline">
                   <ExternalLink size={11} /> Abrir fatura
                 </a>
-                <p className="text-[10px] text-slate-500">A comissão desse evento já está no novo plano. Pode fechar esta janela.</p>
+                <p className="text-[10px] text-slate-500">A comissão desse evento já está em {BILLING_PLAN_COMMISSION[billingPlan]}%. Pode fechar esta janela.</p>
               </div>
             )}
 

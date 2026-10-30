@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { event_id, plano } = await req.json()
+    const { event_id, plano, grace_days: requestedGraceDays } = await req.json()
     if (!event_id) throw new Error('event_id é obrigatório.')
     if (!plano || !(plano in PLAN_FIXED_FEE)) throw new Error('Plano inválido — use "essencial" ou "escala".')
 
@@ -92,12 +92,18 @@ Deno.serve(async (req) => {
     // Dono do evento OU super admin agindo em nome do produtor (botão "Trocar e
     // gerar fatura" em /super-admin). A fatura, o customer Asaas e o e-mail
     // continuam sendo do produtor (event.created_by), nunca do admin.
+    let callerIsAdmin = false
     if (event.created_by !== user.id) {
       const { data: caller } = await supabase
         .from('profiles').select('is_super_admin, role').eq('id', user.id).maybeSingle()
-      const isAdmin = Boolean(caller?.is_super_admin) || caller?.role === 'COREOHUB_ADMIN'
-      if (!isAdmin) throw new Error('Sem permissão para este evento.')
+      callerIsAdmin = Boolean(caller?.is_super_admin) || caller?.role === 'COREOHUB_ADMIN'
+      if (!callerIsAdmin) throw new Error('Sem permissão para este evento.')
     }
+    // Prazo da 1ª fatura: padrão da plataforma (GRACE_DAYS, Termo) — só o admin
+    // pode encurtar, pra negociação direta (1 a GRACE_DAYS dias).
+    const graceDays = callerIsAdmin && Number.isInteger(requestedGraceDays)
+      ? Math.min(GRACE_DAYS, Math.max(1, requestedGraceDays))
+      : GRACE_DAYS
     if (event.is_demo) throw new Error('Evento demo não usa esse fluxo.')
 
     // Produção x sandbox pelo helper único (falha fechada — nunca cai em
@@ -200,7 +206,7 @@ Deno.serve(async (req) => {
     // 1ª fatura: vence no fim da tolerância (GRACE_DAYS) e esse mesmo prazo
     // vira billing_plan_fee_due_at (gate do painel). Fatura refeita depois:
     // vencimento curto, SEM estender o prazo do gate.
-    const graceDate = brtDatePlusDays(GRACE_DAYS)
+    const graceDate = brtDatePlusDays(graceDays)
     const dueDateStr = regenerated ? brtDatePlusDays(REGEN_DAYS) : graceDate
     const description = `Ativação do plano ${planoLabel} — "${event.name}"`
 
