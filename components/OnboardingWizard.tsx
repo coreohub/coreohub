@@ -30,6 +30,20 @@ const PLANO_LABELS: Record<PlanoId, { nome: string; resumo: string }> = {
   escala:    { nome: 'Escala',    resumo: 'R$ 1.490 fixo (cobrado agora) + R$ 2/participante, teto de 4,5% sobre inscrições, ingressos e workshops.' },
 };
 
+// Plano escolhido em /planos, guardado até o evento ser criado (localStorage:
+// a confirmação de e-mail abre em outra aba). Sempre em try/catch — storage
+// pode estar bloqueado.
+const PLANO_PENDENTE_KEY = 'coreohub_plano_pendente';
+const readPlanoPendente = (): PlanoId | null => {
+  try {
+    const v = localStorage.getItem(PLANO_PENDENTE_KEY);
+    return VALID_PLANOS.includes(v as PlanoId) ? (v as PlanoId) : null;
+  } catch { return null; }
+};
+const writePlanoPendente = (p: PlanoId | null) => {
+  try { p ? localStorage.setItem(PLANO_PENDENTE_KEY, p) : localStorage.removeItem(PLANO_PENDENTE_KEY); } catch { /* sem storage: segue só com a URL */ }
+};
+
 /** Mescla arrays de configs sem duplicar por `name` — primeira ocorrência vence. */
 const mergeByName = <T extends { name: string }>(items: T[]): T[] => {
   const seen = new Set<string>();
@@ -46,10 +60,16 @@ const OnboardingWizard: React.FC = () => {
   const [searchParams] = useSearchParams();
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
+  // Plano vem da URL (?plano=) ou, se o parâmetro se perdeu no caminho (login
+  // Google, "Faça login", confirmação de e-mail), do que ficou guardado no
+  // navegador. Sem nenhum dos dois, NADA vem marcado: o produtor escolhe —
+  // antes o Começo vinha marcado e quem não reparava ficava com 10% sem querer.
   const planoFromUrlRaw = searchParams.get('plano');
   const planoFromUrl: PlanoId | null = VALID_PLANOS.includes(planoFromUrlRaw as PlanoId) ? (planoFromUrlRaw as PlanoId) : null;
-  const [selectedPlan, setSelectedPlan] = useState<PlanoId>(planoFromUrl ?? 'comeco');
-  const [showPlanoSelector, setShowPlanoSelector] = useState(planoFromUrl === null);
+  const planoInicial: PlanoId | null = planoFromUrl ?? readPlanoPendente();
+  const [selectedPlan, setSelectedPlan] = useState<PlanoId | null>(planoInicial);
+  const [showPlanoSelector, setShowPlanoSelector] = useState(planoInicial === null);
+  useEffect(() => { if (planoFromUrl) writePlanoPendente(planoFromUrl); }, [planoFromUrl]);
   const [planFeeResult, setPlanFeeResult] = useState<{ invoice_url: string; valor_cobrado: number; plano_label: string } | null>(null);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
 
@@ -105,7 +125,7 @@ const OnboardingWizard: React.FC = () => {
     })();
     return () => { cancelled = true; };
   }, []);
-  const needsTermsAccept = selectedPlan !== 'comeco' && termsVersion !== TERMO_PRODUTOR_VERSION;
+  const needsTermsAccept = selectedPlan !== null && selectedPlan !== 'comeco' && termsVersion !== TERMO_PRODUTOR_VERSION;
 
   const [data, setData] = useState({
     name: '',
@@ -298,7 +318,8 @@ const OnboardingWizard: React.FC = () => {
       // grava o plano no evento (service role) junto com a fatura de 7 dias:
       // o evento já vale como Essencial/Escala, com a taxa pendente; passado o
       // prazo o painel trava (PlanFeeGateModal). Só o webhook marca como paga.
-      if (selectedPlan !== 'comeco') {
+      writePlanoPendente(null);
+      if (selectedPlan !== null && selectedPlan !== 'comeco') {
         try {
           const { data: feeData, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
             body: { event_id: ev.id, plano: selectedPlan },
@@ -550,7 +571,7 @@ const OnboardingWizard: React.FC = () => {
                   já escolheu. */}
               <div className="bg-white dark:bg-slate-900/60 rounded-3xl border border-slate-200 dark:border-white/10 p-6">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Plano do evento</p>
-                {!showPlanoSelector ? (
+                {!showPlanoSelector && selectedPlan ? (
                   <div className="flex items-center justify-between gap-3 p-4 rounded-2xl border-2 border-[#ff0068] bg-[#ff0068]/5">
                     <div>
                       <p className="font-black uppercase italic tracking-tight text-slate-900 dark:text-white">{PLANO_LABELS[selectedPlan].nome}</p>
@@ -594,6 +615,9 @@ const OnboardingWizard: React.FC = () => {
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{PLANO_LABELS.essencial.resumo}</p>
                       </button>
                     </div>
+                    {selectedPlan === null && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] mt-3">Escolha um plano pra continuar.</p>
+                    )}
                     <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-3 leading-relaxed">
                       O plano escolhido vale pro evento inteiro — não dá pra trocar depois de criado (mudança de porte vira negociação direta com a gente). Precisa do plano Escala (grande porte)? <a href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20quero%20falar%20sobre%20o%20plano%20Escala%20da%20CoreoHub" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline font-bold">Fala com a gente</a>.
                     </p>
@@ -629,7 +653,7 @@ const OnboardingWizard: React.FC = () => {
                 </button>
                 <button
                   onClick={handleCreate}
-                  disabled={!canAdvanceStep2 || saving || (needsTermsAccept && !termsChecked)}
+                  disabled={!canAdvanceStep2 || saving || !selectedPlan || (needsTermsAccept && !termsChecked)}
                   className="flex-1 flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:shadow-none disabled:hover:scale-100"
                 >
                   {saving
