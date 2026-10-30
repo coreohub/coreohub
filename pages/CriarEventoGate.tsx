@@ -216,7 +216,8 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}${oauthRedirectPath}` },
+        // Mantém a query (?plano=essencial etc.) — sem ela o plano escolhido em /planos se perdia no retorno do Google.
+        options: { redirectTo: `${window.location.origin}${oauthRedirectPath}${window.location.search}` },
       });
       if (error) throw error;
     } catch (e: any) {
@@ -372,7 +373,10 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
 
         <p className="text-center text-[10px] text-slate-400">
           Já tem conta?{' '}
-          <button onClick={() => navigate('/login')} className="text-[#ff0068] font-bold">Faça login</button>
+          <button
+            onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`${oauthRedirectPath}${window.location.search}`)}`)}
+            className="text-[#ff0068] font-bold"
+          >Faça login</button>
         </p>
       </div>
     </div>
