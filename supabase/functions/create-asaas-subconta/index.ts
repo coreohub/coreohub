@@ -216,9 +216,12 @@ Deno.serve(async (req) => {
 
       if (!existing) {
         console.error('[create-asaas-subconta] subconta duplicada mas não recuperável. email:', email, 'cpf:', cpfLimpo)
-        throw new Error(
-          `${errMsg || 'Conflito detectado'} Esse e-mail já tem conta na Asaas fora da CoreoHub. Informe outro e-mail no campo "E-mail da conta de recebimento" e tente de novo. Se continuar, chame o suporte WhatsApp: https://wa.me/5517997936169`
+        // `code` deixa o front revelar o campo de e-mail alternativo sem depender do texto.
+        const dupErr: any = new Error(
+          `${errMsg || 'Conflito detectado'} Esse e-mail já tem conta na Asaas fora da CoreoHub. Informe outro e-mail abaixo e tente de novo. Se continuar, chame o suporte WhatsApp: https://wa.me/5517997936169`
         )
+        dupErr.code = 'email_in_use'
+        throw dupErr
       }
       // GET /accounts não retorna apiKey/accessToken — vai recorrer ao que estiver
       // no Supabase. Se também estiver null lá, registro de PIX vai falhar (warn).
@@ -367,7 +370,7 @@ Deno.serve(async (req) => {
   } catch (error: any) {
     console.error('[create-asaas-subconta] erro:', error.message)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message, ...(error.code ? { code: error.code } : {}) }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

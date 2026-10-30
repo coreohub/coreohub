@@ -929,6 +929,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError]     = useState<string | null>(null);
   const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
+  // Campo de e-mail alternativo só aparece depois que a Asaas recusa o e-mail do login.
+  const [needsAltEmail, setNeedsAltEmail]       = useState(false);
+  const altEmailRef = useRef<HTMLInputElement>(null);
   const [editingPix, setEditingPix]             = useState(false);
   const [newPixKey, setNewPixKey]               = useState('');
   const [updatingPix, setUpdatingPix]           = useState(false);
@@ -1135,7 +1138,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Erro ao conectar conta Asaas.');
+      if (!res.ok) {
+        if (data.code === 'email_in_use') {
+          setNeedsAltEmail(true);
+          setTimeout(() => altEmailRef.current?.focus(), 50);
+        }
+        throw new Error(data.error ?? 'Erro ao conectar conta Asaas.');
+      }
       const { data: profile } = await supabase
         .from('profiles')
         .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key')
@@ -6222,17 +6231,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         />
                         <p className="text-[9px] text-slate-400 mt-1">Exigido pelo Asaas para validação cadastral (KYC).</p>
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">E-mail da conta de recebimento (opcional)</label>
-                        <input
-                          type="email"
-                          value={asaasForm.account_email}
-                          onChange={e => setAsaasForm(f => ({ ...f, account_email: e.target.value }))}
-                          placeholder="Deixe vazio para usar o e-mail do seu login"
-                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
-                        />
-                        <p className="text-[9px] text-slate-400 mt-1">Use só se der erro de e-mail já em uso. A Asaas aceita um e-mail por conta; informe um que nunca tenha sido usado lá. Seu login na CoreoHub não muda.</p>
-                      </div>
+                      {needsAltEmail && (
+                        <div className="rounded-2xl border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4">
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-1">Outro e-mail para a conta de recebimento</label>
+                          <input
+                            ref={altEmailRef}
+                            type="email"
+                            value={asaasForm.account_email}
+                            onChange={e => setAsaasForm(f => ({ ...f, account_email: e.target.value }))}
+                            placeholder="Um e-mail que você nunca usou na Asaas"
+                            className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <p className="text-[10px] text-amber-800 dark:text-amber-300/80 mt-2">O e-mail do seu login já tem conta na Asaas. Use outro só aqui, o seu login na CoreoHub não muda. Na chave PIX, prefira CPF, CNPJ ou celular em vez de e-mail.</p>
+                        </div>
+                      )}
 
                       <div>
                         <div className="flex items-center justify-between mb-1">
