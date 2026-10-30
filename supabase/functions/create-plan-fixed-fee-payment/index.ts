@@ -89,7 +89,15 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!event) throw new Error('Evento não encontrado.')
-    if (event.created_by !== user.id) throw new Error('Sem permissão para este evento.')
+    // Dono do evento OU super admin agindo em nome do produtor (botão "Trocar e
+    // gerar fatura" em /super-admin). A fatura, o customer Asaas e o e-mail
+    // continuam sendo do produtor (event.created_by), nunca do admin.
+    if (event.created_by !== user.id) {
+      const { data: caller } = await supabase
+        .from('profiles').select('is_super_admin, role').eq('id', user.id).maybeSingle()
+      const isAdmin = Boolean(caller?.is_super_admin) || caller?.role === 'COREOHUB_ADMIN'
+      if (!isAdmin) throw new Error('Sem permissão para este evento.')
+    }
     if (event.is_demo) throw new Error('Evento demo não usa esse fluxo.')
 
     // Produção x sandbox pelo helper único (falha fechada — nunca cai em
