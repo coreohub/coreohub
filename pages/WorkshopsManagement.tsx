@@ -12,6 +12,7 @@ import {
 import FocalPointPicker from '../components/FocalPointPicker';
 import SlugField from '../components/SlugField';
 import { slugify, suggestWorkshopSlug, slugValidity, slugAlternatives, yearOf } from '../utils/slug';
+import { QUANTITY_TIERS_MAX, validateQuantityTiers } from '../supabase/functions/_shared/workshop-checkout';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
 type FeeMode = 'repassar' | 'absorver';
@@ -2624,7 +2625,10 @@ interface PassRow {
   selection_mode: 'fixed' | 'a_la_carte';
   min_selecionaveis: number | null;
   max_selecionaveis: number | null;
+  quantity_discount_tiers: Array<{ min: number; percent: number }> | null;
 }
+
+type TierDraft = { min: string | number; percent: string | number };
 
 const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[] }> = ({ eventId, workshopsInEvent }) => {
   const [passes, setPasses]   = useState<PassRow[]>([]);
@@ -2655,6 +2659,7 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
     selection_mode: 'fixed' as 'fixed' | 'a_la_carte',
     min_selecionaveis: '' as string | number,
     max_selecionaveis: '' as string | number,
+    quantity_discount_tiers: [] as TierDraft[],
     slug: '',
   };
   const [form, setForm] = useState(emptyForm);
@@ -2719,6 +2724,7 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       selection_mode: p.selection_mode ?? 'fixed',
       min_selecionaveis: p.min_selecionaveis ?? '',
       max_selecionaveis: p.max_selecionaveis ?? '',
+      quantity_discount_tiers: (p.quantity_discount_tiers ?? []).map(t => ({ min: t.min, percent: t.percent })),
       slug: p.slug ?? '',
     });
     setFormError(null);
@@ -2736,6 +2742,9 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       if (min < 1) return setFormError('Mínimo de aulas deve ser pelo menos 1');
       if (max > form.workshop_ids.length) return setFormError('Máximo de aulas não pode passar do total de aulas no pacote');
       if (min > max) return setFormError('Mínimo não pode ser maior que o máximo');
+      const tierError = validateQuantityTiers(form.quantity_discount_tiers.map(t => ({ min: t.min === '' ? NaN : Number(t.min), percent: t.percent === '' ? NaN : Number(t.percent) })));
+      if (tierError) return setFormError(`Desconto por quantidade: ${tierError}`);
+      if (form.quantity_discount_tiers.some(t => Number(t.min) > max)) return setFormError('Desconto por quantidade: uma faixa pede mais aulas do que o aluno pode escolher');
     }
 
     setSaving(true);
@@ -2759,6 +2768,10 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       selection_mode: form.selection_mode,
       min_selecionaveis: isALaCarte ? (form.min_selecionaveis === '' ? 1 : Number(form.min_selecionaveis)) : null,
       max_selecionaveis: isALaCarte ? (form.max_selecionaveis === '' ? null : Number(form.max_selecionaveis)) : null,
+      // Só à la carte (CHECK no banco); lista vazia = sem desconto.
+      quantity_discount_tiers: isALaCarte && form.quantity_discount_tiers.length > 0
+        ? form.quantity_discount_tiers.map(t => ({ min: Number(t.min), percent: Number(t.percent) }))
+        : null,
     };
 
     let passId = editingId;
@@ -3186,6 +3199,56 @@ const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError,
                 <Sparkles size={12} className="mt-0.5 shrink-0" />
                 Preço não é fixo aqui — soma o preço vigente de cada aula que o aluno marcar. O pool esgota por aula individual (cada uma some da lista quando lotar).
               </p>
+
+              <div className="rounded-xl border border-slate-200 dark:border-white/10 p-3 space-y-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Desconto por quantidade de aulas</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Quanto mais aulas o aluno escolhe, maior o desconto sobre o total. Vale o maior entre a faixa e o cupom, nunca soma os dois.
+                  </p>
+                </div>
+                {form.quantity_discount_tiers.map((t, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                    <Field label="A partir de (aulas)">
+                      <input type="number" min={2} step={1} value={t.min} onChange={e => setForm(f => ({ ...f, quantity_discount_tiers: f.quantity_discount_tiers.map((x, k) => k === i ? { ...x, min: e.target.value } : x) }))} className={inputCls} placeholder="2" />
+                    </Field>
+                    <Field label="Desconto (%)">
+                      <input type="number" min={1} max={99} step={1} value={t.percent} onChange={e => setForm(f => ({ ...f, quantity_discount_tiers: f.quantity_discount_tiers.map((x, k) => k === i ? { ...x, percent: e.target.value } : x) }))} className={inputCls} placeholder="10" />
+                    </Field>
+                    <button
+                      type="button"
+                      aria-label="Remover faixa"
+                      onClick={() => setForm(f => ({ ...f, quantity_discount_tiers: f.quantity_discount_tiers.filter((_, k) => k !== i) }))}
+                      className="h-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 hover:text-rose-500 hover:border-rose-500/40 transition"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  disabled={form.quantity_discount_tiers.length >= QUANTITY_TIERS_MAX}
+                  onClick={() => setForm(f => {
+                    const last = f.quantity_discount_tiers[f.quantity_discount_tiers.length - 1];
+                    const nextMin = last ? Number(last.min) + 1 : 2;
+                    const nextPercent = last ? Number(last.percent) + 5 : 10;
+                    return { ...f, quantity_discount_tiers: [...f.quantity_discount_tiers, { min: Number.isFinite(nextMin) ? nextMin : 2, percent: Number.isFinite(nextPercent) ? nextPercent : 10 }] };
+                  })}
+                  className="text-xs font-black uppercase tracking-widest text-[#ff0068] disabled:opacity-40"
+                >
+                  + Adicionar faixa
+                </button>
+                {form.quantity_discount_tiers.length > 0 && validateQuantityTiers(form.quantity_discount_tiers.map(t => ({ min: t.min === '' ? NaN : Number(t.min), percent: t.percent === '' ? NaN : Number(t.percent) }))) === null && (
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    <p className="font-black mb-1">O comprador verá:</p>
+                    <ul className="space-y-0.5">
+                      {form.quantity_discount_tiers.map((t, i, arr) => (
+                        <li key={i}>{i === arr.length - 1 && arr.length > 1 ? `${t.min} ou mais aulas` : `${t.min} aulas`}: {t.percent}% de desconto</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </Section>
           ) : (
             <Section title="Preços">

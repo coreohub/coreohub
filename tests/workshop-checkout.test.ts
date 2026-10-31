@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeWorkshopCheckout } from '../supabase/functions/_shared/workshop-checkout';
+import {
+  computeQuantityDiscount,
+  computeWorkshopCheckout,
+  normalizeQuantityTiers,
+  validateQuantityTiers,
+} from '../supabase/functions/_shared/workshop-checkout';
 import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
 
 const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12, installment: { ...PROCESSING_FEE_CONFIG.installment, minOrder: 0, minInstallmentValue: 1 } };
@@ -205,5 +210,103 @@ describe('computeWorkshopCheckout — chave desligada é idêntica à fórmula a
         expect(r.items[k].producer_amount).toBe(feeMode === 'repassar' ? sh : r2(sh - c));
       });
     }
+  });
+});
+
+describe('desconto por quantidade de aulas', () => {
+  const TIERS = [{ min: 2, percent: 10 }, { min: 3, percent: 15 }, { min: 4, percent: 20 }];
+
+  it('abaixo da primeira faixa: sem desconto, informa a próxima', () => {
+    const r = computeQuantityDiscount([100], TIERS);
+    expect(r.percent).toBe(0);
+    expect(r.discount).toBe(0);
+    expect(r.shares).toEqual([100]);
+    expect(r.next).toEqual({ min: 2, percent: 10, missing: 1 });
+  });
+
+  it('faixa exata: 2 aulas = 10%', () => {
+    const r = computeQuantityDiscount([100, 80], TIERS);
+    expect(r.percent).toBe(10);
+    expect(r.discount).toBe(18);
+    expect(sum(r.shares)).toBeCloseTo(162, 2);
+    expect(r.next).toEqual({ min: 3, percent: 15, missing: 1 });
+  });
+
+  it('entre faixas usa a faixa de baixo; acima da última fica na última e next é null', () => {
+    expect(computeQuantityDiscount([100, 100, 100], TIERS).percent).toBe(15);
+    const r = computeQuantityDiscount([100, 100, 100, 100, 100, 100], TIERS);
+    expect(r.percent).toBe(20);
+    expect(r.discount).toBe(120);
+    expect(r.next).toBeNull();
+  });
+
+  it('rateio soma exatamente total - desconto, em centavos, com preços quebrados', () => {
+    for (let i = 1; i <= 300; i++) {
+      const prices = [((i * 37) % 9000) / 100 + 1, ((i * 53) % 7000) / 100 + 1, ((i * 11) % 5000) / 100 + 1].map((v) => Math.round(v * 100) / 100);
+      const total = Math.round(sum(prices) * 100);
+      const r = computeQuantityDiscount(prices, TIERS);
+      expect(Math.round(sum(r.shares) * 100)).toBe(total - Math.round(r.discount * 100));
+      expect(r.shares.every((v) => v >= 0)).toBe(true);
+    }
+  });
+
+  it('sem faixas configuradas: nada muda (regressão)', () => {
+    const prices = [120, 80.5, 99.99];
+    const r = computeQuantityDiscount(prices, []);
+    expect(r.discount).toBe(0);
+    expect(r.shares).toEqual(prices);
+    expect(r.next).toBeNull();
+  });
+
+  it('passe sem faixa dá EXATAMENTE o mesmo total de hoje', () => {
+    const prices = [120, 80.5, 99.99];
+    const antes = computeWorkshopCheckout(base(prices, { product: 'passe' }));
+    const depois = computeWorkshopCheckout(base(computeQuantityDiscount(prices, []).shares, { product: 'passe' }));
+    expect(depois).toEqual(antes);
+  });
+
+  it('comissão e taxa de pagamento incidem sobre o valor já descontado (Pix e cartão)', () => {
+    const prices = [100, 100]; // 2 aulas, 10% = 20 de desconto, 180 pagos
+    const { shares } = computeQuantityDiscount(prices, TIERS);
+    expect(sum(shares)).toBe(180);
+    const pix = computeWorkshopCheckout(base(shares, { product: 'passe', method: 'pix' }));
+    expect(pix.precoPagoTotal).toBe(180);
+    expect(pix.commissionTotal).toBe(18);
+    expect(pix.chargedBeforeFee).toBe(198);
+    expect(pix.producerTotal).toBe(180);
+    const cartao = computeWorkshopCheckout(base(shares, { product: 'passe', method: 'card' }));
+    expect(cartao.commissionTotal).toBe(18);
+    for (const r of [pix, cartao]) {
+      expect(r.producerTotal + r.commissionTotal + r.processingFee).toBeCloseTo(r.chargedTotal, 2);
+      const gross = r.items.map((i) => i.commission_amount + i.producer_amount + i.processing_fee_amount);
+      expect(sum(gross)).toBeCloseTo(r.chargedTotal, 2);
+    }
+  });
+
+  it('faixa contra cupom: vale o maior, empate fica com a faixa', () => {
+    const { discount } = computeQuantityDiscount([100, 100], TIERS); // 20
+    const vence = (cupom: number) => discount >= cupom;
+    expect(vence(15)).toBe(true);
+    expect(vence(20)).toBe(true);
+    expect(vence(25)).toBe(false);
+  });
+
+  it('validação: crescente, inteiro >= 2, percent 1..99 e crescente', () => {
+    expect(validateQuantityTiers(TIERS)).toBeNull();
+    expect(validateQuantityTiers([])).toBeNull();
+    expect(validateQuantityTiers([{ min: 1, percent: 10 }])).not.toBeNull();
+    expect(validateQuantityTiers([{ min: 3, percent: 10 }, { min: 2, percent: 15 }])).not.toBeNull();
+    expect(validateQuantityTiers([{ min: 2, percent: 10 }, { min: 3, percent: 10 }])).not.toBeNull();
+    expect(validateQuantityTiers([{ min: 2, percent: 100 }])).not.toBeNull();
+    expect(validateQuantityTiers([{ min: 2, percent: 0 }])).not.toBeNull();
+    expect(validateQuantityTiers([{ min: 2.5, percent: 10 }])).not.toBeNull();
+    expect(validateQuantityTiers([{ min: NaN, percent: 10 }])).not.toBeNull();
+  });
+
+  it('normalize: ordena válidas e devolve [] para lixo do banco', () => {
+    expect(normalizeQuantityTiers([{ min: 3, percent: 15 }, { min: 2, percent: 10 }])).toEqual([{ min: 2, percent: 10 }, { min: 3, percent: 15 }]);
+    expect(normalizeQuantityTiers(null)).toEqual([]);
+    expect(normalizeQuantityTiers('x')).toEqual([]);
+    expect(normalizeQuantityTiers([{ min: 2, percent: 150 }])).toEqual([]);
   });
 });

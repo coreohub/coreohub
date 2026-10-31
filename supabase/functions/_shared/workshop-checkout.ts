@@ -30,6 +30,74 @@ import { applyUfRules, getUfRule } from './uf-rules.ts'
 
 export type WorkshopProcessingPayer = 'comprador' | 'produtor'
 
+// ── Desconto por quantidade de aulas (passe à la carte) ─────────────────────────────────────────
+// workshop_passes.quantity_discount_tiers: [{ min: 2, percent: 10 }, { min: 3, percent: 15 }, ...].
+// A faixa vale sobre o total do carrinho (já com o combo por CPF) e concorre com o cupom: vale o maior,
+// nunca soma. O servidor recalcula tudo a partir do banco; o checkout só exibe com a mesma função.
+// A mesma regra de validação vive em public.is_valid_quantity_tiers (CHECK da coluna).
+
+export interface QuantityDiscountTier {
+  min: number
+  percent: number
+}
+
+export const QUANTITY_TIERS_MAX = 10
+export const QUANTITY_TIER_MAX_PERCENT = 99
+
+/** Mensagem do primeiro problema das faixas, ou null se válidas. Lista vazia é válida (sem desconto). */
+export function validateQuantityTiers(tiers: ReadonlyArray<{ min: unknown; percent: unknown }>): string | null {
+  if (tiers.length > QUANTITY_TIERS_MAX) return `No máximo ${QUANTITY_TIERS_MAX} faixas`
+  let prevMin = 1
+  let prevPercent = 0
+  for (const t of tiers) {
+    const min = Number(t.min)
+    const percent = Number(t.percent)
+    if (!Number.isInteger(min) || min < 2) return 'A quantidade de cada faixa deve ser um número inteiro a partir de 2'
+    if (min <= prevMin) return 'As quantidades devem ser crescentes, sem repetir'
+    if (!(percent >= 1 && percent <= QUANTITY_TIER_MAX_PERCENT)) return `O desconto de cada faixa deve ficar entre 1% e ${QUANTITY_TIER_MAX_PERCENT}%`
+    if (percent <= prevPercent) return 'O desconto deve crescer a cada faixa'
+    prevMin = min
+    prevPercent = percent
+  }
+  return null
+}
+
+/** Faixas vindas do banco: valida e ordena. Inválidas viram [] (sem desconto) em vez de derrubar o checkout. */
+export function normalizeQuantityTiers(raw: unknown): QuantityDiscountTier[] {
+  if (!Array.isArray(raw)) return []
+  const tiers = raw
+    .filter((t) => t && typeof t === 'object')
+    .map((t: any) => ({ min: Number(t.min), percent: Number(t.percent) }))
+    .sort((a, b) => a.min - b.min)
+  return validateQuantityTiers(tiers) === null ? tiers : []
+}
+
+export interface QuantityDiscountResult {
+  /** Faixa atingida (0 se nenhuma). */
+  percent: number
+  /** Valor do desconto sobre o total de `prices`. */
+  discount: number
+  /** `prices` já descontados, rateados em centavos (soma = total - discount). */
+  shares: number[]
+  /** Próxima faixa, pra mensagem "falta 1 aula para X%". */
+  next: { min: number; percent: number; missing: number } | null
+}
+
+export function computeQuantityDiscount(prices: number[], tiers: QuantityDiscountTier[]): QuantityDiscountResult {
+  const base = prices.map(round2)
+  const total = round2(base.reduce((s, v) => s + v, 0))
+  const count = base.length
+  let hit: QuantityDiscountTier | null = null
+  for (const t of tiers) if (count >= t.min) hit = t
+  const nextTier = tiers.find((t) => t.min > count) ?? null
+  const next = nextTier ? { min: nextTier.min, percent: nextTier.percent, missing: nextTier.min - count } : null
+  if (!hit || !(total > 0)) return { percent: 0, discount: 0, shares: base, next }
+  const discount = round2((total * hit.percent) / 100)
+  // Rateio pro rata em centavos: a soma dos itens fecha exatamente em total - discount.
+  const parts = allocateProportional(discount, base)
+  return { percent: hit.percent, discount, shares: base.map((p, i) => round2(p - parts[i])), next }
+}
+
 export interface WorkshopCheckoutInput {
   product: 'workshop' | 'passe'
   /** Preço pago por item já com cupom/combo (workshop = 1 item; passe = 1 por workshop, soma = total). */

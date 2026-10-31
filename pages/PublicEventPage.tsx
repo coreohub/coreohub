@@ -30,6 +30,7 @@ const ufUtcOffset = (uf?: string | null): string => {
 };
 import { isEventOver } from '../utils/eventStatus';
 import { getUfRule } from '../supabase/functions/_shared/uf-rules';
+import { normalizeQuantityTiers } from '../supabase/functions/_shared/workshop-checkout';
 import AvisoViradaLote from '../components/AvisoViradaLote';
 import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
 import MeiaVendasReport from '../components/MeiaVendasReport';
@@ -133,6 +134,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     workshop_names: string[]; workshop_ids: string[]; esgotado: boolean;
     selection_mode: 'fixed' | 'a_la_carte';
     min_selecionaveis: number | null; max_selecionaveis: number | null;
+    quantity_discount_tiers: Array<{ min: number; percent: number }> | null;
     pass_commission_percent: number | null; pass_fee_mode: string | null; processing_payer: string | null;
   }>>([]);
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
@@ -464,11 +466,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           }
 
           // Passes publicados do evento — pacote fixo, exibido em destaque.
-          const { data: passesData } = await supabase
+          const { data: passesData, error: passesErr } = await supabase
             .from('workshop_passes')
-            .select('id, slug, name, description, preco, preco_inscritos_mostra, selection_mode, min_selecionaveis, max_selecionaveis, pass_commission_percent, pass_fee_mode, processing_payer')
+            .select('id, slug, name, description, preco, preco_inscritos_mostra, selection_mode, min_selecionaveis, max_selecionaveis, quantity_discount_tiers, pass_commission_percent, pass_fee_mode, processing_payer')
             .eq('event_id', eventData.id)
             .eq('is_published', true);
+          // Coluna ausente no schema (migration não aplicada) volta como erro, não como lista vazia.
+          if (passesErr) console.error('[PublicEventPage] workshop_passes:', passesErr.message);
           if (Array.isArray(passesData) && passesData.length > 0) {
             const { data: itemsData } = await supabase
               .from('workshop_pass_items')
@@ -1987,6 +1991,20 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                         <p className="text-[11px] text-slate-400 mt-2">Escolha entre: {pass.workshop_names.filter(Boolean).join(', ')}</p>
                         <p className="text-sm font-black text-white pt-2">Você escolhe quais aulas fazer</p>
                         <p className="text-[11px] text-slate-400">Preço soma conforme a seleção →</p>
+                        {(() => {
+                          const tiers = normalizeQuantityTiers(pass.quantity_discount_tiers);
+                          if (tiers.length === 0) return null;
+                          const last = tiers[tiers.length - 1];
+                          return (
+                            <ul className="mt-2 space-y-0.5 text-[11px] font-bold text-emerald-300">
+                              {tiers.map(t => (
+                                <li key={t.min}>
+                                  {t.min === last.min && tiers.length > 1 ? `${t.min} ou mais aulas` : `${t.min} aulas`}: {t.percent}% de desconto
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
                       </>
                     ) : (
                       <>
