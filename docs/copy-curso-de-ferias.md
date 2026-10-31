@@ -129,4 +129,4 @@ Você faz pelo painel. O valor é devolvido ao comprador, inclusive a taxa de pa
 3. Eyebrow: mantido "cursos de férias e cursos de verão".
 4. CNPJ: confirmado no código (create-asaas-subconta aceita CPF de 11 dígitos ou CNPJ de 14). FAQ "Preciso ter CNPJ?" entrou.
 5. Escala: só como "Eventos grandes" com link para /planos, sem valor (a métrica R$2 por participante nunca foi validada em workshop).
-6. Bloco do desconto por combinação de cursos: NÃO entrou. Entra quando o recurso for publicado e conferido no código.
+6. Bloco do desconto por combinação de cursos: ENTROU (card largo em "O que a CoreoHub resolve" + FAQ), depois do recurso ir pra produção (migration, função e front na dev em 24fe590). Só pode ir ao ar junto com o merge dessa feature na main.
