@@ -8,9 +8,7 @@
  * /workshops-do-evento nesse plano), então a página fala de Começo/Essencial/
  * Escala e aponta pra /planos. Nada de 7,9% aqui.
  *
- * Só afirma o que existe no código. Fora de propósito: desconto automático por
- * quantidade de cursos (em construção em outra sessão — entra aqui quando for
- * publicado e conferido), preço por duração, desconto de grupo/recorrente,
+ * Só afirma o que existe no código. Fora de propósito: preço por duração, desconto de grupo/recorrente,
  * ouvinte, lista de espera e parcelado "sem juros".
  *
  * Segue o molde de LandingEspetaculo.tsx: meta tags nativas React 19, canonical
@@ -23,7 +21,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronRight, Check, X, ChevronDown, ArrowRight, Menu, Layers, TrendingUp,
-  CalendarDays, BedDouble, CreditCard, QrCode, HeartHandshake, MessageCircle,
+  CalendarDays, BedDouble, CreditCard, QrCode, HeartHandshake, MessageCircle, Percent,
 } from 'lucide-react';
 
 const SITE_URL = 'https://coreohub.com';
@@ -44,6 +42,10 @@ export const CURSO_FAQ_ITEMS = [
   {
     q: 'Dá para vender passe de semana e aula avulsa no mesmo curso?',
     a: 'Dá. Você cria passes fechados e passes em que o aluno escolhe as aulas que quer, dentro do mínimo e do máximo que você define, e o valor soma. Cada aula mantém a sua própria vaga, presença e certificado.',
+  },
+  {
+    q: 'Posso dar desconto para quem fizer mais de um curso?',
+    a: 'Pode. Nos passes em que o aluno escolhe as aulas, você cadastra faixas de desconto por quantidade de aulas (por exemplo 2, 3, 4 ou mais). O desconto é aplicado sozinho no carrinho e o aluno vê quanto falta para a próxima faixa. Desconto de faixa e cupom não se somam: vale o maior dos dois.',
   },
   {
     q: 'E se o lote esgotar ou a data do lote chegar?',
@@ -108,6 +110,8 @@ export default function LandingCursoFerias() {
 
   const ctaPrimary = 'inline-flex items-center justify-center gap-2 px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform';
   const ctaSecondary = 'inline-flex items-center justify-center gap-2 px-8 py-5 border border-white/20 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/5 transition-colors';
+  const heroCta = 'inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-[#ff0068] text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_12px_40px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform';
+  const heroCtaSecondary = 'inline-flex items-center justify-center gap-2 px-6 py-3.5 border border-white/25 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white/5 transition-colors';
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
@@ -172,7 +176,7 @@ export default function LandingCursoFerias() {
       </header>
 
       {/* ─── 1. HERO (escuro) ──────────────────────────────────────────────── */}
-      <section className="relative min-h-[80vh] flex flex-col overflow-hidden bg-black">
+      <section className="relative min-h-[90vh] flex flex-col overflow-hidden bg-black">
         <img
           src="/hero-curso-ferias.webp"
           srcSet="/hero-curso-ferias-mobile.webp 960w, /hero-curso-ferias.webp 1376w"
@@ -188,24 +192,24 @@ export default function LandingCursoFerias() {
         <div className="absolute inset-0 bg-black/55" />
         <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.35)_45%,transparent_70%)]" />
         <div className="absolute inset-0 hidden sm:block bg-[linear-gradient(to_right,rgba(0,0,0,0.6)_0%,transparent_65%)]" />
-        <div className="relative z-10 flex-1 flex flex-col justify-end px-4 pb-10 pt-28 text-center sm:px-6 sm:text-left lg:px-8">
-          <div className="mx-auto max-w-5xl">
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Para cursos de férias e cursos de verão de dança</p>
-            <h1 className="mt-3 text-[2.1rem] sm:text-[3.4rem] font-black tracking-normal uppercase leading-[1.06] max-w-3xl">
+        <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col justify-end px-4 pb-10 pt-28 text-center sm:px-6 sm:text-left lg:px-8">
+          <div className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0">
+            <p className="text-xs font-bold uppercase tracking-widest text-white/70 sm:text-sm">Para cursos de férias e de verão de dança</p>
+            <h1 className="mt-2 text-[2.2rem] font-black uppercase leading-none tracking-tight text-white sm:mt-3 sm:text-[3.6rem]">
               Seu curso de férias lotado, sem montar pedido no WhatsApp.
             </h1>
-            <p className="mt-4 sm:mt-5 text-slate-200 text-base sm:text-lg font-medium leading-snug max-w-2xl">
+            <p className="mt-3 text-sm text-white/85 sm:mt-4 sm:text-base">
               O aluno escolhe as aulas, vê o total e paga na hora. Você acompanha vagas, hospedagem e dinheiro num lugar só.
             </p>
-            <div className="mt-7 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-4 sm:justify-start">
-              <a href={CREATE_URL} className={ctaPrimary}>
-                Criar meu curso <ChevronRight size={18} />
+            <div className="mt-5 flex flex-wrap justify-center gap-4 sm:mt-6 sm:justify-start">
+              <a href={CREATE_URL} className={heroCta}>
+                Criar meu curso <ChevronRight size={16} />
               </a>
-              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={ctaSecondary}>
-                <MessageCircle size={18} aria-hidden="true" /> Falar com a gente
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={heroCtaSecondary}>
+                <MessageCircle size={16} aria-hidden="true" /> Falar com a gente
               </a>
             </div>
-            <p className="mt-5 text-xs text-slate-400">Sem mensalidade. Você paga só quando vende.</p>
+            <p className="mt-4 text-xs text-white/60">Sem mensalidade. Você paga só quando vende.</p>
           </div>
         </div>
         <div className="relative z-10 max-w-4xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
@@ -320,10 +324,16 @@ export default function LandingCursoFerias() {
                 title: 'Do check-in ao certificado',
                 body: 'Check-in por QR Code, certificado de participação, cortesias e cupons de desconto.',
               },
+              {
+                icon: Percent,
+                title: 'Desconto por combinação de cursos',
+                body: 'Nos passes em que o aluno escolhe as aulas, você define faixas (por exemplo 2 aulas, 3 aulas, 4 ou mais) e o desconto entra sozinho no carrinho. A vitrine mostra as faixas e o aluno vê quanto falta para a próxima. Desconto de faixa e cupom não se somam: vale o maior.',
+                wide: true,
+              },
             ].map((f, i) => {
               const Icon = f.icon;
               return (
-                <div key={i} className="bg-slate-50 border border-slate-200 rounded-3xl p-6 hover:border-[#ff0068]/30 transition-all">
+                <div key={i} className={`bg-slate-50 border border-slate-200 rounded-3xl p-6 hover:border-[#ff0068]/30 transition-all ${(f as { wide?: boolean }).wide ? 'lg:col-span-3 md:col-span-2' : ''}`}>
                   <Icon size={24} className="text-[#ff0068] mb-3" aria-hidden="true" />
                   <h3 className="text-base font-black uppercase tracking-tight text-slate-950">{f.title}</h3>
                   <p className="text-sm text-slate-600 mt-2 leading-relaxed">{f.body}</p>

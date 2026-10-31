@@ -56,6 +56,10 @@ const CURSO_FERIAS_FAQ: Faq[] = [
     a: 'Dá. Você cria passes fechados e passes em que o aluno escolhe as aulas que quer, dentro do mínimo e do máximo que você define, e o valor soma. Cada aula mantém a sua própria vaga, presença e certificado.',
   },
   {
+    q: 'Posso dar desconto para quem fizer mais de um curso?',
+    a: 'Pode. Nos passes em que o aluno escolhe as aulas, você cadastra faixas de desconto por quantidade de aulas (por exemplo 2, 3, 4 ou mais). O desconto é aplicado sozinho no carrinho e o aluno vê quanto falta para a próxima faixa. Desconto de faixa e cupom não se somam: vale o maior dos dois.',
+  },
+  {
     q: 'E se o lote esgotar ou a data do lote chegar?',
     a: 'O lote seguinte entra sozinho, por data ou quando a cota do lote acaba. O aluno sempre vê o preço vigente.',
   },
