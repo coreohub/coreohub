@@ -206,8 +206,8 @@ export default function LandingCursoFerias() {
               <a href={CREATE_URL} className={heroCta}>
                 Criar meu curso <ChevronRight size={16} />
               </a>
-              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-widest text-white/80 underline underline-offset-4 hover:text-white">
-                Falar com a gente
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={ctaSecondary}>
+                <MessageCircle size={18} aria-hidden="true" /> Falar com a gente
               </a>
             </div>
             <p className="mt-4 text-xs text-white/60">Sem mensalidade. Você paga só quando vende.</p>
