@@ -111,7 +111,6 @@ export default function LandingCursoFerias() {
   const ctaPrimary = 'inline-flex items-center justify-center gap-2 px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform';
   const ctaSecondary = 'inline-flex items-center justify-center gap-2 px-8 py-5 border border-white/20 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/5 transition-colors';
   const heroCta = 'inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-[#ff0068] text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_12px_40px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform';
-  const heroCtaSecondary = 'inline-flex items-center justify-center gap-2 px-6 py-3.5 border border-white/25 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white/5 transition-colors';
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
@@ -120,6 +119,9 @@ export default function LandingCursoFerias() {
       <meta property="og:title" content={OG_TITLE} />
       <meta property="og:description" content={OG_DESCRIPTION} />
       <meta property="og:image" content={`${SITE_URL}/og-curso-ferias.jpg`} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content="Professor e aluna dançando juntos em uma aula de curso de férias de dança" />
       <meta property="og:url" content={CANONICAL_URL} />
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="CoreoHub" />
@@ -181,8 +183,7 @@ export default function LandingCursoFerias() {
           src="/hero-curso-ferias.webp"
           srcSet="/hero-curso-ferias-mobile.webp 960w, /hero-curso-ferias.webp 1376w"
           sizes="100vw"
-          alt=""
-          aria-hidden="true"
+          alt="Professor e aluna dançando juntos em uma aula num estúdio de dança"
           width={1376}
           height={768}
           fetchPriority="high"
@@ -195,24 +196,28 @@ export default function LandingCursoFerias() {
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col justify-end px-4 pb-10 pt-28 text-center sm:px-6 sm:text-left lg:px-8">
           <div className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0">
             <p className="text-xs font-bold uppercase tracking-widest text-white/70 sm:text-sm">Para cursos de férias e de verão de dança</p>
-            <h1 className="mt-2 text-[2.2rem] font-black uppercase leading-none tracking-tight text-white sm:mt-3 sm:text-[3.6rem]">
+            <h1 className="mt-2 text-[2rem] font-black uppercase leading-none tracking-tight text-white sm:mt-3 sm:text-[3.6rem]">
               Seu curso de férias lotado, sem montar pedido no WhatsApp.
             </h1>
             <p className="mt-3 text-sm text-white/85 sm:mt-4 sm:text-base">
               O aluno escolhe as aulas, vê o total e paga na hora. Você acompanha vagas, hospedagem e dinheiro num lugar só.
             </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-4 sm:mt-6 sm:justify-start">
+            <div className="mt-5 flex flex-col items-center gap-4 sm:mt-6 sm:flex-row sm:items-center">
               <a href={CREATE_URL} className={heroCta}>
                 Criar meu curso <ChevronRight size={16} />
               </a>
-              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={heroCtaSecondary}>
-                <MessageCircle size={16} aria-hidden="true" /> Falar com a gente
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-widest text-white/80 underline underline-offset-4 hover:text-white">
+                Falar com a gente
               </a>
             </div>
             <p className="mt-4 text-xs text-white/60">Sem mensalidade. Você paga só quando vende.</p>
           </div>
         </div>
-        <div className="relative z-10 max-w-4xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
+      </section>
+
+      {/* faixa de números fora do hero: o texto do hero fica colado embaixo, como nas páginas da Usualdance */}
+      <section className="bg-black border-t border-white/10">
+        <div className="max-w-4xl mx-auto w-full grid grid-cols-3 gap-4 px-6 py-8">
           {[
             { val: 'R$ 0', label: 'de mensalidade', icon: Layers },
             { val: 'Pix + cartão', label: 'no checkout', icon: CreditCard },
