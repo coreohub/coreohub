@@ -115,7 +115,7 @@ export default function LandingCursoFerias() {
       <meta name="description" content={PAGE_DESCRIPTION} />
       <meta property="og:title" content={OG_TITLE} />
       <meta property="og:description" content={OG_DESCRIPTION} />
-      <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+      <meta property="og:image" content={`${SITE_URL}/og-curso-ferias.jpg`} />
       <meta property="og:url" content={CANONICAL_URL} />
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="CoreoHub" />
@@ -123,7 +123,7 @@ export default function LandingCursoFerias() {
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={OG_TITLE} />
       <meta name="twitter:description" content={OG_DESCRIPTION} />
-      <meta name="twitter:image" content={`${SITE_URL}/og-image.jpg`} />
+      <meta name="twitter:image" content={`${SITE_URL}/og-curso-ferias.jpg`} />
       <link rel="canonical" href={CANONICAL_URL} />
       <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
 
@@ -172,10 +172,23 @@ export default function LandingCursoFerias() {
       </header>
 
       {/* ─── 1. HERO (escuro) ──────────────────────────────────────────────── */}
-      <section className="relative flex flex-col overflow-hidden bg-black">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,0,104,0.22),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_90%,rgba(29,231,242,0.08),transparent_55%)]" />
-        <div className="relative z-10 px-4 pb-12 pt-32 text-center sm:px-6 sm:text-left lg:px-8">
+      <section className="relative min-h-[80vh] flex flex-col overflow-hidden bg-black">
+        <img
+          src="/hero-curso-ferias.webp"
+          srcSet="/hero-curso-ferias-mobile.webp 960w, /hero-curso-ferias.webp 1376w"
+          sizes="100vw"
+          alt=""
+          aria-hidden="true"
+          width={1376}
+          height={768}
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover object-[50%_30%]"
+        />
+        <div className="absolute inset-0 bg-black/55" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.35)_45%,transparent_70%)]" />
+        <div className="absolute inset-0 hidden sm:block bg-[linear-gradient(to_right,rgba(0,0,0,0.6)_0%,transparent_65%)]" />
+        <div className="relative z-10 flex-1 flex flex-col justify-end px-4 pb-10 pt-28 text-center sm:px-6 sm:text-left lg:px-8">
           <div className="mx-auto max-w-5xl">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Para cursos de férias e cursos de verão de dança</p>
             <h1 className="mt-3 text-[2.1rem] sm:text-[3.4rem] font-black tracking-normal uppercase leading-[1.06] max-w-3xl">

@@ -418,7 +418,7 @@ const PAGES: Record<string, PageMeta> = {
       'Venda passes, aulas, hospedagem e lotes do seu curso de férias de dança com Pix e cartão, vagas controladas e painel do produtor. Sem mensalidade.',
     ogTitle: 'Venda o seu curso de férias de dança com pagamento na hora',
     ogDescription: 'O aluno escolhe as aulas, vê o total e paga na hora. Você acompanha vagas, hospedagem e dinheiro num lugar só. Sem mensalidade.',
-    image: `${SITE_URL}/og-image.jpg`,
+    image: `${SITE_URL}/og-curso-ferias.jpg`,
     faq: CURSO_FERIAS_FAQ,
     jsonLd: {
       '@context': 'https://schema.org',
