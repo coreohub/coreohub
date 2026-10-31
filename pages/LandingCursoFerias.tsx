@@ -542,6 +542,10 @@ export default function LandingCursoFerias() {
               <p className="text-[10px] text-slate-600">© {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.</p>
             </div>
           </div>
+          <p className="mt-6 text-center text-[10px] text-slate-600">
+            Site desenvolvido por{' '}
+            <a href="https://culturalestudio.com.br/" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-400 hover:text-white transition-colors">Cultural Estúdio</a>
+          </p>
         </div>
       </footer>
 
