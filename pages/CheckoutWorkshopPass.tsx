@@ -17,7 +17,7 @@ import { edgeErrorMessage } from '../utils/edgeError';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import PaymentMethodPicker, { type PayMethod } from '../components/PaymentMethodPicker';
-import { computeWorkshopCheckout } from '../supabase/functions/_shared/workshop-checkout';
+import { computeQuantityDiscount, computeWorkshopCheckout, normalizeQuantityTiers } from '../supabase/functions/_shared/workshop-checkout';
 import { installmentConfigFor } from '../supabase/functions/_shared/installment-offer';
 import { isEventOver } from '../utils/eventStatus';
 import {
@@ -258,8 +258,22 @@ const CheckoutWorkshopPass: React.FC = () => {
         precoAposCombo = precoBase;
       }
     }
-    const discount = couponApplied ? Number(couponApplied.discount) : 0;
-    const baseAfterCoupon = Math.max(0, Number((precoAposCombo - discount).toFixed(2)));
+    // Desconto por quantidade (só à la carte): mesma função da edge. Concorre com o cupom, vale o maior,
+    // empate fica com a faixa. A faixa incide sobre o total já com o combo por CPF.
+    const tiers = isALaCarte ? normalizeQuantityTiers(pass.quantity_discount_tiers) : [];
+    const selectedForTier = isALaCarte ? poolItems.filter(w => selectedIds.has(w.id)) : [];
+    const tierRes = tiers.length > 0 && selectedForTier.length > 0
+      ? computeQuantityDiscount(
+          selectedForTier.map(w => (combo?.found && w.preco_inscritos_mostra != null) ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0)),
+          tiers,
+        )
+      : null;
+    const couponDiscount = couponApplied ? Number(couponApplied.discount) : 0;
+    const tierWins = Boolean(tierRes && tierRes.discount > 0 && tierRes.discount >= couponDiscount);
+    const couponIgnored = tierWins && couponDiscount > 0;
+    const discount = tierWins ? 0 : couponDiscount;
+    const quantityDiscount = tierWins && tierRes ? tierRes.discount : 0;
+    const baseAfterCoupon = Math.max(0, Number((precoAposCombo - discount - quantityDiscount).toFixed(2)));
     // Mesma fonte da edge (_shared/workshop-checkout): o total exibido é o cobrado. Passe avulso
     // (sem evento) ou chave desligada = cálculo de sempre, sem linha.
     const feeEnabled = Boolean(pass.event_id && eventFee.enabled);
@@ -267,7 +281,7 @@ const CheckoutWorkshopPass: React.FC = () => {
     const feeConfig = installmentConfigFor(eventFee.sandbox, eventFee.maxInstallments);
     const computeFor = (method: PayMethod, n: number) => computeWorkshopCheckout({
       product: 'passe',
-      itemShares: [baseAfterCoupon],
+      itemShares: tierWins && tierRes ? tierRes.shares : [baseAfterCoupon],
       commissionPercent: Number(pass.pass_commission_percent ?? 10),
       feeMode: pass.pass_fee_mode ?? 'repassar',
       processingFeeEnabled: feeEnabled,
@@ -288,6 +302,8 @@ const CheckoutWorkshopPass: React.FC = () => {
       : null;
     return {
       precoBase, precoAposCombo, comboApplied, discount,
+      quantityDiscount, quantityPercent: tierWins && tierRes ? tierRes.percent : 0, couponIgnored,
+      nextTier: tierRes?.next ?? null, tiers,
       commission: r.commissionTotal, feeMode: r.feeMode, charged: r.chargedTotal,
       processingFee: r.processingFee, producerPaidFee: r.producerPaidFee, feeEnabled, payOptions,
     };
@@ -462,6 +478,25 @@ const CheckoutWorkshopPass: React.FC = () => {
                 );
               })}
             </div>
+            {breakdown && breakdown.tiers.length > 0 && (
+              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300 mb-1.5">Desconto por quantidade de aulas</p>
+                <ul className="text-xs text-emerald-100 space-y-0.5">
+                  {breakdown.tiers.map(t => (
+                    <li key={t.min} className={breakdown.quantityPercent === t.percent ? 'font-black' : ''}>
+                      {t.min === breakdown.tiers[breakdown.tiers.length - 1].min ? `${t.min} ou mais aulas` : `${t.min} aulas`}: {t.percent}% de desconto
+                    </li>
+                  ))}
+                </ul>
+                {breakdown.nextTier && selectedIds.size > 0 && breakdown.nextTier.min <= (pass.max_selecionaveis ?? poolItems.length) && (
+                  <p className="mt-2 text-xs font-bold text-white">
+                    {breakdown.nextTier.missing === 1
+                      ? `Falta 1 aula para ${breakdown.nextTier.percent}% de desconto.`
+                      : `Faltam ${breakdown.nextTier.missing} aulas para ${breakdown.nextTier.percent}% de desconto.`}
+                  </p>
+                )}
+              </div>
+            )}
             {!selectionOk && selectedIds.size > 0 && (
               <p className="mt-2 text-[11px] text-rose-300">
                 {selectedIds.size < (pass.min_selecionaveis ?? 1)
@@ -558,6 +593,11 @@ const CheckoutWorkshopPass: React.FC = () => {
                 </div>
               )}
               {couponError && <p className="mt-2 text-xs text-rose-300">{couponError}</p>}
+              {breakdown.couponIgnored && (
+                <p className="mt-2 text-xs text-amber-300">
+                  O desconto por quantidade de aulas é maior que este cupom, então vale o desconto maior e o cupom não é usado.
+                </p>
+              )}
             </div>
           )}
 
@@ -580,6 +620,9 @@ const CheckoutWorkshopPass: React.FC = () => {
               <Row label={isALaCarte ? `Aulas selecionadas (${selectedIds.size})` : 'Preço do pass'} value={formatBRL(breakdown.precoBase)} />
               {breakdown.comboApplied && breakdown.precoAposCombo !== breakdown.precoBase && (
                 <Row label="Desconto inscrito" value={`−${formatBRL(breakdown.precoBase - breakdown.precoAposCombo)}`} highlight="violet" />
+              )}
+              {breakdown.quantityDiscount > 0 && (
+                <Row label={`Desconto por ${selectedIds.size} aulas (${breakdown.quantityPercent}%)`} value={`−${formatBRL(breakdown.quantityDiscount)}`} highlight="emerald" />
               )}
               {breakdown.discount > 0 && (
                 <Row label="Cupom" value={`−${formatBRL(breakdown.discount)}`} highlight="emerald" />

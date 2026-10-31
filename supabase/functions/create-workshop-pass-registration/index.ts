@@ -44,7 +44,7 @@ import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { normalizeInstallments } from '../_shared/processing-fee.ts'
 import { installmentConfigFor } from '../_shared/installment-offer.ts'
 import { fetchCardAnticipationLimit, limitCovers } from '../_shared/asaas-anticipation.ts'
-import { computeWorkshopCheckout } from '../_shared/workshop-checkout.ts'
+import { computeQuantityDiscount, computeWorkshopCheckout, normalizeQuantityTiers } from '../_shared/workshop-checkout.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
         id, event_id, created_by, name,
         preco, preco_inscritos_mostra, auto_detect_combo,
         pass_commission_percent, pass_fee_mode, pass_max_per_cpf, pass_reservation_minutes,
-        selection_mode, min_selecionaveis, max_selecionaveis,
+        selection_mode, min_selecionaveis, max_selecionaveis, quantity_discount_tiers,
         is_published, processing_payer
       `)
       .eq('id', pass_id)
@@ -269,10 +269,26 @@ Deno.serve(async (req) => {
     }
     if (precoPagoTotal < 0) throw new Error('Preço calculado negativo — config inválida')
 
+    // ── Desconto por quantidade (só à la carte) ──────────────────────────────
+    // Incide sobre o total já com o combo por CPF e concorre com o cupom: vale o maior, nunca soma.
+    // Empate fica com a faixa (o cupom não é consumido à toa).
+    let tierResult: ReturnType<typeof computeQuantityDiscount> | null = null
+    if (isALaCarte) {
+      const tiers = normalizeQuantityTiers(pass.quantity_discount_tiers)
+      if (tiers.length > 0) {
+        const unitPrices = workshops.map((w: any) =>
+          (isCombo && w.preco_inscritos_mostra != null) ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0)
+        )
+        const r = computeQuantityDiscount(unitPrices, tiers)
+        if (r.discount > 0) tierResult = r
+      }
+    }
+
     // ── Cupom (scope=workshop|all) ────────────────────────────────────────────
     let couponId: string | null = null
     let couponCode: string | null = null
     let discountAmount = 0
+    let tierApplied = false
 
     if (coupon_code && coupon_code.trim() && precoPagoTotal > 0) {
       const { data: cv, error: cErr } = await supabase.rpc('validate_workshop_pass_coupon', {
@@ -286,10 +302,21 @@ Deno.serve(async (req) => {
       }
       const row = Array.isArray(cv) ? cv[0] : cv
       if (!row || row.error_message) throw new Error(row?.error_message ?? 'Cupom inválido')
-      couponId = row.coupon_id
-      couponCode = row.code
-      discountAmount = parseFloat(Number(row.discount).toFixed(2))
-      precoPagoTotal = parseFloat(Number(row.final_value).toFixed(2))
+      const couponDiscount = parseFloat(Number(row.discount).toFixed(2))
+      if (tierResult && tierResult.discount >= couponDiscount) {
+        // Faixa >= cupom: o cupom não é aplicado nem consumido (used_count só sobe com coupon_id gravado).
+      } else {
+        couponId = row.coupon_id
+        couponCode = row.code
+        discountAmount = couponDiscount
+        precoPagoTotal = parseFloat(Number(row.final_value).toFixed(2))
+      }
+    }
+
+    if (tierResult && !couponId) {
+      tierApplied = true
+      discountAmount = tierResult.discount
+      precoPagoTotal = parseFloat((precoPagoTotal - tierResult.discount).toFixed(2))
     }
 
     if (precoPagoTotal <= 0) {
@@ -305,9 +332,12 @@ Deno.serve(async (req) => {
     const n = workshops.length
     let precoPagoShares: number[]
     if (isALaCarte) {
-      precoPagoShares = workshops.map((w: any) =>
-        (isCombo && w.preco_inscritos_mostra != null) ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0)
-      )
+      // Faixa vencedora: o rateio em centavos já vem pronto (soma exata = total com desconto).
+      precoPagoShares = tierApplied && tierResult
+        ? tierResult.shares
+        : workshops.map((w: any) =>
+            (isCombo && w.preco_inscritos_mostra != null) ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0)
+          )
     } else {
       // Base de rateio = preco_padrao de cada workshop incluso. Se todos forem 0
       // (ou pass sem variação), cai pra divisão igual.
@@ -576,6 +606,8 @@ Deno.serve(async (req) => {
       producer_amount:   producerTotal,
       commission_amount: commissionTotal,
       discount_amount:   discountAmount,
+      discount_source:   tierApplied ? 'quantity' : couponId ? 'coupon' : null,
+      quantity_discount_percent: tierApplied && tierResult ? tierResult.percent : null,
       coupon_code:       couponCode,
       fee_mode:          feeMode,
       processing_fee:    processingFee,
