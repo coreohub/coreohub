@@ -11,6 +11,7 @@
 - [Sobre](https://coreohub.com/sobre): quem está por trás da CoreoHub, o que faz e para quem.
 - [Governo](https://coreohub.com/governo): página específica para editais públicos e mostras municipais/governamentais.
 - [Plano Espetáculo](https://coreohub.com/espetaculo): bilheteria de plateia para espetáculo de fim de ano de estúdio/escola de dança, sem competição — 7,9% sobre o vendido, sem mensalidade, mais a taxa de pagamento (Pix ou cartão), paga pelo comprador ou assumida pelo produtor.
+- [Curso de férias](https://coreohub.com/curso-de-ferias): plataforma de venda para curso de férias e curso de verão de dança — passes, aulas avulsas, lotes, vagas por dia, hospedagem, Pix e cartão. Sem mensalidade; taxa conforme o plano do evento (Começo 10%, Essencial R$250 + 5%, Escala) mais a taxa de pagamento.
 - [Termos de Uso](https://coreohub.com/termos): termos de uso da plataforma, incluindo as regras de compra de ingressos (meia-entrada, transferência, arrependimento, cancelamento e adiamento).
 - [Política de Privacidade](https://coreohub.com/privacidade): política de privacidade e tratamento de dados (LGPD), incluindo prazos de guarda dos dados de compra e de transferência de ingressos.
 

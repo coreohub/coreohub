@@ -73,6 +73,8 @@ Deno.serve(async () => {
       // motivo do /planos acima: página real com meta/canonical/JSON-LD
       // próprios, sem entrada aqui a descoberta dependeria só de link interno.
       { loc: `${MARKETING_URL}/espetaculo`, lastmod: STATIC_LASTMOD, priority: 0.7, changefreq: 'monthly' },
+      // Landing de curso de férias / curso de verão (docs/copy-curso-de-ferias.md): meta/canonical/JSON-LD próprios.
+      { loc: `${MARKETING_URL}/curso-de-ferias`, lastmod: STATIC_LASTMOD, priority: 0.7, changefreq: 'monthly' },
       // Página institucional (quem está por trás, o que faz, para quem) — sinal de entidade pra IA/Google.
       { loc: `${MARKETING_URL}/sobre`, lastmod: STATIC_LASTMOD, priority: 0.5, changefreq: 'yearly' },
       // Vertical de edital público: página real com meta/canonical de bot próprios (api/og-marketing.ts) e citada no llms.txt.
