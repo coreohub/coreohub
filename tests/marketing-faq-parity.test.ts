@@ -15,6 +15,7 @@ const faqOf = (file: string, name: string): { q: string; a: string }[] => {
 };
 const FAQ_ITEMS = faqOf('pages/LandingEspetaculo.tsx', 'FAQ_ITEMS');
 const PLANOS_FAQ_ITEMS = faqOf('pages/Planos.tsx', 'PLANOS_FAQ_ITEMS');
+const CURSO_FAQ_ITEMS = faqOf('pages/LandingCursoFerias.tsx', 'CURSO_FAQ_ITEMS');
 
 // O HTML que bots (Googlebot, GPTBot, ClaudeBot...) recebem de /planos e /espetaculo vem de api/og-marketing.ts,
 // não do React. Estes testes garantem que as FAQs e o JSON-LD de lá não divergem das páginas.
@@ -51,6 +52,21 @@ describe('api/og-marketing — FAQ e JSON-LD espelham as páginas', () => {
     expect(faq.mainEntity.map((x: any) => x.name)).toEqual(FAQ_ITEMS.map(i => i.q));
     expect(faq.mainEntity.map((x: any) => x.acceptedAnswer.text)).toEqual(FAQ_ITEMS.map(i => i.a));
     expect(ld['@graph'].some((n: any) => n['@type'] === 'Service')).toBe(true);
+  });
+
+  it('curso de férias: FAQ da página no corpo e no FAQPage, sem promessa que o produto não cumpre', async () => {
+    const html = await render('cursoferias');
+    for (const { q, a } of CURSO_FAQ_ITEMS) {
+      expect(html).toContain(escHtml(q));
+      expect(html).toContain(escHtml(a));
+    }
+    const ld = jsonLdOf(html);
+    const faq = ld['@graph'].find((n: any) => n['@type'] === 'FAQPage');
+    expect(faq.mainEntity.map((x: any) => x.name)).toEqual(CURSO_FAQ_ITEMS.map(i => i.q));
+    expect(faq.mainEntity.map((x: any) => x.acceptedAnswer.text)).toEqual(CURSO_FAQ_ITEMS.map(i => i.a));
+    expect(ld['@graph'].some((n: any) => n['@type'] === 'Service')).toBe(true);
+    // Workshop não faz parte do Plano Espetáculo: a página de curso de férias nunca cita os 7,9%.
+    expect(html).not.toContain('7,9');
   });
 
   it('planos: FAQ da página no corpo e no FAQPage', async () => {

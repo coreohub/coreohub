@@ -46,6 +46,7 @@ import TermosDeUso from './pages/TermosDeUso';
 import PoliticaDePrivacidade from './pages/PoliticaDePrivacidade';
 const LandingGoverno  = lazy(() => import('./pages/LandingGoverno'));
 const LandingEspetaculo = lazy(() => import('./pages/LandingEspetaculo'));
+const LandingCursoFerias = lazy(() => import('./pages/LandingCursoFerias'));
 const Sobre = lazy(() => import('./pages/Sobre'));
 const PropostaGoverno = lazy(() => import('./pages/PropostaGoverno'));
 
@@ -732,6 +733,9 @@ const App: React.FC = () => {
             fora de /planos, isolada sem link cruzado por ora (decisão 2026-09-20). */}
         <Route path="/sobre" element={<Suspense fallback={<PageLoader />}><Sobre /></Suspense>} />
         <Route path="/espetaculo" element={<Suspense fallback={<PageLoader />}><LandingEspetaculo /></Suspense>} />
+        {/* Curso de férias / curso de verão (docs/copy-curso-de-ferias.md): landing pública, fora do menu, link só no rodapé da home. */}
+        <Route path="/curso-de-ferias" element={<Suspense fallback={<PageLoader />}><LandingCursoFerias /></Suspense>} />
+        <Route path="/curso-de-verao" element={<Navigate to="/curso-de-ferias" replace />} />
         <Route path="/login" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />
         <Route path="/register" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />

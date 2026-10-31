@@ -36,6 +36,7 @@ const NAV_LINKS: { path: string; label: string }[] = [
   { path: '/festivais', label: 'Festivais e mostras de dança' },
   { path: '/planos', label: 'Planos e preços' },
   { path: '/espetaculo', label: 'Bilheteria para espetáculo de dança' },
+  { path: '/curso-de-ferias', label: 'Venda de curso de férias e de verão de dança' },
   { path: '/governo', label: 'Gestão para o setor público' },
   { path: '/sobre', label: 'Sobre a CoreoHub' },
   { path: '/termos', label: 'Termos de Uso' },
@@ -44,6 +45,46 @@ const NAV_LINKS: { path: string; label: string }[] = [
 
 // FAQs espelhadas de pages/LandingEspetaculo.tsx (FAQ_ITEMS) e pages/Planos.tsx (PLANOS_FAQ_ITEMS): bots
 // só leem este HTML. tests/marketing-faq-parity.test.ts quebra se o texto divergir das páginas.
+// FAQ espelhada de pages/LandingCursoFerias.tsx (CURSO_FAQ_ITEMS); o teste de paridade quebra se divergir.
+const CURSO_FERIAS_FAQ: Faq[] = [
+  {
+    q: 'Posso continuar usando meu site, meu Canva ou minha página?',
+    a: 'Sim. O link do seu curso na CoreoHub pode ser o botão Garantir vaga da página que você já tem. O aluno compra no checkout da CoreoHub e você não perde a sua vitrine.',
+  },
+  {
+    q: 'Dá para vender passe de semana e aula avulsa no mesmo curso?',
+    a: 'Dá. Você cria passes fechados e passes em que o aluno escolhe as aulas que quer, dentro do mínimo e do máximo que você define, e o valor soma. Cada aula mantém a sua própria vaga, presença e certificado.',
+  },
+  {
+    q: 'E se o lote esgotar ou a data do lote chegar?',
+    a: 'O lote seguinte entra sozinho, por data ou quando a cota do lote acaba. O aluno sempre vê o preço vigente.',
+  },
+  {
+    q: 'Consigo vender hospedagem junto com o curso?',
+    a: 'Sim. A hospedagem é um adicional com vagas por noite, e você pode permitir chegada antecipada ou saída estendida. O aluno informa a preferência de colega de quarto e a lista de hóspedes sai em CSV para você fechar com o hotel.',
+  },
+  {
+    q: 'O aluno pode parcelar no cartão?',
+    a: 'Sim, em até 6x conforme o valor da compra, liberado por evento pela CoreoHub (fale com a gente para ativar). O custo do parcelamento é do comprador e aparece antes de pagar, com a taxa efetiva. Não é parcelado sem juros.',
+  },
+  {
+    q: 'Quanto custa para começar?',
+    a: 'Não há mensalidade. Você escolhe o plano do evento: Começo (10% sobre o vendido, sem taxa fixa), Essencial (R$250 mais 5% sobre o vendido) ou Escala, para eventos grandes (detalhes em coreohub.com/planos). A taxa do plano vale para inscrições, ingressos e workshops do evento. Além dela há a taxa de pagamento (Pix ou cartão), em linha separada no checkout e paga pelo comprador por padrão. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, debitados no primeiro recebimento.',
+  },
+  {
+    q: 'Preciso ter CNPJ para vender pela CoreoHub?',
+    a: 'Não é obrigatório. A conta digital de recebimento pode ser aberta com CPF ou com CNPJ e passa pela verificação de identidade da Asaas.',
+  },
+  {
+    q: 'Quando eu recebo?',
+    a: 'Cada venda já sai com split automático: a comissão fica com a CoreoHub e o resto vai para a sua conta digital. O Pix fica retido por até 7 dias, como janela de segurança para estornos, e depois é transferido para você. O cartão cai no prazo da Asaas, cerca de 32 dias depois da confirmação, e no parcelado conforme as parcelas.',
+  },
+  {
+    q: 'O que acontece se alguém pedir estorno?',
+    a: 'Você faz o estorno pelo painel e o valor volta ao comprador, incluindo a taxa de pagamento. As regras de estorno e de arrependimento estão no Termo do Produtor.',
+  },
+];
+
 const ESPETACULO_FAQ: Faq[] = [
   {
     q: 'Quanto custa vender ingresso pro espetáculo de fim de ano?',
@@ -368,6 +409,35 @@ const PAGES: Record<string, PageMeta> = {
       name: 'Sobre a CoreoHub',
       url: `${SITE_URL}/sobre`,
       mainEntity: { '@id': 'https://coreohub.com/#organization' },
+    },
+  },
+  cursoferias: {
+    path: '/curso-de-ferias',
+    title: 'Curso de Férias e de Verão de Dança | CoreoHub',
+    description:
+      'Venda passes, aulas, hospedagem e lotes do seu curso de férias de dança com Pix e cartão, vagas controladas e painel do produtor. Sem mensalidade.',
+    ogTitle: 'Venda o seu curso de férias de dança com pagamento na hora',
+    ogDescription: 'O aluno escolhe as aulas, vê o total e paga na hora. Você acompanha vagas, hospedagem e dinheiro num lugar só. Sem mensalidade.',
+    image: `${SITE_URL}/og-image.jpg`,
+    faq: CURSO_FERIAS_FAQ,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'Service',
+          name: 'Venda de curso de férias de dança — CoreoHub',
+          description: 'Venda passes, aulas, hospedagem e lotes do seu curso de férias de dança com Pix e cartão, vagas controladas e painel do produtor. Sem mensalidade.',
+          provider: { '@type': 'Organization', name: 'CoreoHub', url: SITE_URL },
+          areaServed: 'BR',
+          serviceType: 'Plataforma de vendas e inscrições para curso de férias e curso de verão de dança',
+          offers: {
+            '@type': 'Offer',
+            description: 'Sem mensalidade. Plano Começo: 10% sobre o valor vendido. Plano Essencial: R$250 mais 5%. Plano Escala para eventos grandes. Mais taxa de pagamento (Pix ou cartão) paga pelo comprador ou assumida pelo produtor',
+            priceCurrency: 'BRL',
+          },
+        },
+        faqPage(CURSO_FERIAS_FAQ),
+      ],
     },
   },
   espetaculo: {

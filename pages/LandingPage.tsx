@@ -895,6 +895,7 @@ const LandingPage = () => {
                 <li><a href="https://app.coreohub.com/criar-evento" className="hover:text-[#ff0068]">Criar meu festival</a></li>
                 <li><a href="https://app.coreohub.com/login" className="hover:text-[#ff0068]">Entrar</a></li>
                 <li><Link to="/governo" className="hover:text-[#ff0068]">Para o setor público</Link></li>
+                <li><Link to="/curso-de-ferias" className="hover:text-[#ff0068]">Para cursos de férias</Link></li>
               </ul>
             </div>
 
