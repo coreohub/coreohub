@@ -191,14 +191,14 @@ const LandingPage = () => {
           <div
             className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0 animate-hero-in"
           >
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Para festivais e mostras de dança</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Chega de planilha.</p>
             <h1 className="mt-2 sm:mt-3 text-[2.2rem] sm:text-[3.3rem] font-black tracking-normal uppercase leading-[1.06]">
-              Do primeiro inscrito ao último certificado, tudo num só lugar.
+              Plataforma de gestão para festivais e mostras de dança
             </h1>
 
             <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
-              Plataforma de gestão para festivais e mostras de dança: inscrições, pagamento, júri,
-              cronograma e ingressos numa única plataforma, sem surpresa no dia do evento.
+              Do regulamento ao palco: inscrições, júri e cronograma numa única
+              plataforma — sem surpresa no dia do evento.
             </p>
 
             <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:justify-start">
@@ -209,26 +209,23 @@ const LandingPage = () => {
                   <ChevronRight size={18} />
                 </span>
               </button>
-              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={ctaSecondaryCls}>
-                <WhatsAppIcon size={18} /> Falar no WhatsApp
-              </a>
             </div>
-            <p className="mt-4 text-xs text-white/60">Sem mensalidade. Você paga só quando vende.</p>
+
           </div>
         </div>
 
         {/* barra de stats */}
         <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
+            { val: 'Sob medida', label: 'pro tamanho do evento', icon: Target },
             { val: 'R$ 0', label: 'de mensalidade', icon: Wallet },
-            { val: 'Pix + cartão', label: 'no checkout', icon: CreditCard },
-            { val: 'QR Code', label: 'no check-in', icon: QrCode },
+            { val: '100%', label: 'digital, sem papel', icon: Smartphone },
           ].map((s, i) => {
             const Icon = s.icon;
             return (
               <div key={i} className="text-center flex flex-col items-center">
                 <Icon size={26} className="text-[#ff0068] mb-2" aria-hidden="true" />
-                <p className="text-xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
+                <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
                 <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
               </div>
             );
@@ -302,12 +299,12 @@ const LandingPage = () => {
                 com: 'O inscrito escolhe, paga e a inscrição se confirma sozinha. O dinheiro cai na sua conta.',
               },
               {
-                title: 'Cronograma',
+                title: 'Cronograma inteligente',
                 hoje: 'Bailarino escalado em duas coreografias no mesmo horário, descoberto só no dia.',
                 com: 'O sistema calcula o intervalo e avisa o conflito antes de você publicar.',
               },
               {
-                title: 'Júri',
+                title: 'Júri digital',
                 hoje: 'Nota na prancheta, soma na mão, e o erro vira problema seu.',
                 com: 'O jurado avalia no tablet, até sem Wi-Fi, e o resultado calcula sozinho.',
               },
@@ -343,8 +340,8 @@ const LandingPage = () => {
               <span className="text-[#ff0068]">operacional do seu festival.</span>
             </h2>
             <p className="text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-              Cole o regulamento, publique o festival e deixe a plataforma trabalhar.
-              Cada etapa — da inscrição ao certificado — roda sozinha enquanto você cuida do palco.
+              Envie o regulamento, publique o festival e deixe a plataforma trabalhar.
+              Da inscrição ao certificado, cada etapa se organiza sozinha enquanto você foca na gestão.
             </p>
           </div>
 
@@ -366,7 +363,7 @@ const LandingPage = () => {
               {
                 num: '03',
                 icon: Trophy,
-                title: 'O festival roda. Você foca no palco.',
+                title: 'O festival roda. Você foca na gestão.',
                 body: 'Júri avalia (até offline), resultado calcula sozinho e o certificado sai com QR Code.',
               },
             ].map((step, i) => {
@@ -493,9 +490,9 @@ const LandingPage = () => {
 
       {/* ─── 5. IA CONFIGURA ──────────────────────────────────────────────── */}
       <FeatureSection
-        kicker="Setup em 30 segundos"
-        title={<>Cole o PDF do <span className="text-[#ff0068]">regulamento</span>.<br />Seu festival, pronto para publicar.</>}
-        body="Nossa IA lê o regulamento (ou edital público de governo) e extrai TUDO: categorias, formações, lotes de preço, prêmios, critérios, tolerâncias. Em 30 segundos você está revisando, não digitando."
+        kicker="Configuração"
+        title={<>Configuração do evento<br /><span className="text-[#ff0068]">por IA</span></>}
+        body="Anexe o PDF do regulamento (ou do edital) e a IA extrai categorias, formações, lotes de preço, prêmios, critérios e tolerâncias. Em 30 segundos você está revisando, não digitando."
         bullets={[
           'Reconhece editais públicos, regulamentos próprios e mostras municipais',
           'Extrai ingressos, workshops, programação e patrocinadores',
@@ -534,9 +531,9 @@ const LandingPage = () => {
       {/* ─── 5.5. INSCRIÇÃO E PAGAMENTO ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
-        kicker="Inscrição e pagamento"
-        title={<>O inscrito paga sozinho.<br /><span className="text-[#ff0068]">Você só acompanha.</span></>}
-        body="O inscrito monta a inscrição, escolhe as coreografias e paga com Pix ou cartão. Se tiver várias, paga tudo numa fatura só. A taxa de pagamento aparece separada antes de ele pagar, e o split é automático: a sua parte cai na sua conta."
+        kicker="Inscrições"
+        title={<>Inscrição e<br /><span className="text-[#ff0068]">pagamento online</span></>}
+        body="O inscrito escolhe as coreografias e paga com Pix ou cartão, tudo numa fatura só. A taxa de pagamento aparece separada antes de ele pagar, e o split cai direto na sua conta."
         bullets={[
           'Pix e cartão, com parcelado liberado por evento',
           'Pagar tudo numa fatura só, com cupom de desconto',
@@ -580,13 +577,13 @@ const LandingPage = () => {
 
       {/* ─── 6. SELETIVA DE VÍDEO ──────────────────────────────────────────────── */}
       <FeatureSection
-        kicker="Seletiva de Vídeo"
-        title={<>Seletiva por <span className="text-[#ff0068]">vídeo</span>.<br />Cronograma só com quem passou.</>}
-        body="Bailarino envia o vídeo direto no formulário de inscrição. A banca avalia pelo tablet, antes do festival começar — sem precisar de dia extra de eliminatórias. No dia, o cronograma já vem filtrado só com os classificados: você economiza palco, banca e horário."
+        kicker="Pré-festival"
+        title={<>Seletiva<br /><span className="text-[#ff0068]">de vídeo</span></>}
+        body="O bailarino envia o vídeo na própria inscrição. A banca avalia pelo tablet antes do festival, e o cronograma já nasce só com os classificados: você economiza palco, banca e horário."
         bullets={[
-          'Vídeo enviado no cadastro (link YouTube)',
-          'Banca avalia remotamente, antes do festival',
-          'Notificação automática pro inscrito (passou / não passou)',
+          'Vídeo enviado na inscrição (link do YouTube)',
+          'A banca avalia à distância, antes do festival',
+          'O inscrito é avisado automaticamente: passou ou não passou',
         ]}
         mockup={
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
@@ -605,9 +602,9 @@ const LandingPage = () => {
       {/* ─── 6.5. JÚRI DIGITAL ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
-        kicker="Júri Digital"
-        title={<>Jurado avalia no tablet<br />ou notebook. <span className="text-[#ff0068]">Mesmo sem Wi-Fi.</span></>}
-        body="Esqueça a ficha de avaliação em papel. O júri acessa com PIN de 4 dígitos — sem cadastro. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
+        kicker="Avaliação"
+        title={<>Júri<br /><span className="text-[#ff0068]">digital</span></>}
+        body="O jurado avalia no tablet ou no notebook, com PIN de 4 dígitos e sem cadastro. Você acompanha cada nota em tempo real, o Coordenador do Júri revisa antes de publicar, e tudo funciona mesmo sem Wi-Fi."
         bullets={[
           'Login por PIN de 4 dígitos — sem cadastro, sem senha para lembrar',
           'Notas chegam em tempo real no painel do produtor',
@@ -630,14 +627,13 @@ const LandingPage = () => {
 
       {/* ─── 6.6. ÁUDIO DOS JURADOS ──────────────────────────────────────────────── */}
       <FeatureSection
-        kicker="Feedback em áudio"
-        title={<>O jurado grava. O coreógrafo recebe.<br /><span className="text-[#ff0068]">Sem empresa separada.</span></>}
-        body="Muitos festivais contratam uma empresa só para gravar o comentário dos jurados e mandar um por um no WhatsApp dos coreógrafos. Na CoreoHub o jurado grava o comentário direto no tablet, na hora da avaliação. O coreógrafo ouve, baixa e compartilha pelo próprio celular, em Meus Resultados. Você exporta tudo de uma vez, com os arquivos já nomeados por apresentação."
+        kicker="Jurados"
+        title={<>Gravação de áudio<br /><span className="text-[#ff0068]">dos jurados</span></>}
+        body="O jurado grava o comentário no tablet, na hora da avaliação, e ele chega direto ao coreógrafo. Sem contratar empresa e sem mandar áudio por áudio no WhatsApp."
         bullets={[
-          'Gravação feita no tablet do jurado, durante a avaliação',
+          'Gravado no tablet do jurado, durante a avaliação',
           'Cada coreógrafo ouve e baixa só o áudio da sua coreografia',
-          'Exportação em lote (.zip) com o nome da coreografia, do estúdio e do jurado',
-          'O áudio fica disponível por 90 dias depois do evento',
+          'Exportação em .zip, com os arquivos nomeados por apresentação',
         ]}
         mockup={
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
@@ -656,14 +652,13 @@ const LandingPage = () => {
       {/* ─── 6.65. TELÃO DE PALCO ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
-        kicker="Telão de palco"
-        title={<>O resultado aparece no telão.<br /><span className="text-[#ff0068]">Você decide a hora.</span></>}
-        body="Qualquer LED ou projetor vira telão com um código, sem instalar nada. No modo Ao vivo ele mostra os jurados e a média quando o último fecha a nota. No modo Premiação você revela os vencedores um por um na cerimônia, e nada aparece para o público antes de você liberar."
+        kicker="Palco"
+        title={<>Telão<br /><span className="text-[#ff0068]">de palco</span></>}
+        body="Qualquer LED ou projetor vira telão com um código, sem instalar nada. No modo ao vivo ele mostra a média quando o último jurado fecha a nota. No modo Premiação, você revela os vencedores um a um."
         bullets={[
           'Entra por código, em qualquer tela e proporção',
           'Média ao vivo, sem revelar medalha antes da hora',
           'Vencedores registrados antes e revelados na cerimônia',
-          'Voto Popular entra automático no troféu',
         ]}
         mockup={
           <div className="bg-black border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
@@ -696,9 +691,9 @@ const LandingPage = () => {
 
       {/* ─── 6.7. CERTIFICADO ──────────────────────────────────────────────── */}
       <FeatureSection
-        kicker="Certificado"
-        title={<>Certificado digital com QR Code.<br /><span className="text-[#ff0068]">Ninguém falsifica, ninguém digita.</span></>}
-        body="Assim que o resultado é publicado, cada bailarino recebe o certificado digital automaticamente — com QR Code de validação pública. Qualquer pessoa pode escanear e confirmar que é oficial. Acabou o certificado por certificado, à mão."
+        kicker="Resultado"
+        title={<>Certificado digital<br /><span className="text-[#ff0068]">com QR Code</span></>}
+        body="Ao publicar o resultado, cada bailarino recebe o certificado automaticamente, com QR Code de validação pública. Qualquer pessoa escaneia e confirma que é oficial."
         bullets={[
           'Certificado digital gerado e enviado automaticamente',
           'QR Code de validação pública — confirma autenticidade em segundos',
@@ -722,9 +717,9 @@ const LandingPage = () => {
       {/* ─── 7. CRONOGRAMA INTELIGENTE ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
-        kicker="Conflito? Antes de acontecer."
-        title={<>Bailarina em <span className="text-[#ff0068]">5 coreografias</span>?<br />O sistema calcula o intervalo.</>}
-        body="O cronograma identifica quando o mesmo bailarino aparece em apresentações próximas e respeita um intervalo mínimo pra troca de figurino. Se há conflito, ele alerta antes de você publicar. Reordena com 1 toque, sem refazer planilha."
+        kicker="Organização"
+        title={<>Cronograma<br /><span className="text-[#ff0068]">inteligente</span></>}
+        body="O sistema detecta o bailarino que aparece em apresentações próximas e respeita o intervalo para a troca de figurino. Se há conflito, avisa antes de você publicar e reordena com 1 toque."
         bullets={[
           'Detecta bailarinos em múltiplas coreografias (solo, duo, grupo)',
           'Calcula intervalo mínimo entre apresentações da mesma pessoa',
@@ -778,9 +773,9 @@ const LandingPage = () => {
 
       {/* ─── 8. INGRESSOS ──────────────────────────────────────────────── */}
       <FeatureSection
-        kicker="Ingressos"
-        title={<>Venda a plateia do seu festival<br /><span className="text-[#ff0068]">no mesmo link.</span></>}
-        body="Ingresso de plateia com Pix e cartão, lotes, meia-entrada e mapa de assentos numerados quando o local tem. O comprador recebe o ingresso com QR Code e você confere na porta."
+        kicker="Bilheteria"
+        title={<>Venda<br /><span className="text-[#ff0068]">de ingressos</span></>}
+        body="Venda a plateia no mesmo link do festival, com Pix e cartão, lotes, meia-entrada e mapa de assentos. O comprador recebe o ingresso com QR Code e você confere na porta."
         bullets={[
           'Tipos de ingresso, lotes e cupons de desconto',
           'Mapa de assentos e ponto de venda para a bilheteria presencial',
@@ -820,9 +815,9 @@ const LandingPage = () => {
       {/* ─── 9. CREDENCIAMENTO ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
-        kicker="Credenciamento"
-        title={<>Check-in por QR Code,<br /><span className="text-[#ff0068]">do portão ao camarim.</span></>}
-        body="Inscritos, equipe, jurados e participantes de workshop entram por QR Code, e você vê quem já chegou. Se quiser credencial física, o sistema gera o PDF pronto para imprimir, com foto, nome, função e QR Code."
+        kicker="Portaria"
+        title={<>Credenciamento<br /><span className="text-[#ff0068]">e check-in</span></>}
+        body="Inscritos, equipe, jurados e participantes de workshop entram por QR Code, e você vê quem já chegou. Se quiser credencial física, o sistema gera o PDF pronto para imprimir."
         bullets={[
           'Check-in por QR de inscritos, equipe, jurados e workshops',
           'Credencial impressa em A6 com cordão ou adesivo',
