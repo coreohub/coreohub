@@ -6,7 +6,7 @@ import {
   AlertTriangle, ArrowRight, Menu, Play,
   CalendarClock, Globe, IdCard, QrCode,
   Smartphone, Share2, Mail, Target, Wallet,
-  CreditCard, Ticket, Tv, Users, Landmark, Drama, Megaphone, BarChart3, Tag, Music, Vote, Gift, Percent,
+  CreditCard, Ticket, Tv, Users, Landmark, Drama, Megaphone, BarChart3, Tag, Music, Gift, Percent,
   CalendarDays, Mic, Building2,
 } from 'lucide-react';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
@@ -341,7 +341,7 @@ const LandingPage = () => {
             </h2>
             <p className="text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
               Envie o regulamento, publique o festival e deixe a plataforma trabalhar.
-              Da inscrição ao certificado, cada etapa se organiza sozinha enquanto você foca na gestão.
+              Da inscrição ao certificado, cada etapa se organiza sozinha enquanto você acompanha e decide.
             </p>
           </div>
 
@@ -363,7 +363,7 @@ const LandingPage = () => {
               {
                 num: '03',
                 icon: Trophy,
-                title: 'O festival roda. Você foca na gestão.',
+                title: 'O festival roda. Você acompanha e decide.',
                 body: 'Júri avalia (até offline), resultado calcula sozinho e o certificado sai com QR Code.',
               },
             ].map((step, i) => {
@@ -859,7 +859,7 @@ const LandingPage = () => {
               { icon: Tag, title: 'Cupons e marketing', body: 'Cupons por tipo de venda e pixels de anúncio no seu evento.' },
               { icon: Music, title: 'Mesa de som', body: 'Marca a coreografia ao vivo, toca a trilha e acompanha o cronograma em tempo real.' },
               { icon: Mic2, title: 'Narração por IA (opcional)', body: 'Voz em português gerada antes do evento, com cópia para rodar offline.' },
-              { icon: Vote, title: 'Voto Popular', body: 'Votação do público ligada ao troféu do telão.' },
+              { icon: Users, title: 'Área do inscrito', body: 'Coreografias, pagamentos, resultados, áudios dos jurados e certificados num só lugar.' },
               { icon: Gift, title: 'Cortesias', body: 'Convites e entradas da casa, com QR Code.' },
             ].map((c, i) => {
               const Icon = c.icon;
