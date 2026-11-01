@@ -6,7 +6,56 @@ import {
   AlertTriangle, ArrowRight, Menu, Play,
   CalendarClock, Globe, IdCard, QrCode,
   Smartphone, Share2, Mail, Target, Wallet,
+  CreditCard, Ticket, Tv, Users, Landmark, Drama, Megaphone, BarChart3, Tag, Music, Vote, Gift, Percent,
+  CalendarDays, Mic, Building2,
 } from 'lucide-react';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
+
+const WHATSAPP_URL = 'https://wa.me/5517981264290?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub';
+
+// FAQ da home. O JSON-LD de index.html e de api/og-marketing.ts espelha este array
+// (tests/marketing-faq-parity.test.ts quebra se divergir).
+const HOME_FAQ_ITEMS = [
+  {
+    q: 'Quando eu recebo o dinheiro das inscrições?',
+    a: 'O Pix fica retido por até 7 dias, como janela de segurança para estornos, e depois a CoreoHub transfere para você. O botão "Transferir agora" envia na hora, sem taxa, o saldo que já passou dos 7 dias. O cartão cai no prazo da Asaas, hoje cerca de 32 dias depois da confirmação, e só então segue o mesmo caminho. Cada pagamento sai com split automático: a comissão do seu plano fica com a CoreoHub e o resto vai para a sua conta digital.',
+  },
+  {
+    q: 'Quanto custa para começar?',
+    a: 'Não há mensalidade. Você escolhe um plano por evento: Começo (10% sobre o vendido), Essencial (R$250 por evento mais 5%) ou Escala, para eventos grandes. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, debitados no primeiro recebimento. A taxa de pagamento (Pix ou cartão) aparece separada no checkout e, por padrão, quem paga é o comprador.',
+  },
+  {
+    q: 'Funciona mesmo offline?',
+    a: 'Sim. Avaliação de jurados, cronograma, check-in por QR Code e narração funcionam mesmo sem internet no local — o app sincroniza automaticamente quando a conexão volta. Você só precisa de internet pra publicar o evento e receber pagamentos.',
+  },
+  {
+    q: 'Os jurados podem gravar comentário em áudio?',
+    a: 'Sim. O jurado grava o comentário direto no tablet, durante a avaliação. O coreógrafo ouve, baixa e compartilha pelo celular em Meus Resultados, e você exporta todos os áudios de uma vez, em um arquivo .zip com os nomes organizados por apresentação. Os áudios ficam disponíveis por 90 dias depois do evento.',
+  },
+  {
+    q: 'Posso vender ingressos da plateia?',
+    a: 'Sim. Você cria tipos de ingresso e lotes, com meia-entrada, cupons, cortesias e mapa de assentos numerados quando o local tem. O comprador paga com Pix ou cartão e recebe o ingresso com QR Code, que você confere na porta.',
+  },
+  {
+    q: 'E se eu quiser sair? Tem fidelidade?',
+    a: 'Não. Não existe contrato de permanência nem multa de cancelamento — você usa enquanto fizer sentido pro seu festival. Se decidir sair, seu histórico de eventos, inscrições e certificados continua acessível e exportável, sem prazo de expiração.',
+  },
+  {
+    q: 'Tem suporte técnico?',
+    a: 'Sim, direto por WhatsApp com nossa equipe — sem ticket, sem fila de atendimento genérico. Na semana do seu festival, o suporte é prioritário: se algo travar no dia, você fala com a gente na hora, não espera resposta de central.',
+  },
+  {
+    q: 'Quantos festivais por mês posso criar?',
+    a: 'Quantos quiser. Não há limite de festivais, edições ou mostras — você paga só a comissão do seu plano sobre o que vender (nos planos Essencial e Escala, mais a taxa de ativação por evento), então pode rodar um evento por mês ou dez, sem mensalidade te travando.',
+  },
+  {
+    q: 'Funciona pra evento gratuito ou edital público?',
+    a: 'Sim — temos modelo específico para eventos gratuitos, mostras municipais e editais públicos. Como cada caso tem particularidades (tipo de evento, instituição, verba), fale com a gente pelo WhatsApp e montamos a proposta certa pro seu caso.',
+  },
+];
+
+const ctaPrimaryCls = 'group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform';
+const ctaSecondaryCls = 'inline-flex items-center justify-center gap-2 px-8 py-5 border border-white/20 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/5 transition-colors';
 const LandingPage = () => {
   const navigate = useNavigate();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -48,11 +97,27 @@ const LandingPage = () => {
             <span className="text-sm font-black uppercase tracking-tight text-white">CoreoHub</span>
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
+            <div className="group relative">
+              <button type="button" className="flex items-center gap-1 text-xs font-bold text-slate-300 hover:text-white transition-colors py-2" aria-haspopup="true">
+                Soluções <ChevronDown size={14} aria-hidden="true" />
+              </button>
+              <div className="hidden group-hover:block group-focus-within:block absolute left-0 top-full pt-2 w-64">
+                <div className="bg-slate-950/95 backdrop-blur-md border border-white/10 rounded-2xl p-2 shadow-2xl">
+                  {[
+                    { to: '/', label: 'Festivais e mostras' },
+                    { to: '/curso-de-ferias', label: 'Cursos de férias e de verão' },
+                    { to: '/espetaculo', label: 'Espetáculos e bilheteria' },
+                    { to: '/governo', label: 'Setor público' },
+                  ].map((l) => (
+                    <Link key={l.to} to={l.to} className="block px-4 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 transition-colors">
+                      {l.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
             <Link to="/festivais" className="text-xs font-bold text-slate-300 hover:text-white transition-colors">
-              Festivais
-            </Link>
-            <Link to="/governo" className="text-xs font-bold text-slate-300 hover:text-white transition-colors">
-              Setor público
+              Agenda
             </Link>
             <a
               href="https://app.coreohub.com/login"
@@ -79,12 +144,17 @@ const LandingPage = () => {
         {/* mobile menu */}
         {menuOpen && (
           <div className="sm:hidden bg-slate-950/95 backdrop-blur-md border-t border-white/10 px-6 py-4 space-y-1">
-            <Link to="/festivais" onClick={() => setMenuOpen(false)} className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
-              Festivais
-            </Link>
-            <Link to="/governo" onClick={() => setMenuOpen(false)} className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
-              Setor público
-            </Link>
+            {[
+              { to: '/', label: 'Festivais e mostras' },
+              { to: '/curso-de-ferias', label: 'Cursos de férias e de verão' },
+              { to: '/espetaculo', label: 'Espetáculos e bilheteria' },
+              { to: '/governo', label: 'Setor público' },
+              { to: '/festivais', label: 'Agenda de festivais' },
+            ].map((l) => (
+              <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
+                {l.label}
+              </Link>
+            ))}
             <a href="https://app.coreohub.com/login" className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
               Entrar
             </a>
@@ -106,8 +176,7 @@ const LandingPage = () => {
           src="/hero-festival.webp"
           srcSet="/hero-festival-mobile.webp 960w, /hero-festival.webp 1920w"
           sizes="100vw"
-          alt=""
-          aria-hidden="true"
+          alt="Bailarinos se apresentando em um palco de festival de dança"
           width={1920}
           height={1072}
           fetchPriority="high"
@@ -122,44 +191,44 @@ const LandingPage = () => {
           <div
             className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0 animate-hero-in"
           >
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Chega de planilha.</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Para festivais e mostras de dança</p>
             <h1 className="mt-2 sm:mt-3 text-[2.2rem] sm:text-[3.3rem] font-black tracking-normal uppercase leading-[1.06]">
-              Plataforma de gestão para festivais e mostras de dança
+              Do regulamento ao certificado, seu festival rodando sozinho.
             </h1>
 
             <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
-              Do regulamento ao palco: inscrições, júri e cronograma numa única
-              plataforma — sem surpresa no dia do evento.
+              Plataforma de gestão para festivais e mostras de dança: inscrições, pagamento, júri,
+              cronograma e ingressos numa única plataforma, sem surpresa no dia do evento.
             </p>
 
             <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:justify-start">
-              <button
-                onClick={() => navigate('/planos')}
-                className="group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
-              >
+              <button onClick={() => navigate('/planos')} className={ctaPrimaryCls}>
                 <span className="relative z-10 flex items-center gap-2">
                   <span className="sm:hidden">Ver planos</span>
                   <span className="hidden sm:inline">Fazer simulação</span>
                   <ChevronRight size={18} />
                 </span>
               </button>
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={ctaSecondaryCls}>
+                <WhatsAppIcon size={18} /> Falar no WhatsApp
+              </a>
             </div>
-
+            <p className="mt-4 text-xs text-white/60">Sem mensalidade. Você paga só quando vende.</p>
           </div>
         </div>
 
         {/* barra de stats */}
         <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
-            { val: 'Sob medida', label: 'pro tamanho do evento', icon: Target },
             { val: 'R$ 0', label: 'de mensalidade', icon: Wallet },
-            { val: '100%', label: 'digital, sem papel', icon: Smartphone },
+            { val: 'Pix + cartão', label: 'no checkout', icon: CreditCard },
+            { val: 'QR Code', label: 'no check-in', icon: QrCode },
           ].map((s, i) => {
             const Icon = s.icon;
             return (
               <div key={i} className="text-center flex flex-col items-center">
                 <Icon size={26} className="text-[#ff0068] mb-2" aria-hidden="true" />
-                <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
+                <p className="text-xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
                 <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
               </div>
             );
@@ -214,45 +283,51 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ─── 2. PROBLEMA ──────────────────────────────────────────────── */}
+      {/* ─── 2. HOJE x COM A COREOHUB ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-400 mb-3">Reconhece a rotina?</p>
-          <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-8">
-            Você começou pra<br />
-            produzir arte.<br />
-            <span className="text-rose-400">Virou produtor de planilha.</span>
-          </h2>
-          <div className="space-y-4 text-slate-300 text-lg leading-relaxed">
-            <p>Inscrição no Google Forms, cronograma na planilha, regulamento no PDF — nada conversa entre si.</p>
-            <p>Bailarino aparece escalado em duas coreografias no mesmo horário, e você só descobre no dia.</p>
-            <p>Inscrição chega, você confere comprovante de Pix um por um, manualmente.</p>
-            <p>Jurado soma nota na prancheta — se errar, o erro vira problema seu.</p>
-            <p className="text-white font-bold pt-2">
-              Cada hora apagando incêndio é uma hora longe do palco. E é o palco que te trouxe aqui.
-            </p>
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Reconhece a rotina?</p>
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+              Menos planilha.<br />
+              <span className="text-[#ff0068]">Mais palco.</span>
+            </h2>
           </div>
-        </div>
-      </section>
-
-      {/* ─── 3. AGITAÇÃO ──────────────────────────────────────────────── */}
-      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400 mb-3">E só piora</p>
-          <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-8">
-            O festival cresce.<br />
-            <span className="text-amber-400">O caos também.</span>
-          </h2>
-          <div className="space-y-5 text-slate-300 text-lg leading-relaxed">
-            <p>
-              100 inscrições viram 300. Três ajudantes no Excel viram cinco pessoas sem comunicação.
-              A reputação que você construiu em anos pode ir embora numa noite de resultado atrasado ou certificado errado.
-            </p>
-            <p className="text-white font-bold">
-              Quanto maior o festival, maior o risco de você ser lembrado pelo que deu errado —
-              não pelo que deu certo no palco.
-            </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              {
+                title: 'Inscrição e pagamento',
+                hoje: 'Formulário, comprovante de Pix conferido um por um e uma planilha que não conversa com nada.',
+                com: 'O inscrito escolhe, paga e a inscrição se confirma sozinha. O dinheiro cai na sua conta.',
+              },
+              {
+                title: 'Cronograma',
+                hoje: 'Bailarino escalado em duas coreografias no mesmo horário, descoberto só no dia.',
+                com: 'O sistema calcula o intervalo e avisa o conflito antes de você publicar.',
+              },
+              {
+                title: 'Júri',
+                hoje: 'Nota na prancheta, soma na mão, e o erro vira problema seu.',
+                com: 'O jurado avalia no tablet, até sem Wi-Fi, e o resultado calcula sozinho.',
+              },
+              {
+                title: 'Resultado e certificado',
+                hoje: 'Resultado atrasado e certificado digitado um a um.',
+                com: 'Resultado publicado e certificado com QR Code na hora.',
+              },
+            ].map((c, i) => (
+              <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                <h3 className="text-base font-black uppercase tracking-tight text-white mb-4">{c.title}</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-400 mb-1">Hoje</p>
+                <p className="text-sm text-slate-400 leading-relaxed mb-4">{c.hoje}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1">Com a CoreoHub</p>
+                <p className="text-sm text-slate-200 leading-relaxed">{c.com}</p>
+              </div>
+            ))}
           </div>
+          <p className="text-center text-white font-bold text-lg mt-10">
+            Cada hora a menos apagando incêndio é uma hora a mais no palco.
+          </p>
         </div>
       </section>
 
@@ -290,8 +365,8 @@ const LandingPage = () => {
               {
                 num: '03',
                 icon: Trophy,
-                title: 'O festival roda. Você finalmente respira.',
-                body: 'Júri avalia (até offline), resultado calcula sozinho, certificado sai com QR Code. Você foca no palco.',
+                title: 'O festival roda. Você foca no palco.',
+                body: 'Júri avalia (até offline), resultado calcula sozinho e o certificado sai com QR Code.',
               },
             ].map((step, i) => {
               const Icon = step.icon;
@@ -304,6 +379,95 @@ const LandingPage = () => {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── 4.2. PARA CADA TIPO DE EVENTO ──────────────────────────────────────────────── */}
+      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Para cada tipo de evento</p>
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+              Um sistema,<br />
+              <span className="text-[#ff0068]">vários tipos de evento.</span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { icon: Trophy, title: 'Festivais e mostras de dança', body: 'Inscrição, júri, cronograma, premiação e certificado. É esta página.', to: null as string | null },
+              { icon: GraduationCap, title: 'Cursos de férias e de verão', body: 'Passes, aulas à la carte, lotes, hospedagem e desconto por combinação.', to: '/curso-de-ferias' },
+              { icon: Drama, title: 'Espetáculos e bilheteria', body: 'Ingressos com mapa de assentos, Pix e cartão, e QR Code no portão.', to: '/espetaculo' },
+              { icon: Landmark, title: 'Setor público', body: 'Editais, mostras municipais e prefeituras, com proposta própria.', to: '/governo' },
+            ].map((c, i) => {
+              const Icon = c.icon;
+              const inner = (
+                <>
+                  <Icon size={24} className="text-[#ff0068] mb-3" aria-hidden="true" />
+                  <h3 className="text-lg font-black uppercase tracking-tight text-white">{c.title}</h3>
+                  <p className="text-sm text-slate-400 mt-2 leading-relaxed">{c.body}</p>
+                  {c.to && (
+                    <span className="inline-flex items-center gap-1 mt-4 text-xs font-black uppercase tracking-widest text-[#ff0068]">
+                      Ver como funciona <ArrowRight size={14} aria-hidden="true" />
+                    </span>
+                  )}
+                </>
+              );
+              const cls = 'block bg-white/5 border border-white/10 rounded-3xl p-6 transition-all';
+              return c.to ? (
+                <Link key={i} to={c.to} className={cls + ' hover:border-[#ff0068]/40'}>{inner}</Link>
+              ) : (
+                <div key={i} className={cls + ' border-[#ff0068]/30'}>{inner}</div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── 4.3. PROVA SOCIAL ──────────────────────────────────────────────── */}
+      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Depoimentos</p>
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+              Quem já usou,<br />
+              <span className="text-[#ff0068]">aprova.</span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
+              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Uma das plataformas de gestão de eventos mais completas que já utilizei. Além da praticidade, ela entrega praticamente TUDO em um formato prático e didático. Tive a honra de conhecer e utilizar na produção do Usualdance Festival, e com certeza daqui pra frente estará no Extreme Festival."</p>
+              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+                <img src="/will-nunes.webp" alt="Will Nunes" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
+                <div>
+                  <p className="text-white text-sm font-black">Will Nunes</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Monte Aprazível-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
+              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Avaliar pela CoreoHub foi extremamente positivo — processo organizado, prático e eficiente. O sistema agiliza o trabalho do júri sem comprometer a qualidade técnica, entregando uma avaliação transparente e padronizada. Uma solução moderna que eleva o nível do festival. Nota 1000."</p>
+              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+                <img src="/jonathan-lupe.webp" alt="Jonathan Lupe" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
+                <div>
+                  <p className="text-white text-sm font-black">Jonathan Lupe</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">São José do Rio Preto-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
+              <p className="text-slate-300 text-sm leading-relaxed flex-1">"A Coreohub foi uma grande parceira na construção do Festival Ecodança. Mesmo entrando já com o festival em andamento, o serviço contratado facilitou muito a logística. O suporte da equipe foi essencial pra tudo dar certo. Super recomendo — pra 2026 já vou estar com a Coreohub desde o início!"</p>
+              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+                <img src="/bheto-bastheli.webp" alt="Bhetto Bastelli" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
+                <div>
+                  <p className="text-white text-sm font-black">Bhetto Bastelli</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Limeira-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Festival Ecodança</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -366,9 +530,55 @@ const LandingPage = () => {
         }
       />
 
-      {/* ─── 6. SELETIVA DE VÍDEO ──────────────────────────────────────────────── */}
+      {/* ─── 5.5. INSCRIÇÃO E PAGAMENTO ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
+        kicker="Inscrição e pagamento"
+        title={<>O inscrito paga sozinho.<br /><span className="text-[#ff0068]">Você só acompanha.</span></>}
+        body="O inscrito monta a inscrição, escolhe as coreografias e paga com Pix ou cartão. Se tiver várias, paga tudo numa fatura só. A taxa de pagamento aparece separada antes de ele pagar, e o split é automático: a sua parte cai na sua conta."
+        bullets={[
+          'Pix e cartão, com parcelado liberado por evento',
+          'Pagar tudo numa fatura só, com cupom de desconto',
+          'Lotes que viram por data ou quando a cota acaba',
+          'Estorno pelo painel, sem planilha',
+        ]}
+        mockup={
+          <div className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <CreditCard size={14} className="text-[#ff0068]" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fatura · 2 inscrições</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Pix ou cartão</span>
+            </div>
+            {[
+              { name: 'Lago dos Cisnes Moderno', who: 'Solo · Juvenil', val: 'R$ 120,00' },
+              { name: 'Carmen Reinventada', who: 'Duo · Adulto', val: 'R$ 180,00' },
+            ].map((r, i) => (
+              <div key={i} className="flex items-center justify-between rounded-lg bg-white/5 border border-white/10 p-3">
+                <div>
+                  <p className="text-xs font-bold text-white">{r.name}</p>
+                  <p className="text-[10px] text-slate-500">{r.who}</p>
+                </div>
+                <span className="text-xs font-black text-slate-200 tabular-nums">{r.val}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between text-[11px] text-emerald-400 font-bold px-1">
+              <span>Cupom aplicado</span><span className="tabular-nums">− R$ 30,00</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+              <span>Taxa de pagamento</span><span>separada, antes de pagar</span>
+            </div>
+            <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>
+              <span className="text-lg font-black text-white tabular-nums">R$ 270,00</span>
+            </div>
+          </div>
+        }
+      />
+
+      {/* ─── 6. SELETIVA DE VÍDEO ──────────────────────────────────────────────── */}
+      <FeatureSection
         kicker="Seletiva de Vídeo"
         title={<>Seletiva por <span className="text-[#ff0068]">vídeo</span>.<br />Cronograma só com quem passou.</>}
         body="Bailarino envia o vídeo direto no formulário de inscrição. A banca avalia pelo tablet, antes do festival começar — sem precisar de dia extra de eliminatórias. No dia, o cronograma já vem filtrado só com os classificados: você economiza palco, banca e horário."
@@ -391,6 +601,7 @@ const LandingPage = () => {
 
       {/* ─── 6.5. JÚRI DIGITAL ──────────────────────────────────────────────── */}
       <FeatureSection
+        reverse
         kicker="Júri Digital"
         title={<>Jurado avalia no tablet<br />ou notebook. <span className="text-[#ff0068]">Mesmo sem Wi-Fi.</span></>}
         body="Esqueça a ficha de avaliação em papel. O júri acessa com PIN de 4 dígitos — sem cadastro. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
@@ -412,9 +623,74 @@ const LandingPage = () => {
         }
       />
 
-      {/* ─── 6.7. CERTIFICADO ──────────────────────────────────────────────── */}
+      {/* ─── 6.6. ÁUDIO DOS JURADOS ──────────────────────────────────────────────── */}
+      <FeatureSection
+        kicker="Feedback em áudio"
+        title={<>O jurado grava. O coreógrafo recebe.<br /><span className="text-[#ff0068]">Sem empresa separada.</span></>}
+        body="Muitos festivais contratam uma empresa só para gravar o comentário dos jurados e mandar um por um no WhatsApp dos coreógrafos. Na CoreoHub o jurado grava o comentário direto no tablet, na hora da avaliação. O coreógrafo ouve, baixa e compartilha pelo próprio celular, em Meus Resultados. Você exporta tudo de uma vez, com os arquivos já nomeados por apresentação."
+        bullets={[
+          'Gravação feita no tablet do jurado, durante a avaliação',
+          'Cada coreógrafo ouve e baixa só o áudio da sua coreografia',
+          'Exportação em lote (.zip) com o nome da coreografia, do estúdio e do jurado',
+          'O áudio fica disponível por 90 dias depois do evento',
+        ]}
+        mockup={
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+            <img
+              src="/feedback-audio-juri.webp"
+              alt="Tela do terminal do jurado gravando comentário em áudio durante a avaliação de uma coreografia"
+              width={1100}
+              height={707}
+              className="w-full h-auto block"
+              loading="lazy"
+            />
+          </div>
+        }
+      />
+
+      {/* ─── 6.65. TELÃO DE PALCO ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
+        kicker="Telão de palco"
+        title={<>O resultado aparece no telão.<br /><span className="text-[#ff0068]">Você decide a hora.</span></>}
+        body="Qualquer LED ou projetor vira telão com um código, sem instalar nada. No modo Ao vivo ele mostra os jurados e a média quando o último fecha a nota. No modo Premiação você revela os vencedores um por um na cerimônia, e nada aparece para o público antes de você liberar."
+        bullets={[
+          'Entra por código, em qualquer tela e proporção',
+          'Média ao vivo, sem revelar medalha antes da hora',
+          'Vencedores registrados antes e revelados na cerimônia',
+          'Voto Popular entra automático no troféu',
+        ]}
+        mockup={
+          <div className="bg-black border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-slate-950">
+              <div className="flex items-center gap-2">
+                <Tv size={14} className="text-[#ff0068]" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Telão · modo ao vivo</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Código 4821</span>
+            </div>
+            <div className="p-6 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Em cena</p>
+              <p className="text-2xl font-black uppercase tracking-tighter text-white mt-1">Lago dos Cisnes Moderno</p>
+              <p className="text-xs text-slate-400 mt-1">Cia Étoile · Grupo · Adulto</p>
+              <div className="flex items-center justify-center gap-4 mt-5">
+                {[{ n: 'Jurado 1', ok: true }, { n: 'Jurado 2', ok: true }, { n: 'Jurado 3', ok: false }].map((j, i) => (
+                  <div key={i} className="text-center">
+                    <div className={`w-9 h-9 rounded-full mx-auto flex items-center justify-center border ${j.ok ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
+                      {j.ok ? <Check size={16} /> : <span className="text-[10px] font-black">…</span>}
+                    </div>
+                    <p className="text-[9px] text-slate-500 mt-1">{j.n}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-5">Aguardando o último jurado</p>
+            </div>
+          </div>
+        }
+      />
+
+      {/* ─── 6.7. CERTIFICADO ──────────────────────────────────────────────── */}
+      <FeatureSection
         kicker="Certificado"
         title={<>Certificado digital com QR Code.<br /><span className="text-[#ff0068]">Ninguém falsifica, ninguém digita.</span></>}
         body="Assim que o resultado é publicado, cada bailarino recebe o certificado digital automaticamente — com QR Code de validação pública. Qualquer pessoa pode escanear e confirmar que é oficial. Acabou o certificado por certificado, à mão."
@@ -438,6 +714,7 @@ const LandingPage = () => {
 
       {/* ─── 7. CRONOGRAMA INTELIGENTE ──────────────────────────────────────────────── */}
       <FeatureSection
+        reverse
         kicker="Conflito? Antes de acontecer."
         title={<>Bailarina em <span className="text-[#ff0068]">5 coreografias</span>?<br />O sistema calcula o intervalo.</>}
         body="O cronograma identifica quando o mesmo bailarino aparece em apresentações próximas e respeita um intervalo mínimo pra troca de figurino. Se há conflito, ele alerta antes de você publicar. Reordena com 1 toque, sem refazer planilha."
@@ -492,17 +769,57 @@ const LandingPage = () => {
         }
       />
 
-      {/* ─── 8. CREDENCIAIS FÍSICAS ──────────────────────────────────────────────── */}
+      {/* ─── 8. INGRESSOS ──────────────────────────────────────────────── */}
+      <FeatureSection
+        kicker="Ingressos"
+        title={<>Venda a plateia do seu festival<br /><span className="text-[#ff0068]">no mesmo link.</span></>}
+        body="Ingresso de plateia com Pix e cartão, lotes, meia-entrada e mapa de assentos numerados quando o local tem. O comprador recebe o ingresso com QR Code e você confere na porta."
+        bullets={[
+          'Tipos de ingresso, lotes e cupons de desconto',
+          'Mapa de assentos e ponto de venda para a bilheteria presencial',
+          'Cortesias e transferência de ingresso',
+          'Check-in por QR Code no portão',
+        ]}
+        mockup={
+          <div className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Ticket size={14} className="text-[#ff0068]" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ingressos · Noite de gala</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Vendas abertas</span>
+            </div>
+            {[
+              { name: 'Inteira', note: '1º lote', val: 'R$ 40,00' },
+              { name: 'Meia-entrada', note: 'Últimos 14', val: 'R$ 20,00' },
+              { name: 'Solidária', note: 'Traga 1 kg de alimento', val: 'R$ 20,00' },
+            ].map((r, i) => (
+              <div key={i} className="flex items-center justify-between rounded-lg bg-white/5 border border-white/10 p-3">
+                <div>
+                  <p className="text-xs font-bold text-white">{r.name}</p>
+                  <p className="text-[10px] text-slate-500">{r.note}</p>
+                </div>
+                <span className="text-xs font-black text-slate-200 tabular-nums">{r.val}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-3 rounded-lg bg-[#ff0068]/10 border border-[#ff0068]/30 p-3">
+              <QrCode size={28} className="text-[#ff0068] shrink-0" aria-hidden="true" />
+              <p className="text-[11px] text-slate-300">Ingresso com QR Code, conferido na porta pelo celular da equipe.</p>
+            </div>
+          </div>
+        }
+      />
+
+      {/* ─── 9. CREDENCIAMENTO ──────────────────────────────────────────────── */}
       <FeatureSection
         reverse
-        kicker="Credenciais físicas em PDF"
-        title={<>Imprime no <span className="text-[#ff0068]">offset</span> da esquina.<br />Cola na credencial.</>}
-        body="Selecione os inscritos, escolha o modo de impressão (A6 com cordão ou adesivo Pimaco 6280) e o sistema gera o PDF pronto pra gráfica. Foto, nome, função e QR Code de check-in — tudo organizado nas margens exatas do papel."
+        kicker="Credenciamento"
+        title={<>Check-in por QR Code,<br /><span className="text-[#ff0068]">do portão ao camarim.</span></>}
+        body="Inscritos, equipe, jurados e participantes de workshop entram por QR Code, e você vê quem já chegou. Se quiser credencial física, o sistema gera o PDF pronto para imprimir, com foto, nome, função e QR Code."
         bullets={[
-          'Modo A6 cordão: 4 credenciais por folha A4 em papel cartão 250g',
-          'Modo Pimaco 6280: adesivos prontos pra colar em credencial pré-impressa',
-          'Tipos suportados: inscrito, workshop, equipe e jurados',
-          'Cor automática por tipo (rosa, azul, dourado, roxo)',
+          'Check-in por QR de inscritos, equipe, jurados e workshops',
+          'Credencial impressa em A6 com cordão ou adesivo',
+          'Cor automática por tipo de credencial',
         ]}
         mockup={
           <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
@@ -520,105 +837,36 @@ const LandingPage = () => {
         }
       />
 
-      {/* ─── 9. NARRAÇÃO IA ──────────────────────────────────────────────── */}
-      <FeatureSection
-        kicker="Narração profissional por IA"
-        title={<>Voz <span className="text-[#ff0068]">profissional</span> anuncia<br />cada coreografia.</>}
-        body="A IA gera a narração de abertura, transição e encerramento com voz natural em português. Geração em lote antes do evento, fallback automático se a internet cair. Não fique mais refém de locutor cobrando caro."
-        bullets={[
-          'Voz natural em português, ritmo de locutor profissional',
-          'Lê nome do bailarino, coreografia, categoria e estúdio',
-          'Geração em lote antes do festival — pronto pra rodar offline',
-          'Customize abertura, transições e encerramento separadamente',
-        ]}
-        mockup={
-          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <Mic2 size={14} className="text-[#ff0068]" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Narração · Bloco 03</span>
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">12 / 38 geradas</span>
-            </div>
-            <div className="p-4 space-y-3">
-              {[
-                { tag: 'Abertura', text: 'A próxima coreografia... Lago dos Cisnes Moderno.', dur: '0:14' },
-                { tag: 'Transição', text: 'Aplausos pra Cia Étoile. Em seguida...', dur: '0:08' },
-                { tag: 'Encerramento', text: 'Encerramos o bloco infantil. Voltamos em 15 minutos.', dur: '0:11' },
-              ].map((n, i) => (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">{n.tag}</span>
-                    <span className="text-[10px] text-slate-500 font-mono tabular-nums">{n.dur}</span>
-                  </div>
-                  <p className="text-xs text-slate-300 italic mb-2 leading-relaxed">"{n.text}"</p>
-                  <div className="flex items-center gap-0.5 h-6">
-                    {Array.from({ length: 32 }).map((_, j) => {
-                      const h = ((j * 7 + i * 11) % 100) / 100;
-                      return (
-                        <div
-                          key={j}
-                          className="flex-1 bg-[#ff0068]/40 rounded-full"
-                          style={{ height: `${20 + h * 80}%` }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="px-4 pb-4 border-t border-white/10 pt-3 flex items-center justify-between">
-              <span className="text-[10px] text-slate-500">Voz: pt-BR · masculina</span>
-              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Cache offline ativo</span>
-            </div>
-          </div>
-        }
-      />
-
-      {/* ─── 10. PROVA SOCIAL ──────────────────────────────────────────────── */}
+      {/* ─── 10. E MAIS ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Depoimentos</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">E mais</p>
             <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
-              Quem já usou,<br />
-              <span className="text-[#ff0068]">aprova.</span>
+              E tudo o que um<br />
+              <span className="text-[#ff0068]">festival precisa.</span>
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
-              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Uma das plataformas de gestão de eventos mais completas que já utilizei. Além da praticidade, ela entrega praticamente TUDO em um formato prático e didático. Tive a honra de conhecer e utilizar na produção do Usualdance Festival, e com certeza daqui pra frente estará no Extreme Festival."</p>
-              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                <img src="/will-nunes.webp" alt="Will Nunes" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
-                <div>
-                  <p className="text-white text-sm font-black">Will Nunes</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Monte Aprazível-SP</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { icon: GraduationCap, title: 'Workshops e passes', body: 'Venda workshop avulso ou passe, com lotes, vagas por turma e desconto por combinação.' },
+              { icon: Megaphone, title: 'Avisos e ordem de apresentação', body: 'O inscrito vê os avisos do evento e a posição da coreografia no cronograma.' },
+              { icon: BarChart3, title: 'Painel de vendas', body: 'Inscrições, ingressos, workshops e seletiva num só lugar, com transferência do saldo quando quiser.' },
+              { icon: Tag, title: 'Cupons e marketing', body: 'Cupons por tipo de venda e pixels de anúncio no seu evento.' },
+              { icon: Music, title: 'Mesa de som', body: 'Marca a coreografia ao vivo, toca a trilha e acompanha o cronograma em tempo real.' },
+              { icon: Mic2, title: 'Narração por IA (opcional)', body: 'Voz em português gerada antes do evento, com cópia para rodar offline.' },
+              { icon: Vote, title: 'Voto Popular', body: 'Votação do público ligada ao troféu do telão.' },
+              { icon: Gift, title: 'Cortesias', body: 'Convites e entradas da casa, com QR Code.' },
+            ].map((c, i) => {
+              const Icon = c.icon;
+              return (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6 hover:border-[#ff0068]/30 transition-all">
+                  <Icon size={22} className="text-[#ff0068] mb-3" aria-hidden="true" />
+                  <h3 className="text-sm font-black uppercase tracking-tight text-white">{c.title}</h3>
+                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">{c.body}</p>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
-              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Avaliar pela CoreoHub foi extremamente positivo — processo organizado, prático e eficiente. O sistema agiliza o trabalho do júri sem comprometer a qualidade técnica, entregando uma avaliação transparente e padronizada. Uma solução moderna que eleva o nível do festival. Nota 1000."</p>
-              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                <img src="/jonathan-lupe.webp" alt="Jonathan Lupe" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
-                <div>
-                  <p className="text-white text-sm font-black">Jonathan Lupe</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">São José do Rio Preto-SP</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
-              <p className="text-slate-300 text-sm leading-relaxed flex-1">"A Coreohub foi uma grande parceira na construção do Festival Ecodança. Mesmo entrando já com o festival em andamento, o serviço contratado facilitou muito a logística. O suporte da equipe foi essencial pra tudo dar certo. Super recomendo — pra 2026 já vou estar com a Coreohub desde o início!"</p>
-              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                <img src="/bheto-bastheli.webp" alt="Bhetto Bastelli" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
-                <div>
-                  <p className="text-white text-sm font-black">Bhetto Bastelli</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Limeira-SP</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Festival Ecodança</p>
-                </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -656,21 +904,36 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ─── 11. PREÇO / CTA PRA SIMULAÇÃO ──────────────────────────────────────────────── */}
+      {/* ─── 11. PREÇO ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-5xl mx-auto text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Modelo transparente</p>
           <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-6">
-            Você paga <span className="text-[#ff0068]">proporcional</span> ao que vende.<br />
-            E o dinheiro cai direto na sua conta.
+            Você paga <span className="text-[#ff0068]">proporcional</span> ao que vende.
           </h2>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mb-10">
-            3 planos, um pra cada porte de festival — do primeiro evento à competição nacional.
-            Zero mensalidade fora do plano escolhido. Zero fidelidade. O dinheiro cai direto na sua conta,
-            de forma automática — sem fechamento de caixa manual no fim do mês.
+            Sem mensalidade e sem fidelidade. O dinheiro cai na sua conta por split automático,
+            sem fechamento de caixa manual no fim do mês.
           </p>
 
-          <div className="max-w-3xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-8 md:p-10 backdrop-blur-xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+            {[
+              { name: 'Começo', price: '10%', note: 'sobre o vendido. Sem taxa fixa.' },
+              { name: 'Essencial', price: 'R$250 + 5%', note: 'por evento, mais 5% sobre o vendido.' },
+              { name: 'Escala', price: 'Eventos grandes', note: 'Veja os detalhes em Planos.' },
+            ].map((p, i) => (
+              <Link key={i} to="/planos" className="block bg-white/5 border border-white/10 rounded-3xl p-6 hover:border-[#ff0068]/40 transition-all">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">{p.name}</p>
+                <p className="text-2xl font-black tracking-tighter text-white mt-2">{p.price}</p>
+                <p className="text-sm text-slate-400 mt-1">{p.note}</p>
+              </Link>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 mt-4 max-w-2xl mx-auto">
+            A taxa de pagamento (Pix ou cartão) aparece separada no checkout. Por padrão quem paga é o comprador, e você pode escolher assumir.
+          </p>
+
+          <div className="max-w-3xl mx-auto mt-8 bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-8 md:p-10 backdrop-blur-xl">
             <p className="text-white text-lg font-black">Quanto o seu festival pagaria?</p>
             <p className="text-slate-300 text-sm mt-2 max-w-md mx-auto">
               Informe nº de coreografias, média de bailarinos e ticket médio — a simulação calcula na hora
@@ -681,7 +944,7 @@ const LandingPage = () => {
               onClick={() => navigate('/planos')}
               className="mt-6 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#ff0068] text-white rounded-xl text-sm font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-colors"
             >
-              Fazer simulação <ArrowRight size={16} />
+              Fazer simulação do meu festival <ArrowRight size={16} />
             </button>
           </div>
 
@@ -696,7 +959,7 @@ const LandingPage = () => {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-colors shrink-0"
             >
-              Falar no WhatsApp <ArrowRight size={14} />
+              <WhatsAppIcon size={14} /> Falar no WhatsApp
             </a>
           </div>
         </div>
@@ -708,7 +971,7 @@ const LandingPage = () => {
           <div className="text-center mb-12">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Por que a CoreoHub</p>
             <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
-              O que ninguém mais faz.
+              O que muda com a CoreoHub.
             </h2>
           </div>
           <div className="overflow-x-auto">
@@ -737,20 +1000,21 @@ const LandingPage = () => {
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-xs font-bold text-slate-400">Planilha + Pix</span>
-                      <span className="text-[9px] text-slate-500">Seu tempo: ~3h/dia</span>
+                      <span className="text-[9px] text-slate-500">Jeito artesanal</span>
                     </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {[
-                  { f: 'Preço', type: 'text' as const, c: '3 planos, sem mensalidade fora deles', d: 'Mensalidade fixa*', m: '7-12% + taxa fixa', p: 'Seu tempo: ~3h/dia' },
+                  { f: 'Preço', type: 'text' as const, c: '3 planos, sem mensalidade fora deles', d: 'Mensalidade fixa*', m: '7-12% + taxa fixa', p: 'Seu tempo' },
                   { f: 'Configura o evento a partir do seu regulamento', type: 'text' as const, c: 'Automático — cole o PDF, a IA extrai tudo', d: 'Manual, categoria por categoria', m: false, p: false },
                   { f: 'Júri avalia mesmo com Wi-Fi caindo',              type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Detecta conflito de bailarino em várias coreografias', type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Seletiva de vídeo pré-festival com banca de jurados', type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Telão de palco com resultado revelado ao vivo',   type: 'bool' as const, c: true, d: false, m: false, p: false },
-                  { f: 'Narração automática por IA entre apresentações',  type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Feedback em áudio dos jurados, direto para o coreógrafo', type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Venda de ingressos e check-in por QR no mesmo sistema', type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Certificado com QR Code de validação pública',    type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Sem contrato de fidelidade',                      type: 'bool' as const, c: true, d: false, m: true,  p: true  },
                 ].map((row, i) => {
@@ -790,32 +1054,7 @@ const LandingPage = () => {
             </h2>
           </div>
           <div className="space-y-2">
-            {[
-              {
-                q: 'Como recebo o dinheiro das inscrições?',
-                a: 'Quer o dinheiro assim que liberar? O botão "Transferir agora" envia na hora, sem taxa, o saldo que já passou dos 7 dias. O repasse é automático: cada pagamento sai com o split — a comissão do seu plano fica com a CoreoHub e o resto vai para a sua subconta. O Pix fica retido por até 7 dias (janela de segurança para estornos, a mesma ideia de Stripe e Sympla) e depois a CoreoHub transfere via Pix direto pra você, sem precisar clicar em nada. O cartão entra na subconta no prazo do Asaas, hoje cerca de 32 dias depois da confirmação, e só então segue o mesmo caminho. Custos à parte: a taxa única de R$ 12,90 da Asaas (nosso parceiro de pagamentos) pela abertura da subconta, cobrada uma vez só no seu primeiro recebimento; nos planos Essencial e Escala, a taxa de ativação por evento; e, quando ativada, a taxa de pagamento, que por padrão é paga pelo comprador.',
-              },
-              {
-                q: 'Funciona mesmo offline?',
-                a: 'Sim. Avaliação de jurados, cronograma, check-in por QR Code e narração funcionam mesmo sem internet no local — o app sincroniza automaticamente quando a conexão volta. Você só precisa de internet pra publicar o evento e receber pagamentos.',
-              },
-              {
-                q: 'E se eu quiser sair? Tem fidelidade?',
-                a: 'Não. Não existe contrato de permanência nem multa de cancelamento — você usa enquanto fizer sentido pro seu festival. Se decidir sair, seu histórico de eventos, inscrições e certificados continua acessível e exportável, sem prazo de expiração.',
-              },
-              {
-                q: 'Tem suporte técnico?',
-                a: 'Sim, direto por WhatsApp com nossa equipe — sem ticket, sem fila de atendimento genérico. Na semana do seu festival, o suporte é prioritário: se algo travar no dia, você fala com a gente na hora, não espera resposta de central.',
-              },
-              {
-                q: 'Quantos festivais por mês posso criar?',
-                a: 'Quantos quiser. Não há limite de festivais, edições ou mostras — você paga só a comissão do seu plano sobre o que vender (nos planos Essencial e Escala, mais a taxa de ativação por evento), então pode rodar um evento por mês ou dez, sem mensalidade te travando.',
-              },
-              {
-                q: 'Funciona pra evento gratuito ou edital público?',
-                a: 'Sim — temos modelo específico para eventos gratuitos, mostras municipais e editais públicos. Como cada caso tem particularidades (tipo de evento, instituição, verba), fale com a gente pelo WhatsApp e montamos a proposta certa pro seu caso.',
-              },
-            ].map((item, i) => (
+            {HOME_FAQ_ITEMS.map((item, i) => (
               <div
                 key={i}
                 className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden"
@@ -851,18 +1090,23 @@ const LandingPage = () => {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.18),transparent_70%)]" />
         <div className="relative max-w-4xl mx-auto text-center">
           <h2 className="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-[0.95] mb-6">
-            Chega de apagar incêndio<br />
-            <span className="text-[#ff0068]">antes de cada festival.</span>
+            Seu próximo festival<br />
+            <span className="text-[#ff0068]">pode rodar sozinho.</span>
           </h2>
           <p className="text-slate-300 text-xl md:text-2xl max-w-2xl mx-auto leading-relaxed mb-10">
-            Crie seu festival agora. Compartilhe o link hoje à noite. Receba a primeira inscrição amanhã.
+            Crie o evento, compartilhe o link e receba a primeira inscrição. Se preferir, fale com a gente antes.
           </p>
-          <button
-            onClick={() => navigate('/planos')}
-            className="inline-flex items-center gap-2 px-10 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
-          >
-            Ver planos <ArrowRight size={18} />
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={() => navigate('/planos')}
+              className="inline-flex items-center gap-2 px-10 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
+            >
+              Ver planos <ArrowRight size={18} />
+            </button>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={ctaSecondaryCls}>
+              <WhatsAppIcon size={18} /> Falar no WhatsApp
+            </a>
+          </div>
           <p className="text-xs text-slate-500 mt-5">
             Sem cartão de crédito · Você só paga quando vende · Cancela quando quiser
           </p>
@@ -891,11 +1135,12 @@ const LandingPage = () => {
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mb-4">Produto</p>
               <ul className="space-y-2 text-[11px] text-slate-400">
-                <li><a href="https://app.coreohub.com/festivais" className="hover:text-[#ff0068]">Festivais ativos</a></li>
+                <li><a href="https://app.coreohub.com/festivais" className="hover:text-[#ff0068]">Agenda de festivais</a></li>
                 <li><a href="https://app.coreohub.com/criar-evento" className="hover:text-[#ff0068]">Criar meu festival</a></li>
                 <li><a href="https://app.coreohub.com/login" className="hover:text-[#ff0068]">Entrar</a></li>
                 <li><Link to="/governo" className="hover:text-[#ff0068]">Para o setor público</Link></li>
                 <li><Link to="/curso-de-ferias" className="hover:text-[#ff0068]">Para cursos de férias</Link></li>
+                <li><Link to="/espetaculo" className="hover:text-[#ff0068]">Para espetáculos e bilheteria</Link></li>
               </ul>
             </div>
 
@@ -930,15 +1175,13 @@ const LandingPage = () => {
 
       {/* ─── BOTÃO FLUTUANTE WHATSAPP ──────────────────────────────────────────────── */}
       <a
-        href="https://wa.me/5517981264290?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub"
+        href={WHATSAPP_URL}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Falar no WhatsApp"
         className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-[#25D366] flex items-center justify-center shadow-[0_8px_24px_rgba(37,211,102,0.45)] hover:scale-105 active:scale-95 transition-transform"
       >
-        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-[#052e16]" aria-hidden="true">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.768.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
-        </svg>
+        <WhatsAppIcon size={30} className="text-white" />
       </a>
     </div>
   );

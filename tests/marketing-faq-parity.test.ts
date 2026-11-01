@@ -16,6 +16,7 @@ const faqOf = (file: string, name: string): { q: string; a: string }[] => {
 const FAQ_ITEMS = faqOf('pages/LandingEspetaculo.tsx', 'FAQ_ITEMS');
 const PLANOS_FAQ_ITEMS = faqOf('pages/Planos.tsx', 'PLANOS_FAQ_ITEMS');
 const CURSO_FAQ_ITEMS = faqOf('pages/LandingCursoFerias.tsx', 'CURSO_FAQ_ITEMS');
+const HOME_FAQ_ITEMS = faqOf('pages/LandingPage.tsx', 'HOME_FAQ_ITEMS');
 
 // O HTML que bots (Googlebot, GPTBot, ClaudeBot...) recebem de /planos e /espetaculo vem de api/og-marketing.ts,
 // não do React. Estes testes garantem que as FAQs e o JSON-LD de lá não divergem das páginas.
@@ -88,6 +89,9 @@ describe('api/og-marketing — FAQ e JSON-LD espelham as páginas', () => {
     const html = await render('home');
     expect(jsonLdOf(html)).toEqual(fromIndex);
     const faq = fromIndex['@graph'].find((n: any) => n['@type'] === 'FAQPage').mainEntity;
+    // a FAQ visível na home é a mesma que vai no JSON-LD
+    expect(faq.map((x: any) => x.name)).toEqual(HOME_FAQ_ITEMS.map(i => i.q));
+    expect(faq.map((x: any) => x.acceptedAnswer.text)).toEqual(HOME_FAQ_ITEMS.map(i => i.a));
     for (const x of faq) {
       expect(html).toContain(escHtml(x.name));
       expect(html).toContain(escHtml(x.acceptedAnswer.text));
