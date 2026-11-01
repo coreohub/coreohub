@@ -19,9 +19,10 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import {
   ChevronRight, Check, X, ChevronDown, ArrowRight, Menu, Layers, TrendingUp,
-  CalendarDays, BedDouble, CreditCard, QrCode, HeartHandshake, MessageCircle, Percent,
+  CalendarDays, BedDouble, CreditCard, QrCode, HeartHandshake, Percent,
 } from 'lucide-react';
 
 const SITE_URL = 'https://coreohub.com';
@@ -207,7 +208,7 @@ export default function LandingCursoFerias() {
                 Criar meu curso <ChevronRight size={16} />
               </a>
               <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={ctaSecondary}>
-                <MessageCircle size={18} aria-hidden="true" /> Falar com a gente
+                <WhatsAppIcon size={18} /> Falar com a gente
               </a>
             </div>
             <p className="mt-4 text-xs text-white/60">Sem mensalidade. Você paga só quando vende.</p>
@@ -375,7 +376,7 @@ export default function LandingCursoFerias() {
               <p className="text-sm text-slate-300 mt-1 leading-relaxed">A gente configura o primeiro curso com você: passes, lotes, vagas e hospedagem.</p>
             </div>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-4 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-colors">
-              <MessageCircle size={16} aria-hidden="true" /> Falar com a gente
+              <WhatsAppIcon size={16} /> Falar com a gente
             </a>
           </div>
         </div>
@@ -481,7 +482,7 @@ export default function LandingCursoFerias() {
               Criar meu curso <ArrowRight size={18} />
             </a>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className={ctaSecondary}>
-              <MessageCircle size={18} aria-hidden="true" /> Falar no WhatsApp
+              <WhatsAppIcon size={18} /> Falar no WhatsApp
             </a>
           </div>
           <p className="text-xs text-slate-500 mt-5">Sem mensalidade · Você só paga quando vende</p>
@@ -557,7 +558,7 @@ export default function LandingCursoFerias() {
         aria-label="Falar no WhatsApp"
         className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-[#25D366] flex items-center justify-center shadow-[0_8px_24px_rgba(37,211,102,0.45)] hover:scale-105 active:scale-95 transition-transform"
       >
-        <MessageCircle size={26} className="text-[#052e16]" aria-hidden="true" />
+        <WhatsAppIcon size={30} className="text-white" />
       </a>
     </div>
   );
