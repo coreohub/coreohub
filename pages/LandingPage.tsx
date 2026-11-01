@@ -117,7 +117,7 @@ const LandingPage = () => {
               </div>
             </div>
             <Link to="/festivais" className="text-xs font-bold text-slate-300 hover:text-white transition-colors">
-              Agenda
+              Eventos
             </Link>
             <a
               href="https://app.coreohub.com/login"
@@ -149,7 +149,7 @@ const LandingPage = () => {
               { to: '/curso-de-ferias', label: 'Cursos de férias e de verão' },
               { to: '/espetaculo', label: 'Espetáculos e bilheteria' },
               { to: '/governo', label: 'Setor público' },
-              { to: '/festivais', label: 'Agenda de festivais' },
+              { to: '/festivais', label: 'Eventos' },
             ].map((l) => (
               <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
                 {l.label}
@@ -193,7 +193,7 @@ const LandingPage = () => {
           >
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Para festivais e mostras de dança</p>
             <h1 className="mt-2 sm:mt-3 text-[2.2rem] sm:text-[3.3rem] font-black tracking-normal uppercase leading-[1.06]">
-              Do regulamento ao certificado, seu festival rodando sozinho.
+              Do primeiro inscrito ao último certificado, tudo num só lugar.
             </h1>
 
             <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
@@ -290,7 +290,7 @@ const LandingPage = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Reconhece a rotina?</p>
             <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
               Menos planilha.<br />
-              <span className="text-[#ff0068]">Mais palco.</span>
+              <span className="text-[#ff0068]">Mais venda.</span>
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -326,7 +326,7 @@ const LandingPage = () => {
             ))}
           </div>
           <p className="text-center text-white font-bold text-lg mt-10">
-            Cada hora a menos apagando incêndio é uma hora a mais no palco.
+            Cada hora a menos na planilha é uma hora a mais vendendo.
           </p>
         </div>
       </section>
@@ -639,8 +639,8 @@ const LandingPage = () => {
             <img
               src="/feedback-audio-juri.webp"
               alt="Tela do terminal do jurado gravando comentário em áudio durante a avaliação de uma coreografia"
-              width={1100}
-              height={707}
+              width={1200}
+              height={751}
               className="w-full h-auto block"
               loading="lazy"
             />
@@ -1090,8 +1090,8 @@ const LandingPage = () => {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.18),transparent_70%)]" />
         <div className="relative max-w-4xl mx-auto text-center">
           <h2 className="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-[0.95] mb-6">
-            Seu próximo festival<br />
-            <span className="text-[#ff0068]">pode rodar sozinho.</span>
+            Seu próximo festival,<br />
+            <span className="text-[#ff0068]">mais organizado e vendendo.</span>
           </h2>
           <p className="text-slate-300 text-xl md:text-2xl max-w-2xl mx-auto leading-relaxed mb-10">
             Crie o evento, compartilhe o link e receba a primeira inscrição. Se preferir, fale com a gente antes.
@@ -1135,7 +1135,7 @@ const LandingPage = () => {
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mb-4">Produto</p>
               <ul className="space-y-2 text-[11px] text-slate-400">
-                <li><a href="https://app.coreohub.com/festivais" className="hover:text-[#ff0068]">Agenda de festivais</a></li>
+                <li><a href="https://app.coreohub.com/festivais" className="hover:text-[#ff0068]">Eventos</a></li>
                 <li><a href="https://app.coreohub.com/criar-evento" className="hover:text-[#ff0068]">Criar meu festival</a></li>
                 <li><a href="https://app.coreohub.com/login" className="hover:text-[#ff0068]">Entrar</a></li>
                 <li><Link to="/governo" className="hover:text-[#ff0068]">Para o setor público</Link></li>

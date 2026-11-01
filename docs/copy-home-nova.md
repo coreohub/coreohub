@@ -11,13 +11,13 @@ Fora de escopo de propósito: competições de outros tipos (o eyebrow diz só "
 ## 0. Menu
 
 - Soluções (menu): Festivais e mostras (/) · Cursos de férias (/curso-de-ferias) · Espetáculos (/espetaculo) · Setor público (/governo)
-- Agenda (era "Festivais", leva a /festivais) · Planos · Entrar · botão "Ver planos".
+- Eventos (era "Festivais", leva a /festivais) · Planos · Entrar · botão "Ver planos".
 - Mesmo conteúdo no menu do celular e no rodapé.
 
 ## 1. Hero
 
 **Eyebrow:** Para festivais e mostras de dança
-**H1:** Do regulamento ao certificado, seu festival rodando sozinho.
+**H1:** Do primeiro inscrito ao último certificado, tudo num só lugar.
 **Subtítulo:** Plataforma de gestão para festivais e mostras de dança: inscrições, pagamento, júri, cronograma e ingressos numa única plataforma, sem surpresa no dia do evento.
 **Botões:** [Fazer simulação] [Falar no WhatsApp]
 **Linha de apoio:** Sem mensalidade. Você paga só quando vende.
@@ -27,7 +27,7 @@ Fora de escopo de propósito: competições de outros tipos (o eyebrow diz só "
 
 ## 3. Hoje x Com a CoreoHub (substitui "Reconhece a rotina?" e "E só piora")
 
-Título: Menos planilha. Mais palco.
+Título: Menos planilha. Mais venda.
 
 Quatro linhas, cada uma com "Hoje" e "Com a CoreoHub":
 
@@ -44,7 +44,7 @@ Quatro linhas, cada uma com "Hoje" e "Com a CoreoHub":
   - Hoje: resultado atrasado e certificado digitado um a um.
   - Com a CoreoHub: resultado publicado e certificado com QR Code sai na hora.
 
-Frase de fecho: Cada hora a menos apagando incêndio é uma hora a mais no palco.
+Frase de fecho: Cada hora a menos na planilha é uma hora a mais vendendo.
 
 ## 4. Três passos (mantém, com ajuste no 2)
 
@@ -185,7 +185,7 @@ Nota para você: a linha "Sistemas dedicados" só pode afirmar "não tem" onde e
 
 ## 12. CTA final
 
-**Título:** Seu próximo festival pode rodar sozinho.
+**Título:** Seu próximo festival, mais organizado e vendendo.
 **Texto:** Crie o evento, compartilhe o link e receba a primeira inscrição. Se preferir, fale com a gente antes.
 **Botões:** [Ver planos] [Falar no WhatsApp]
 **Linha de apoio:** Sem cartão de crédito · Você só paga quando vende · Cancela quando quiser
