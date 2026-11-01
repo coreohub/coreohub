@@ -265,9 +265,10 @@ const LandingPage = () => {
                 className="group absolute inset-0 w-full h-full"
               >
                 <img
-                  src="/video-cta-thumb.jpg"
-                  alt=""
-                  aria-hidden="true"
+                  src="/video-cta-thumb.webp"
+                  alt="Imagem de abertura do vídeo da CoreoHub em 3 minutos, mostrando o festival rodando dentro da plataforma"
+                  width={480}
+                  height={360}
                   loading="lazy"
                   className="absolute inset-0 w-full h-full object-cover"
                 />
@@ -438,7 +439,7 @@ const LandingPage = () => {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
               <p className="text-slate-300 text-sm leading-relaxed flex-1">"Uma das plataformas de gestão de eventos mais completas que já utilizei. Além da praticidade, ela entrega praticamente TUDO em um formato prático e didático. Tive a honra de conhecer e utilizar na produção do Usualdance Festival, e com certeza daqui pra frente estará no Extreme Festival."</p>
               <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                <img src="/will-nunes.webp" alt="Will Nunes" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
+                <img src="/will-nunes.webp" alt="Will Nunes, produtor do Extreme Festival" width={200} height={200} loading="lazy" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Will Nunes</p>
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Monte Aprazível-SP</p>
@@ -449,7 +450,7 @@ const LandingPage = () => {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
               <p className="text-slate-300 text-sm leading-relaxed flex-1">"Avaliar pela CoreoHub foi extremamente positivo — processo organizado, prático e eficiente. O sistema agiliza o trabalho do júri sem comprometer a qualidade técnica, entregando uma avaliação transparente e padronizada. Uma solução moderna que eleva o nível do festival. Nota 1000."</p>
               <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                <img src="/jonathan-lupe.webp" alt="Jonathan Lupe" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
+                <img src="/jonathan-lupe.webp" alt="Jonathan Lupe, jurado do Usualdance Festival" width={200} height={200} loading="lazy" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Jonathan Lupe</p>
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">São José do Rio Preto-SP</p>
@@ -460,7 +461,7 @@ const LandingPage = () => {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
               <p className="text-slate-300 text-sm leading-relaxed flex-1">"A Coreohub foi uma grande parceira na construção do Festival Ecodança. Mesmo entrando já com o festival em andamento, o serviço contratado facilitou muito a logística. O suporte da equipe foi essencial pra tudo dar certo. Super recomendo — pra 2026 já vou estar com a Coreohub desde o início!"</p>
               <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                <img src="/bheto-bastheli.webp" alt="Bhetto Bastelli" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
+                <img src="/bheto-bastheli.webp" alt="Bhetto Bastelli, produtor do Festival Ecodança" width={320} height={281} loading="lazy" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Bhetto Bastelli</p>
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Limeira-SP</p>
@@ -591,6 +592,8 @@ const LandingPage = () => {
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
             <img
               src="/seletiva-video-nova.webp"
+              width={1600}
+              height={995}
               alt="Painel de revisão de vídeo da Seletiva de Vídeo CoreoHub, com botões de aprovar, condicional e reprovar"
               className="w-full h-auto block object-cover object-center"
               loading="lazy"
@@ -615,6 +618,8 @@ const LandingPage = () => {
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
             <img
               src="/jurada-tablet-nova.webp"
+              width={1620}
+              height={846}
               alt="Jurada com microfone avaliando no tablet durante apresentação de dança"
               className="w-full h-auto block object-cover object-center"
               loading="lazy"
@@ -704,6 +709,8 @@ const LandingPage = () => {
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
             <img
               src="/certificado-nova.webp"
+              width={1200}
+              height={630}
               alt="Mão segurando certificado de participação CoreoHub com QR Code de validação pública"
               className="w-full h-auto block object-cover object-center"
               loading="lazy"
@@ -829,6 +836,8 @@ const LandingPage = () => {
             </div>
             <img
               src="/credencial-fisica-mockup.webp"
+              width={1800}
+              height={1100}
               alt="Credenciais físicas CoreoHub impressas, com QR Code de check-in, penduradas em cordão"
               loading="lazy"
               className="w-full h-auto object-cover"

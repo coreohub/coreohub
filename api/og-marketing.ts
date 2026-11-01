@@ -233,6 +233,8 @@ const HOME_JSONLD: Record<string, any> = {
         "Inscrições online por modalidade",
         "Pagamento via Pix e cartão, e boleto nos eventos que o oferecem, com split automático",
         "Júri digital por tablet (funciona sem Wi-Fi)",
+        "Feedback em áudio dos jurados, direto para o coreógrafo",
+        "Telão de palco com resultado revelado ao vivo",
         "Cronograma inteligente com detecção de conflito de bailarino",
         "Seletiva de vídeo pré-festival",
         "Bilheteria e workshops integrados",
