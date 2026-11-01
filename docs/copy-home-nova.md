@@ -106,7 +106,6 @@ Itens:
 - Entra por código, em qualquer tela e proporção
 - Média ao vivo, sem revelar medalha antes da hora
 - Vencedores registrados antes e revelados na cerimônia
-- Voto Popular entra automático no troféu
 
 ### 7.8 Certificado (mantém)
 
@@ -142,7 +141,7 @@ Título: E tudo o que um festival precisa.
 - **Cupons e marketing:** cupons por tipo de venda e pixels de anúncio no seu evento.
 - **Mesa de som e cronograma ao vivo:** marca a coreografia ao vivo, toca a trilha e narra a entrada.
 - **Narração por IA (opcional):** voz em português gerada antes do evento, com cópia offline.
-- **Voto Popular:** votação do público ligada ao troféu do telão.
+- **Área do inscrito:** coreografias, pagamentos, resultados, áudios dos jurados e certificados num só lugar.
 - **Cortesias:** convites e entradas da casa, com QR Code.
 
 ## 9. Preço (muda; mostra os três planos)
