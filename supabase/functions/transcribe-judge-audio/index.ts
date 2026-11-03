@@ -3,7 +3,7 @@ import { buildCorsHeaders } from '../_shared/cors.ts'
 
 /**
  * transcribe-judge-audio — transcreve em texto (PT-BR) o áudio de feedback
- * do jurado via Gemini 2.5 Flash (mesmo modelo/padrão de `gemini-analysis`,
+ * do jurado via Gemini 3.5 Flash-Lite (mesmo modelo/padrão de `gemini-analysis`,
  * que hoje só processa PDF — Gemini 2.5 Flash também aceita áudio nativo
  * via `inlineData`). Plano completo: memory/backlog_transcricao_pdf_audios_jurados.md.
  *
@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
       const mimeType = mimeForExt(extractExt(evalRow.audio_url))
 
       const response: any = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash-lite',
         contents: {
           parts: [
             {
