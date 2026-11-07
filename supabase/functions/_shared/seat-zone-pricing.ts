@@ -291,3 +291,59 @@ export function applyZonePricing<T extends { idx: number; quantity: number; seat
   }
   return { resolved: outItems, seatIds: outSeats }
 }
+
+// ── Checkout: qual ingresso vai em qual assento ──────────────────────────────
+
+/**
+ * Atribuição assento → tipo de ingresso usada pelo checkout (e mandada ao servidor
+ * como `seat_assignments`). Padrão = alinhamento por tipo de assento, igual ao de
+ * sempre (PCD → assento PCD etc.). `prefs` ({seat_id: tipo escolhido}) deixa o
+ * comprador trocar entre tipos COMUNS (ex.: qual assento é a Meia), sempre por troca
+ * com outro assento, pra a quantidade de cada tipo nunca mudar.
+ */
+export function resolveSeatAssignments(opts: {
+  lines: Array<{ idx: number; qty: number; seatKind: TicketSeatKind }>
+  seatIds: string[]
+  tipoById: Map<string, string>
+  prefs?: Record<string, number>
+}): Array<{ seat_id: string; ticket_type_idx: number }> {
+  const { lines, seatIds, tipoById, prefs } = opts
+  const aligned = alignSeatsToItems(
+    lines.map(l => ({ seatKind: l.seatKind, quantity: l.qty })),
+    seatIds,
+    tipoById,
+  )
+  const typeOf = new Map<string, number>()
+  let cursor = 0
+  for (const l of lines) {
+    for (let n = 0; n < l.qty && cursor < aligned.length; n++) typeOf.set(aligned[cursor++], l.idx)
+  }
+  const comum = new Set(lines.filter(l => l.seatKind === 'comum').map(l => l.idx))
+  for (const [seat, want] of Object.entries(prefs ?? {})) {
+    const cur = typeOf.get(seat)
+    if (cur == null || cur === want || !comum.has(cur) || !comum.has(want)) continue
+    const other = [...typeOf].find(([id, t]) => id !== seat && t === want && prefs?.[id] !== want)
+      ?? [...typeOf].find(([id, t]) => id !== seat && t === want)
+    if (!other) continue
+    typeOf.set(other[0], cur)
+    typeOf.set(seat, want)
+  }
+  return seatIds.filter(id => typeOf.has(id)).map(id => ({ seat_id: id, ticket_type_idx: typeOf.get(id) as number }))
+}
+
+/** Menor e maior preço do tipo entre as zonas (e o preço-base, se há assento sem zona). */
+export function priceRangeForType(
+  type: ZonePricedType,
+  idx: number,
+  zones: SeatZone[],
+  today: string,
+  opts?: { includeBase?: boolean; quotePrices?: Record<string, { preco: number }> | null },
+): { min: number; max: number } {
+  const prices: number[] = zones.map(z => {
+    const q = opts?.quotePrices?.[`${idx}:${z.key}`]?.preco
+    return q != null && q > 0 ? q : priceForZone(type, z.key, today)
+  })
+  if (opts?.includeBase) prices.push(priceForZone(type, DEFAULT_ZONE_KEY, today))
+  const valid = prices.filter(p => p > 0)
+  return valid.length > 0 ? { min: Math.min(...valid), max: Math.max(...valid) } : { min: 0, max: 0 }
+}
