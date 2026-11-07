@@ -107,10 +107,10 @@ export function groupTicketsByZone(
   return out
 }
 
-function isMeia(t: ZonePricedType): boolean {
+export function isMeia(t: ZonePricedType): boolean {
   return String(t.kind ?? '').toLowerCase() === 'meia' || (!t.kind && /meia/i.test(String(t.nome ?? '')))
 }
-function isInteira(t: ZonePricedType): boolean {
+export function isInteira(t: ZonePricedType): boolean {
   const k = String(t.kind ?? '').toLowerCase()
   return k === 'inteira' || (!k && !/meia|solid|cortes|pcd|acompanh|obes/i.test(String(t.nome ?? '')))
 }

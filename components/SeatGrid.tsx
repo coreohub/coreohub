@@ -27,7 +27,9 @@ interface SeatGridProps {
    * para bloquear/desbloquear (ignora as regras de ingresso; livre e bloqueado são
    * selecionáveis; PCD/acompanhante, reservado e vendido ficam travados).
    */
-  mode?: 'sell' | 'block';
+  mode?: 'sell' | 'block' | 'zone';
+  /** Cor por assento (zona do preço). No modo zone o produtor pinta; no checkout colore os livres. */
+  seatZoneColors?: Record<string, string>;
   /** sell: dono/super admin pode escolher lugar bloqueado no PDV (a equipe o vê como ocupado). */
   canSellBlocked?: boolean;
   /** block: clicar no rótulo da fileira seleciona a fileira inteira. */
@@ -59,7 +61,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * dedo (< 30px), o 1º toque amplia até ele e o 2º seleciona (mesmo padrão de
  * 2 passos do Seats.io no mobile).
  */
-export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons }: SeatGridProps) {
+export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors }: SeatGridProps) {
   const s = SIZES[size];
   const canZoom = zoomable ?? size === 'md';
 
@@ -232,7 +234,7 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
       style={canZoom ? { transform: `scale(${scale})`, transformOrigin: '0 0' } : undefined}>
       {rowsConfig.map(row => (
         <div key={row.codigo} className={`relative flex items-center ${row.alinhamento === 'esquerda' ? 'justify-start' : 'justify-center'} min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
-          {mode === 'block' && onToggleRow ? (
+          {(mode === 'block' || mode === 'zone') && onToggleRow ? (
             <button
               type="button"
               onClick={() => onToggleRow(row.codigo)}
@@ -254,11 +256,14 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
               const isSelected = selectedSeats.includes(seatId);
               const isBlockedSeat = st === 'bloqueado';
               const blockMode = mode === 'block';
-              const showBlocked = isBlockedSeat && (blockMode || canSellBlocked);
-              const isTaken = blockMode
+              const zoneMode = mode === 'zone';
+              const showBlocked = isBlockedSeat && !zoneMode && (blockMode || canSellBlocked);
+              const isTaken = blockMode || zoneMode
                 ? !(st === 'livre' || isBlockedSeat)
                 : st !== 'livre' && !(isBlockedSeat && canSellBlocked);
-              const reason = blockMode
+              const zc = seatZoneColors?.[seatId];
+              const zoneStyled = !!zc && !isSelected && !isTaken && !showBlocked;
+              const reason = zoneMode ? null : blockMode
                 ? (special && !isBlockedSeat ? 'Lugares PCD e de acompanhante não podem ser bloqueados.' : null)
                 : blockReason(seatId, tipo);
               const locked = !isTaken && !isSelected && !!reason;
@@ -279,7 +284,8 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
                     aria-pressed={isSelected}
                     aria-disabled={locked || undefined}
                     className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors
-                      ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : special ? specialFree : freeClass}`}
+                      ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : zoneStyled ? 'hover:brightness-125' : special ? specialFree : freeClass}`}
+                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 } : zoneStyled ? { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` } : undefined) : undefined}
                   >
                     {Icon ? <Icon size={s.icon} /> : n}
                   </button>

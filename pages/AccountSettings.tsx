@@ -19,6 +19,9 @@ import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import EventSessionsCard from '../components/EventSessionsCard';
+import SeatZonesEditor from '../components/SeatZonesEditor';
+import ZonePriceMatrix from '../components/ZonePriceMatrix';
+import { validateZonePricing, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2, Check, Info,
   Music2, DollarSign, Users, AlertTriangle,
@@ -425,7 +428,7 @@ const DEFAULT_GENERAL = {
 interface ProgramItem { hora: string; atividade: string }
 const DEFAULT_PROGRAMACAO: ProgramItem[] = [];
 
-interface TicketLote { data_virada: string | null; preco: number }
+interface TicketLote { data_virada: string | null; preco: number; /** Preço por zona do mapa ({zona: preço}); zona sem preço usa `preco`. */ precos_por_zona?: Record<string, number> }
 interface TicketType {
   nome: string;
   preco: number;
@@ -433,6 +436,8 @@ interface TicketType {
   link?: string;
   /** Modo lotes: quando presente e com 2+ itens, vence o `preco` (que vira fallback). */
   lotes?: TicketLote[];
+  /** Preço por zona do mapa quando o tipo não tem lotes ({zona: preço}); zona sem preço usa `preco`. */
+  precos_por_zona?: Record<string, number>;
   /** Estoque total (Tier 2). null/undefined = ilimitado. */
   quantidade_total?: number | null;
   /** Promocional: política comercial do produtor, fora da cota de meia-entrada (Decreto 13.108 art. 10). */
@@ -1668,6 +1673,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Tier 2: tempo de reserva temporária (10min default)
   const [audienceReservationMinutes, setAudienceReservationMinutes] = useState<number>(15);
   const [eventSeatMap, setEventSeatMap] = useState(false);
+  // Zonas do mapa de assentos (events.seat_zones) — o preço por zona vive em cada ingresso.
+  const [seatZones, setSeatZones] = useState<SeatZone[]>([]);
   const [coverDragOver, setCoverDragOver] = useState(false);
   // Mesmo caminho pro clique e pro arrastar-e-soltar. A compressão (<=250KB, webp)
   // acontece dentro de uploadEventCover.
@@ -2112,7 +2119,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, seat_map_enabled, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan, session_group_id')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, seat_map_enabled, seat_zones, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan, session_group_id')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2201,6 +2208,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               setAudienceMaxPerPurchase(Number((myEvent as any).audience_max_per_purchase));
             }
             setEventSeatMap(Boolean((myEvent as any).seat_map_enabled));
+            setSeatZones(Array.isArray((myEvent as any).seat_zones) ? (myEvent as any).seat_zones : []);
             if ((myEvent as any).audience_reservation_minutes != null) {
               setAudienceReservationMinutes(Number((myEvent as any).audience_reservation_minutes));
             }
@@ -2407,6 +2415,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     if (general.tipos_apresentacao.length === 0) {
       setError('Marque pelo menos um tipo de apresentação (Competitiva ou Avaliada) em "Geral".');
       return;
+    }
+    // Preço por zona: não deixa salvar tabela inválida (ex.: meia acima de 50% da inteira da zona).
+    if (eventSeatMap && seatZones.length > 0) {
+      const zoneErrors = validateZonePricing(seatZones, ingressos);
+      if (zoneErrors.length > 0) {
+        setError(`Preço por zona: ${zoneErrors[0]}${zoneErrors.length > 1 ? ` (e mais ${zoneErrors.length - 1})` : ''}`);
+        return;
+      }
     }
     saveInFlightRef.current = true;
     setSaving(true);
@@ -4358,6 +4374,24 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </>
               )}
             </div>
+
+            {/* Preço por zona do mapa de assentos */}
+            {activeEventId && eventSeatMap && politicaIngressos === 'INTERNO' && (
+              <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 md:p-8 rounded-3xl space-y-5">
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Preço por zona do mapa</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Cobre valores diferentes por região da plateia (frente, fundo, laterais...).</p>
+                </div>
+                <SeatZonesEditor eventId={activeEventId} zones={seatZones} onZonesSaved={setSeatZones} />
+                {seatZones.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preços por zona</p>
+                    <ZonePriceMatrix zones={seatZones} ingressos={ingressos} onChange={setIngressos} />
+                    <p className="text-[10px] text-slate-500">Os preços entram quando você clicar em Salvar no fim da página.</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Sessões do mesmo espetáculo (evento por sessão, mesmo local) */}
             {activeEventId && (isEspetaculo || eventSeatMap) && <EventSessionsCard eventId={activeEventId} />}
