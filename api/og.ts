@@ -108,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const evCols = 'id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,seat_zones,seat_map_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original,session_group_id';
+    const evCols = 'id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,seat_zones,seat_map_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original,session_group_id,created_by';
     const restUrl = `${SUPABASE_URL}/rest/v1/events?select=${evCols}&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
@@ -147,6 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessao_motivo: string | null;
       sessao_data_original: string | null;
       session_group_id: string | null;
+      created_by?: string | null;
     }>;
 
     // `let` porque ?sessao= troca pelo evento da sessão; o `as` mantém o tipo sem undefined dentro dos callbacks.
@@ -273,6 +274,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[api/og] workshops fetch failed:', wsErr);
     }
 
+    // Quem se apresenta: nome público do produtor (página pública é opt-in; sem ela, fica de fora).
+    let performerName: string | null = null;
+    if (ev.created_by) {
+      try {
+        const prodRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_producer`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_id: ev.created_by }),
+        });
+        const prodRows = prodRes.ok ? ((await prodRes.json()) as Array<{ full_name: string | null }>) : [];
+        performerName = prodRows[0]?.full_name?.trim() || null;
+      } catch (prodErr) {
+        console.error('[api/og] get_public_producer failed:', prodErr);
+      }
+    }
+
     const fullDescription = (ev.description ?? '').replace(/\s+/g, ' ').trim();
     const title = `${ev.name}${sessionLabel ? ` — ${sessionLabel}` : ''} — ${statusLabel} | CoreoHub`;
     // Preview do WhatsApp e snippet: a sessão (dia e horário) aparece no título e na descrição.
@@ -380,6 +397,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       },
       organizer: { '@type': 'Organization', name: 'CoreoHub', url: 'https://coreohub.com' },
+      ...(performerName ? { performer: { '@type': 'PerformingGroup', name: performerName } } : {}),
       url,
       ...(allOffers.length > 0 ? { offers: allOffers } : {}),
     };
