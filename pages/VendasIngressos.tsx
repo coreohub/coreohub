@@ -1584,6 +1584,7 @@ const VendasIngressos: React.FC = () => {
                         <SeatLegend rowsConfig={rowsConfig} variant="auto" showBlocked={canManageBlocks} />
                         {zonePriced && (
                           <SeatZoneLegend
+                            variant="auto"
                             zones={seatZones}
                             types={[{ idx: pdvTypeIdx, nome: ticketTypes[pdvTypeIdx]?.nome ?? '', priceByZone: Object.fromEntries(seatZones.map(z => [z.key, priceForZone((ticketTypes[pdvTypeIdx] ?? {}) as any, z.key, new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10))])) }]}
                           />
