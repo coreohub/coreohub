@@ -315,15 +315,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const vigente = lotes.find((l) => (!l.data_inicio || l.data_inicio <= todayIso) && (!l.data_virada || l.data_virada >= todayIso));
         const basePrice = Number(vigente?.preco ?? t.preco ?? 0);
         const zonePrices = (vigente?.precos_por_zona ?? t.precos_por_zona ?? {}) as Record<string, number | string>;
-        const lines: Array<{ nome: string; price: number }> = [];
+        // validFrom só com data real de abertura do lote vigente (data_inicio); sem ela, fica de fora.
+        const inicioLote = (vigente as { data_inicio?: string | null } | undefined)?.data_inicio;
+        const validFrom = inicioLote && /^\d{4}-\d{2}-\d{2}/.test(inicioLote) ? inicioLote.slice(0, 10) : undefined;
+        const lines: Array<{ nome: string; price: number; validFrom?: string }> = [];
         if (seatZones.length > 0) {
           for (const z of seatZones) {
             const zp = zonePrices[z.key];
             const price = zp != null && Number(zp) > 0 ? Number(zp) : basePrice;
-            lines.push({ nome: `${t.nome} - ${z.nome}`, price });
+            lines.push({ nome: `${t.nome} - ${z.nome}`, price, validFrom });
           }
         } else {
-          lines.push({ nome: t.nome ?? '', price: basePrice });
+          lines.push({ nome: t.nome ?? '', price: basePrice, validFrom });
         }
         return lines.map((l) => ({ ...l, idx, hasName: !!t.nome }));
       })
@@ -334,6 +337,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         price: t.price.toFixed(2),
         priceCurrency: 'BRL',
         availability: offerAvailability,
+        ...(t.validFrom ? { validFrom: t.validFrom } : {}),
         url: `${SITE_URL}/checkout-ingresso/${canonicalSlug}/${t.idx}`,
       }));
     const workshopOffers = workshops

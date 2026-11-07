@@ -794,13 +794,12 @@ export default function CheckoutIngresso() {
       <meta name="robots" content="noindex, nofollow" />
       {(event as any)?.payment_sandbox && <SandboxBanner />}
       {event?.cover_url && (
-        <div className="relative h-32 md:h-48 overflow-hidden">
-          <img src={event.cover_url} alt="" className="w-full h-full object-cover opacity-30" />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0b0b0f]" />
+        <div className="w-full max-w-3xl mx-auto md:pt-4 md:px-4">
+          <img src={event.cover_url} alt={event.name ?? ''} className="w-full h-auto block md:rounded-3xl" />
         </div>
       )}
 
-      <div className={`max-w-2xl mx-auto px-4 py-6 relative ${event?.cover_url ? '-mt-8' : ''}`}>
+      <div className="max-w-2xl mx-auto px-4 py-6 relative">
         <button
           onClick={() => navigate(backPath ?? `/evento/${idOrSlug}`)}
           className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-6"
