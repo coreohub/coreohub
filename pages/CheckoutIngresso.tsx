@@ -255,7 +255,7 @@ export default function CheckoutIngresso() {
       };
       const prev = quoteRef.current;
       if (notify && data.renewed && prev) {
-        const changed = Object.keys(cart).some(k => (prev.prices[k]?.preco ?? 0) !== (next.prices[k]?.preco ?? 0))
+        const changed = Array.from(new Set([...Object.keys(prev.prices), ...Object.keys(next.prices)])).some(k => (prev.prices[k]?.preco ?? 0) !== (next.prices[k]?.preco ?? 0))
           || prev.commission !== next.commission || prev.feeMode !== next.feeMode;
         setQuoteNotice(changed
           ? 'O tempo da cotação acabou e os valores foram atualizados. Confira o novo total antes de pagar.'

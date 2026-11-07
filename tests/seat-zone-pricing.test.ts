@@ -143,7 +143,7 @@ describe('validateZonePricing', () => {
   })
 })
 
-import { applyZonePricing, zonePricingActive, quoteZonePrices, resolveSeatAssignments, priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing'
+import { validateMeiaCeiling, applyZonePricing, zonePricingActive, quoteZonePrices, resolveSeatAssignments, priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing'
 
 describe('zonePricingActive / quoteZonePrices', () => {
   it('só ativa com mapa, zonas e algum preço por zona', () => {
@@ -254,5 +254,48 @@ describe('priceRangeForType', () => {
   })
   it('cotação travada vence o preço ao vivo', () => {
     expect(priceRangeForType(inteira, 0, zones, TODAY, { quotePrices: { '0:frente': { preco: 90 } } }).max).toBe(90)
+  })
+})
+
+describe('travas de servidor (code review)', () => {
+  const ingressos = [inteira, meia]
+  const info = new Map([
+    ['A-1', { zone_key: 'frente', seat_tipo: 'comum' }],
+    ['C-1', { zone_key: 'centro', seat_tipo: 'comum' }],
+    ['P-1', { zone_key: null, seat_tipo: 'cadeirante' }],
+  ])
+  const item = (idx: number, quantity: number, seatKind: 'comum' | 'pcd', precoUnit = 0) =>
+    ({ idx, quantity, seatKind, precoUnit, nome: `t${idx}`, kind: idx === 1 ? 'meia' : 'inteira', quantidadeTotal: null })
+
+  it('assento sem zona usa o preço-base já travado na cotação, não o ao vivo', () => {
+    const out = applyZonePricing({
+      resolved: [item(0, 1, 'comum', 45)], ingressos, today: TODAY, seatInfo: new Map([['X-1', { zone_key: null, seat_tipo: 'comum' }]]),
+      seatIds: ['X-1'],
+    })
+    expect(out.resolved[0].precoUnit).toBe(45)
+  })
+  it('tipo sem preço por zona também mantém o preço travado', () => {
+    const semZona = { nome: 'Solidária', kind: 'solidaria', preco: 10 }
+    const out = applyZonePricing({
+      resolved: [item(2, 1, 'comum', 9)], ingressos: [inteira, meia, semZona], today: TODAY, seatInfo: info, seatIds: ['A-1'],
+    })
+    expect(out.resolved[0].precoUnit).toBe(9)
+  })
+  it('recusa atribuição que põe ingresso PCD em assento comum', () => {
+    expect(() => applyZonePricing({
+      resolved: [item(0, 1, 'comum'), item(1, 1, 'pcd')], ingressos, today: TODAY, seatInfo: info, seatIds: ['A-1', 'P-1'],
+      assignments: [{ seat_id: 'A-1', ticket_type_idx: 1 }, { seat_id: 'P-1', ticket_type_idx: 0 }],
+    })).toThrow('Atribuição')
+  })
+  it('recusa a venda quando a meia passa de 50% da inteira', () => {
+    const meiaCara = { ...meia, lotes: [{ data_virada: null, preco: 25, precos_por_zona: { frente: 70, centro: 30, lateral: 20 } }] }
+    const inteiraUm = { ...inteira, lotes: [{ data_virada: null, preco: 50, precos_por_zona: { frente: 80, centro: 60, lateral: 40 } }] }
+    expect(() => applyZonePricing({
+      resolved: [item(1, 1, 'comum')], ingressos: [inteiraUm, meiaCara], today: TODAY, seatInfo: info, seatIds: ['A-1'], zones,
+    })).toThrow('50%')
+  })
+  it('meia de assento especial (PCD cadastrado como meia) não entra no teto de 50%', () => {
+    const pcd = { nome: 'Plateia PCD', kind: 'meia', assento_tipo: 'pcd', preco: 50 } as ZonePricedType
+    expect(validateMeiaCeiling(zones, [inteira, pcd])).toEqual([])
   })
 })

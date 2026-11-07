@@ -174,9 +174,18 @@ export function validateZonePricing(zones: SeatZone[], types: ZonePricedType[]):
     ;(Array.isArray(t.lotes) ? t.lotes : []).forEach((l, j) => checkMap(l.precos_por_zona, `${nome} (lote ${j + 1})`, free))
   }
 
-  const inteira = types.find(isInteira)
-  if (inteira) {
-    for (const meia of types.filter(isMeia)) {
+  errors.push(...validateMeiaCeiling(zones, types))
+  return errors
+}
+
+/** Teto legal da meia (Lei 12.933): no máximo 50% da inteira, por zona e por lote. Roda também na venda. */
+export function validateMeiaCeiling(zones: SeatZone[], types: ZonePricedType[] & Array<{ nome?: string }>): string[] {
+  const errors: string[] = []
+  {
+    const inteira = types.find(isInteira)
+    if (inteira) {
+    // Só a meia-entrada comum: tipos de assento especial (PCD, acompanhante) são cadastrados como 'meia' mas têm outra regra.
+    for (const meia of types.filter(t => isMeia(t) && !(t as { assento_tipo?: string | null }).assento_tipo)) {
       const zoneKeys = [DEFAULT_ZONE_KEY, ...zones.map(z => z.key)]
       const lotes = Array.isArray(meia.lotes) ? meia.lotes : []
       const slots = lotes.length > 0 ? lotes.map((l, j) => ({ j, src: l as { preco?: number | null; precos_por_zona?: ZonePrices | null } })) : [{ j: 0, src: meia }]
@@ -190,6 +199,7 @@ export function validateZonePricing(zones: SeatZone[], types: ZonePricedType[]):
           }
         }
       }
+    }
     }
   }
   return errors
@@ -242,8 +252,13 @@ export function applyZonePricing<T extends { idx: number; quantity: number; seat
   assignments?: Array<{ seat_id: string; ticket_type_idx: number }> | null
   today: string
   quotePrices?: Record<string, { preco: number }> | null
+  zones?: SeatZone[] | null
 }): { resolved: Array<T & { zoneKey: string }>; seatIds: string[] } {
-  const { resolved, ingressos, seatIds, seatInfo, assignments, today, quotePrices } = opts
+  const { resolved, ingressos, seatIds, seatInfo, assignments, today, quotePrices, zones } = opts
+  if (Array.isArray(zones)) {
+    const bad = validateMeiaCeiling(zones, ingressos as any)
+    if (bad.length > 0) throw new Error('Preço da meia-entrada acima do limite legal de 50% da inteira. Fale com a organização do evento.')
+  }
   const total = resolved.reduce((s, r) => s + r.quantity, 0)
   if (seatIds.length !== total) throw new Error(`Selecione exatamente ${total} assento(s)`)
 
@@ -261,6 +276,20 @@ export function applyZonePricing<T extends { idx: number; quantity: number; seat
     }
     for (const r of resolved) {
       if ((seatsByIdx.get(r.idx)?.length ?? 0) !== r.quantity) throw new Error('Atribuição de assentos inválida')
+    }
+    // Ingresso PCD / obeso / acompanhante só vale no assento do seu tipo: a atribuição do
+    // cliente só pode trocar lugares entre tipos comuns (ex.: qual é a Meia).
+    const tipoById = new Map<string, string>()
+    seatIds.forEach(id => tipoById.set(id, String(seatInfo.get(id)?.seat_tipo ?? 'comum')))
+    const aligned = alignSeatsToItems(resolved, seatIds, tipoById)
+    let cur = 0
+    for (const r of resolved) {
+      const mine = aligned.slice(cur, cur + r.quantity)
+      cur += r.quantity
+      if (r.seatKind !== 'comum') {
+        const got = new Set(seatsByIdx.get(r.idx) ?? [])
+        if (mine.some(id => !got.has(id))) throw new Error('Atribuição de assentos inválida')
+      }
     }
   } else {
     const tipoById = new Map<string, string>()
@@ -283,7 +312,12 @@ export function applyZonePricing<T extends { idx: number; quantity: number; seat
     }
     for (const [zk, ids] of byZone) {
       const quoted = quotePrices?.[`${r.idx}:${zk}`]?.preco
-      const preco = quoted != null && quoted > 0 ? quoted : priceForZone(ingressos[r.idx] ?? {}, zk, today)
+      // Sem célula de zona na cotação (assento sem zona, ou tipo sem preço por zona): vale o
+      // preço-base já travado na cotação (r.precoUnit), não o preço ao vivo.
+      const noZoneCell = zk === DEFAULT_ZONE_KEY || !hasZonePricing(ingressos[r.idx] ?? {})
+      const preco = quoted != null && quoted > 0
+        ? quoted
+        : (noZoneCell && r.precoUnit > 0 ? r.precoUnit : priceForZone(ingressos[r.idx] ?? {}, zk, today))
       if (!(preco > 0)) throw new Error('Preço inválido para a zona escolhida')
       outItems.push({ ...r, quantity: ids.length, precoUnit: preco, zoneKey: zk })
       outSeats.push(...ids)

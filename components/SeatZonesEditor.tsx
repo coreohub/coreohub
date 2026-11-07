@@ -142,6 +142,12 @@ export default function SeatZonesEditor({ eventId, zones, onZonesSaved }: Props)
 
     setBusy(true);
     try {
+      // Primeiro as zonas (fonte da verdade), depois a limpeza dos assentos: se a limpeza falhar,
+      // o assento fica com chave de zona que não existe mais (cai no preço-base), nunca o contrário.
+      for (const ev of targetIds()) {
+        const { error } = await supabase.from('events').update({ seat_zones: next }).eq('id', ev);
+        if (error) throw new Error(error.message);
+      }
       for (const z of removed) {
         const ids = Object.values(zoneRows).filter(r => r.zone_key === z.key).map(r => r.seat_id);
         if (ids.length === 0) continue;
@@ -149,10 +155,6 @@ export default function SeatZonesEditor({ eventId, zones, onZonesSaved }: Props)
           const { error } = await supabase.rpc('set_event_seat_zones', { p_event_id: ev, p_zone_key: null, p_seat_ids: ids });
           if (error) throw new Error(error.message);
         }
-      }
-      for (const ev of targetIds()) {
-        const { error } = await supabase.from('events').update({ seat_zones: next }).eq('id', ev);
-        if (error) throw new Error(error.message);
       }
       onZonesSaved(next);
       setDraft(next);

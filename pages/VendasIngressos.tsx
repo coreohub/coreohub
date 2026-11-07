@@ -623,7 +623,7 @@ const VendasIngressos: React.FC = () => {
   const resolveDisplayPreco = (t: TicketTypeConfig): number => {
     const lotes = Array.isArray(t.lotes) ? t.lotes : [];
     if (lotes.length > 0) {
-      const todayISO = new Date().toISOString().slice(0, 10);
+      const todayISO = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
       const idx = lotes.findIndex(l => !l.data_virada || l.data_virada >= todayISO);
       return Number((idx >= 0 ? lotes[idx] : lotes[lotes.length - 1])?.preco ?? 0);
     }
@@ -1532,7 +1532,7 @@ const VendasIngressos: React.FC = () => {
                       {ticketTypes.map((t, idx) => (
                         <option key={idx} value={idx}>{t.nome} — {(() => {
                           if (!zonePriced) return formatBRL(resolveDisplayPreco(t));
-                          const r = priceRangeForType(t as any, idx, seatZones, new Date().toISOString().slice(0, 10), { includeBase: true });
+                          const r = priceRangeForType(t as any, idx, seatZones, new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10), { includeBase: true });
                           return r.min === r.max ? formatBRL(r.min) : `${formatBRL(r.min)} a ${formatBRL(r.max)}`;
                         })()}</option>
                       ))}
@@ -1585,7 +1585,7 @@ const VendasIngressos: React.FC = () => {
                         {zonePriced && (
                           <SeatZoneLegend
                             zones={seatZones}
-                            types={[{ idx: pdvTypeIdx, nome: ticketTypes[pdvTypeIdx]?.nome ?? '', priceByZone: Object.fromEntries(seatZones.map(z => [z.key, priceForZone((ticketTypes[pdvTypeIdx] ?? {}) as any, z.key, new Date().toISOString().slice(0, 10))])) }]}
+                            types={[{ idx: pdvTypeIdx, nome: ticketTypes[pdvTypeIdx]?.nome ?? '', priceByZone: Object.fromEntries(seatZones.map(z => [z.key, priceForZone((ticketTypes[pdvTypeIdx] ?? {}) as any, z.key, new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10))])) }]}
                           />
                         )}
                       </div>

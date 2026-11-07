@@ -4,7 +4,7 @@
 -- RPC NOVA e separada de get_event_seats_public_v2 de propósito: aquela função é
 -- a do checkout ao vivo e mudar o tipo de retorno dela exigiria DROP + CREATE.
 -- Esta devolve só os assentos que têm zona (o resto é "sem zona" = preço-base),
--- apenas de evento com mapa ligado e venda ativa. Não expõe nada além do que o
+-- apenas de evento com mapa ligado (a venda pode estar desligada; a leitura não vaza nada além do que o mapa público já mostra). Não expõe nada além do que o
 -- comprador já vê no mapa (nome/cor das zonas ficam em events.seat_zones, público).
 -- ════════════════════════════════════════════════════════════════════════════
 
