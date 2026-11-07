@@ -4003,17 +4003,21 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       // Mantém preço atual no lote final como ponto de partida.
                       const today = new Date().toISOString().slice(0, 10);
                       const precoBase = Number(item.preco ?? 0);
+                      // Preços por zona acompanham: viram os dos dois lotes (não se perdem).
+                      const zonas = (item as any).precos_por_zona;
                       updateField({
                         lotes: [
-                          { data_virada: today, preco: precoBase },
-                          { data_virada: null, preco: precoBase },
+                          { data_virada: today, preco: precoBase, ...(zonas ? { precos_por_zona: { ...zonas } } : {}) },
+                          { data_virada: null, preco: precoBase, ...(zonas ? { precos_por_zona: { ...zonas } } : {}) },
                         ],
-                      });
+                        ...(zonas ? { precos_por_zona: undefined } : {}),
+                      } as any);
                     };
                     const stopLotes = () => {
                       // Volta pra modo simples: usa preço do último lote como preço único.
                       const ultimo = lotes?.[lotes.length - 1]?.preco ?? item.preco ?? 0;
-                      updateField({ lotes: undefined, preco: Number(ultimo) });
+                      const zonasUltimo = (lotes?.[lotes.length - 1] as any)?.precos_por_zona;
+                      updateField({ lotes: undefined, preco: Number(ultimo), ...(zonasUltimo ? { precos_por_zona: { ...zonasUltimo } } : {}) } as any);
                     };
                     const updateLote = (loteIdx: number, patch: Partial<TicketLote>) => {
                       const next = (lotes ?? []).map((l, idx) => idx === loteIdx ? { ...l, ...patch } : l);
@@ -4024,7 +4028,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       const today = new Date().toISOString().slice(0, 10);
                       const next = [...(lotes ?? [])];
                       const ultimoPreco = next[next.length - 1]?.preco ?? 0;
-                      next.splice(next.length - 1, 0, { data_virada: today, preco: ultimoPreco });
+                      const zonasUltimo = (next[next.length - 1] as any)?.precos_por_zona;
+                      next.splice(next.length - 1, 0, { data_virada: today, preco: ultimoPreco, ...(zonasUltimo ? { precos_por_zona: { ...zonasUltimo } } : {}) } as any);
                       updateField({ lotes: next });
                     };
                     const removeLote = (loteIdx: number) => {
