@@ -9,6 +9,8 @@
 // Zona sem preço informado cai no preço-base do lote/tipo: evento sem zonas
 // se comporta exatamente como antes.
 
+import { alignSeatsToItems, type TicketSeatKind } from './seat-rules.ts'
+
 export const MAX_SEAT_ZONES = 8
 export const DEFAULT_ZONE_KEY = 'geral'
 const ZONE_KEY_RE = /^[a-z0-9_-]{1,24}$/
@@ -191,4 +193,101 @@ export function validateZonePricing(zones: SeatZone[], types: ZonePricedType[]):
     }
   }
   return errors
+}
+
+// ── Aplicação no servidor (create-audience-ticket / create-pdv-ticket) ───────
+
+/** O evento cobra por zona? Só com mapa ligado, zonas definidas e algum preço por zona. */
+export function zonePricingActive(seatMapEnabled: boolean, zones: unknown, types: ZonePricedType[]): boolean {
+  return seatMapEnabled && Array.isArray(zones) && zones.length > 0 && types.some(hasZonePricing)
+}
+
+/** Cotação travada por tipo × zona: chave "idx:zona" (a chave "idx" sozinha segue sendo o preço-base). */
+export function quoteZonePrices(
+  types: Array<ZonePricedType & { nome?: string }>,
+  zones: SeatZone[],
+  today: string,
+): Record<string, { preco: number; lote: string | null }> {
+  const out: Record<string, { preco: number; lote: string | null }> = {}
+  types.forEach((t, idx) => {
+    if (!t?.nome || !hasZonePricing(t)) return
+    const i = vigenteLoteIndex(t.lotes, today)
+    const lote = i >= 0 ? ((t.lotes as Array<ZoneLote & { nome?: string }>)[i].nome ?? null) : null
+    for (const z of zones) {
+      const preco = priceForZone(t, z.key, today)
+      if (preco > 0) out[`${idx}:${z.key}`] = { preco, lote }
+    }
+  })
+  return out
+}
+
+export type SeatInfo = { zone_key?: string | null; seat_tipo?: string | null }
+
+/**
+ * Divide cada item do carrinho por zona e dá a cada ingresso o preço da zona do
+ * seu assento. Devolve os itens (um por tipo × zona, `quantity` já recontada) e os
+ * seatIds NA ORDEM em que a RPC cria os tickets, pro vínculo assento↔ingresso bater.
+ *
+ * Quem decide qual assento é de qual tipo (Meia ou Inteira muda o preço):
+ *   1. `assignments` ([{seat_id, ticket_type_idx}]) quando o cliente manda — conferido
+ *      contra as quantidades; qualquer divergência é erro;
+ *   2. senão, alinhamento por tipo de assento (PCD → assento especial etc.), igual ao de hoje.
+ * O preço NUNCA vem do cliente: só de assento → zona → tipo.
+ */
+export function applyZonePricing<T extends { idx: number; quantity: number; seatKind: TicketSeatKind; precoUnit: number }>(opts: {
+  resolved: T[]
+  ingressos: ZonePricedType[]
+  seatIds: string[]
+  seatInfo: Map<string, SeatInfo>
+  assignments?: Array<{ seat_id: string; ticket_type_idx: number }> | null
+  today: string
+  quotePrices?: Record<string, { preco: number }> | null
+}): { resolved: Array<T & { zoneKey: string }>; seatIds: string[] } {
+  const { resolved, ingressos, seatIds, seatInfo, assignments, today, quotePrices } = opts
+  const total = resolved.reduce((s, r) => s + r.quantity, 0)
+  if (seatIds.length !== total) throw new Error(`Selecione exatamente ${total} assento(s)`)
+
+  const seatsByIdx = new Map<number, string[]>()
+  if (assignments && assignments.length > 0) {
+    if (assignments.length !== seatIds.length) throw new Error('Atribuição de assentos inválida')
+    const wanted = new Set(seatIds)
+    const seen = new Set<string>()
+    for (const a of assignments) {
+      if (!a || !wanted.has(a.seat_id) || seen.has(a.seat_id)) throw new Error('Atribuição de assentos inválida')
+      seen.add(a.seat_id)
+      const list = seatsByIdx.get(a.ticket_type_idx) ?? []
+      list.push(a.seat_id)
+      seatsByIdx.set(a.ticket_type_idx, list)
+    }
+    for (const r of resolved) {
+      if ((seatsByIdx.get(r.idx)?.length ?? 0) !== r.quantity) throw new Error('Atribuição de assentos inválida')
+    }
+  } else {
+    const tipoById = new Map<string, string>()
+    seatIds.forEach(id => tipoById.set(id, String(seatInfo.get(id)?.seat_tipo ?? 'comum')))
+    const aligned = alignSeatsToItems(resolved, seatIds, tipoById)
+    let cursor = 0
+    for (const r of resolved) {
+      seatsByIdx.set(r.idx, aligned.slice(cursor, cursor + r.quantity))
+      cursor += r.quantity
+    }
+  }
+
+  const outItems: Array<T & { zoneKey: string }> = []
+  const outSeats: string[] = []
+  for (const r of resolved) {
+    const byZone = new Map<string, string[]>()
+    for (const id of seatsByIdx.get(r.idx) ?? []) {
+      const zk = normalizeZoneKey(seatInfo.get(id)?.zone_key)
+      byZone.set(zk, [...(byZone.get(zk) ?? []), id])
+    }
+    for (const [zk, ids] of byZone) {
+      const quoted = quotePrices?.[`${r.idx}:${zk}`]?.preco
+      const preco = quoted != null && quoted > 0 ? quoted : priceForZone(ingressos[r.idx] ?? {}, zk, today)
+      if (!(preco > 0)) throw new Error('Preço inválido para a zona escolhida')
+      outItems.push({ ...r, quantity: ids.length, precoUnit: preco, zoneKey: zk })
+      outSeats.push(...ids)
+    }
+  }
+  return { resolved: outItems, seatIds: outSeats }
 }

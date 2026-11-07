@@ -40,6 +40,7 @@ import { round2 } from '../_shared/audience-pricing.ts'
 import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
 import { allocateProportional } from '../_shared/processing-fee.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { zonePricingActive, applyZonePricing } from '../_shared/seat-zone-pricing.ts'
 import { ticketSeatKind, effectiveTicketKind, countPcdTickets, countObesoTickets, countCompanionTickets, alignSeatsToItems, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
@@ -125,12 +126,14 @@ Deno.serve(async (req) => {
       buyer,
       payment_method,
       seat_ids: seatIdsRaw,
+      seat_assignments: seatAssignmentsRaw,
     } = body as {
       event_id?: string
       ticket_type_idx?: number
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
       payment_method?: 'pix' | 'cartao_tap'
       seat_ids?: string[]
+      seat_assignments?: Array<{ seat_id: string; ticket_type_idx: number }>
     }
     const quantity = Math.max(1, Math.min(20, Number(body.quantity ?? 1)))
 
@@ -152,7 +155,7 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status,
+        politica_ingressos, seat_map_enabled, seat_zones, payment_sandbox, sessao_status,
         processing_fee_enabled, audience_processing_payer, state
       `)
       .eq('id', event_id)
@@ -204,7 +207,7 @@ Deno.serve(async (req) => {
       idx: number; nome: string; kind: string; quantity: number
       precoUnit: number; quantidadeTotal: number | null; seatKind: TicketSeatKind
     }
-    const resolved: ResolvedItem[] = []
+    let resolved: ResolvedItem[] = []
     let totalQty = 0
     let totalBase = 0
     for (const [idx, q] of mergedQty.entries()) {
@@ -255,7 +258,30 @@ Deno.serve(async (req) => {
       // Vários tipos na venda: o vínculo assento↔ingresso segue a ORDEM dos itens.
       // Não confia na ordem que o cliente mandou: alinha por tipo de assento (PCD →
       // assento especial, acompanhante → assento de acompanhante, comum → o resto).
-      if (resolved.length > 1) {
+      if (zonePricingActive(true, (event as any).seat_zones, ingressos)) {
+        // Preço por zona: o preço de cada ingresso sai do assento → zona → tipo (banco),
+        // e os seatIds saem na ordem dos tickets que a RPC cria.
+        const { data: seatRows, error: seatInfoErr } = await supabase
+          .from('event_seats')
+          .select('seat_id, zone_key, seat_tipo')
+          .eq('event_id', event_id)
+          .in('seat_id', seatIds)
+        if (seatInfoErr) {
+          console.error('[create-pdv-ticket] erro ao ler zonas dos assentos:', seatInfoErr.message)
+          throw new Error('Falha ao validar os assentos')
+        }
+        const seatInfo = new Map((seatRows ?? []).map((r: any) => [r.seat_id as string, { zone_key: r.zone_key as string | null, seat_tipo: r.seat_tipo as string | null }]))
+        if (seatInfo.size !== seatIds.length) throw new Error('Assento inexistente neste evento')
+        const todayBR = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
+        const applied = applyZonePricing({
+          resolved, ingressos, seatIds, seatInfo,
+          assignments: Array.isArray(seatAssignmentsRaw) ? seatAssignmentsRaw : null,
+          today: todayBR,
+        })
+        resolved = applied.resolved
+        seatIds = applied.seatIds
+        totalBase = round2(resolved.reduce((s, r) => s + r.precoUnit * r.quantity, 0))
+      } else if (resolved.length > 1) {
         const { data: tipoRows } = await supabase
           .from('event_seats')
           .select('seat_id, seat_tipo')

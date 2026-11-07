@@ -142,3 +142,82 @@ describe('validateZonePricing', () => {
     expect(validateZonePricing(zones, [c])).toEqual([])
   })
 })
+
+import { applyZonePricing, zonePricingActive, quoteZonePrices } from '../supabase/functions/_shared/seat-zone-pricing'
+
+describe('zonePricingActive / quoteZonePrices', () => {
+  it('só ativa com mapa, zonas e algum preço por zona', () => {
+    expect(zonePricingActive(true, zones, [inteira])).toBe(true)
+    expect(zonePricingActive(false, zones, [inteira])).toBe(false)
+    expect(zonePricingActive(true, [], [inteira])).toBe(false)
+    expect(zonePricingActive(true, zones, [{ preco: 50 }])).toBe(false)
+    expect(zonePricingActive(true, null, [inteira])).toBe(false)
+  })
+  it('cotação por tipo x zona usa chave idx:zona e ignora tipo sem preço por zona', () => {
+    const q = quoteZonePrices([inteira, { nome: 'Sem zona', preco: 10 }, meia], zones, TODAY)
+    expect(q['0:frente']).toEqual({ preco: 80, lote: null })
+    expect(q['0:lateral'].preco).toBe(40)
+    expect(q['2:centro'].preco).toBe(30)
+    expect(Object.keys(q).some(k => k.startsWith('1:'))).toBe(false)
+  })
+})
+
+describe('applyZonePricing', () => {
+  const ingressos = [inteira, meia]
+  const info = new Map([
+    ['A-1', { zone_key: 'frente', seat_tipo: 'comum' }],
+    ['A-2', { zone_key: 'frente', seat_tipo: 'comum' }],
+    ['M-9', { zone_key: 'centro', seat_tipo: 'comum' }],
+    ['L-1', { zone_key: 'lateral', seat_tipo: 'comum' }],
+    ['P-1', { zone_key: null, seat_tipo: 'cadeirante' }],
+  ])
+  const base = (idx: number, quantity: number, seatKind: 'comum' | 'pcd' = 'comum') => ({ idx, quantity, seatKind, precoUnit: 0, nome: `t${idx}`, kind: idx === 1 ? 'meia' : 'inteira', quantidadeTotal: null })
+
+  it('divide por zona, dá o preço da zona e devolve assentos na ordem dos tickets', () => {
+    const out = applyZonePricing({
+      resolved: [base(0, 3), base(1, 1)], ingressos, today: TODAY, seatInfo: info,
+      seatIds: ['A-1', 'M-9', 'A-2', 'L-1'],
+      assignments: [
+        { seat_id: 'A-1', ticket_type_idx: 0 }, { seat_id: 'M-9', ticket_type_idx: 0 },
+        { seat_id: 'A-2', ticket_type_idx: 0 }, { seat_id: 'L-1', ticket_type_idx: 1 },
+      ],
+    })
+    expect(out.resolved.map(r => [r.idx, r.zoneKey, r.quantity, r.precoUnit])).toEqual([
+      [0, 'frente', 2, 80], [0, 'centro', 1, 60], [1, 'lateral', 1, 20],
+    ])
+    expect(out.seatIds).toEqual(['A-1', 'A-2', 'M-9', 'L-1'])
+  })
+  it('a atribuição decide qual assento é meia (preço muda)', () => {
+    const a = applyZonePricing({
+      resolved: [base(0, 1), base(1, 1)], ingressos, today: TODAY, seatInfo: info, seatIds: ['A-1', 'L-1'],
+      assignments: [{ seat_id: 'A-1', ticket_type_idx: 1 }, { seat_id: 'L-1', ticket_type_idx: 0 }],
+    })
+    expect(a.resolved.map(r => [r.idx, r.zoneKey, r.precoUnit])).toEqual([[0, 'lateral', 40], [1, 'frente', 40]])
+  })
+  it('sem atribuição alinha por tipo de assento (PCD vai pro assento PCD)', () => {
+    const out = applyZonePricing({
+      resolved: [base(0, 1), base(1, 1, 'pcd')], ingressos, today: TODAY, seatInfo: info, seatIds: ['A-1', 'P-1'],
+    })
+    expect(out.seatIds).toEqual(['A-1', 'P-1'])
+    expect(out.resolved.find(r => r.idx === 1)?.zoneKey).toBe('geral')
+    expect(out.resolved.find(r => r.idx === 1)?.precoUnit).toBe(25) // zona geral → preço-base do lote
+  })
+  it('cotação travada vence o preço ao vivo; sem a chave cai no ao vivo', () => {
+    const out = applyZonePricing({
+      resolved: [base(0, 2)], ingressos, today: TODAY, seatInfo: info, seatIds: ['A-1', 'M-9'],
+      quotePrices: { '0:frente': { preco: 70 } },
+    })
+    expect(out.resolved.map(r => [r.zoneKey, r.precoUnit])).toEqual([['frente', 70], ['centro', 60]])
+  })
+  it('atribuição inconsistente é recusada (anti-fraude)', () => {
+    const r = [base(0, 1), base(1, 1)]
+    const go = (assignments: Array<{ seat_id: string; ticket_type_idx: number }>) =>
+      () => applyZonePricing({ resolved: r, ingressos, today: TODAY, seatInfo: info, seatIds: ['A-1', 'L-1'], assignments })
+    expect(go([{ seat_id: 'A-1', ticket_type_idx: 0 }, { seat_id: 'L-1', ticket_type_idx: 0 }])).toThrow(/inválida/) // 2 inteiras, falta meia
+    expect(go([{ seat_id: 'A-1', ticket_type_idx: 0 }, { seat_id: 'M-9', ticket_type_idx: 1 }])).toThrow(/inválida/) // assento fora do pedido
+    expect(go([{ seat_id: 'A-1', ticket_type_idx: 0 }, { seat_id: 'A-1', ticket_type_idx: 1 }])).toThrow(/inválida/) // repetido
+  })
+  it('quantidade de assentos diferente da de ingressos é recusada', () => {
+    expect(() => applyZonePricing({ resolved: [base(0, 2)], ingressos, today: TODAY, seatInfo: info, seatIds: ['A-1'] })).toThrow(/exatamente 2/)
+  })
+})

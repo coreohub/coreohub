@@ -21,6 +21,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveTicketPrice } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { zonePricingActive, quoteZonePrices, type SeatZone } from '../_shared/seat-zone-pricing.ts'
 
 function extractClientIp(req: Request): string {
   return req.headers.get('cf-connecting-ip')
@@ -96,7 +97,7 @@ Deno.serve(async (req) => {
 
     const { data: event } = await supabase
       .from('events')
-      .select('id, ingressos_config, audience_commission_percent, audience_fee_mode, audience_sales_enabled, politica_ingressos, audience_reservation_minutes, sessao_status, processing_fee_enabled')
+      .select('id, ingressos_config, audience_commission_percent, audience_fee_mode, audience_sales_enabled, politica_ingressos, audience_reservation_minutes, sessao_status, processing_fee_enabled, seat_map_enabled, seat_zones')
       .eq('id', event_id)
       .maybeSingle()
     if (!event) throw new Error('Evento não encontrado')
@@ -112,6 +113,11 @@ Deno.serve(async (req) => {
       const p = resolveTicketPrice(t)
       if (p.preco > 0) prices[String(idx)] = p
     })
+    // Preço por zona: chaves extras "idx:zona" (a "idx" segue sendo o preço-base).
+    if (zonePricingActive(Boolean((event as any).seat_map_enabled), (event as any).seat_zones, ingressos)) {
+      const todayBR = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
+      Object.assign(prices, quoteZonePrices(ingressos, (event as any).seat_zones as SeatZone[], todayBR))
+    }
 
     const minutes = Math.min(Math.max(Number(event.audience_reservation_minutes ?? 15), 5), 30)
     const commissionPercent = Number(event.audience_commission_percent ?? 10)
