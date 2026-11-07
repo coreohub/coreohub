@@ -161,3 +161,18 @@ describe('reasonsBySeat / BLOCK_REASON_SUGGESTIONS', () => {
     for (const r of BLOCK_REASON_SUGGESTIONS) expect(r.length).toBeLessThanOrEqual(SEAT_BLOCK_REASON_MAX);
   });
 });
+
+import { chunkIds, SEAT_ZONE_RPC_MAX } from '../utils/seatBlock'
+describe('chunkIds (limite da RPC de zonas)', () => {
+  it('divide em blocos de até 600 e preserva a ordem', () => {
+    const ids = Array.from({ length: 1300 }, (_, i) => `S${i}`)
+    const parts = chunkIds(ids)
+    expect(parts.map(p => p.length)).toEqual([600, 600, 100])
+    expect(parts.flat()).toEqual(ids)
+    expect(SEAT_ZONE_RPC_MAX).toBe(600)
+  })
+  it('lista pequena ou vazia', () => {
+    expect(chunkIds(['a'])).toEqual([['a']])
+    expect(chunkIds([])).toEqual([])
+  })
+})

@@ -3,7 +3,7 @@ import { Loader2, Plus, Trash2, Paintbrush, Eraser } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import SeatGrid from './SeatGrid';
 import { useSeatMap, type SeatStatus } from '../hooks/useSeatMap';
-import { expandRow, toggleMany } from '../utils/seatBlock';
+import { expandRow, toggleMany, chunkIds } from '../utils/seatBlock';
 import {
   MAX_SEAT_ZONES, validateZonePricing, zoneKeyFromName, pruneZonePrices, type SeatZone,
 } from '../supabase/functions/_shared/seat-zone-pricing';
@@ -20,6 +20,25 @@ interface Props {
   zones: SeatZone[];
   /** Chamado depois que as zonas são salvas, pro resto da tela (tabela de preços) acompanhar. */
   onZonesSaved: (zones: SeatZone[]) => void;
+}
+
+/**
+ * Aplica a zona em `ids` de um evento em blocos (a RPC recusa mais de 600 por chamada).
+ * Não é atômico: se um bloco falha, os anteriores já valeram; o erro diz quantos.
+ */
+async function setSeatZonesChunked(eventId: string, zoneKey: string | null, ids: string[]): Promise<{ updated: number; skipped: string[] }> {
+  let updated = 0;
+  const skipped: string[] = [];
+  for (const part of chunkIds(ids)) {
+    const { data, error } = await supabase.rpc('set_event_seat_zones', { p_event_id: eventId, p_zone_key: zoneKey, p_seat_ids: part });
+    if (error) {
+      throw new Error(updated > 0 ? `${error.message} (${updated} de ${ids.length} lugares já foram aplicados; repita para concluir)` : error.message);
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    updated += Number(row?.updated ?? 0);
+    skipped.push(...((row?.skipped ?? []) as string[]));
+  }
+  return { updated, skipped };
 }
 
 const sameZones = (a: SeatZone[], b: SeatZone[]) => JSON.stringify(a) === JSON.stringify(b);
@@ -152,8 +171,7 @@ export default function SeatZonesEditor({ eventId, zones, onZonesSaved }: Props)
         const ids = Object.values(zoneRows).filter(r => r.zone_key === z.key).map(r => r.seat_id);
         if (ids.length === 0) continue;
         for (const ev of targetIds()) {
-          const { error } = await supabase.rpc('set_event_seat_zones', { p_event_id: ev, p_zone_key: null, p_seat_ids: ids });
-          if (error) throw new Error(error.message);
+          await setSeatZonesChunked(ev, null, ids);
         }
       }
       // Sessões irmãs: preço e ingresso são POR SESSÃO, então o preço da zona removida também
@@ -191,12 +209,9 @@ export default function SeatZonesEditor({ eventId, zones, onZonesSaved }: Props)
     try {
       const parts: string[] = [];
       for (const ev of targetIds()) {
-        const { data, error } = await supabase.rpc('set_event_seat_zones', { p_event_id: ev, p_zone_key: zoneKey, p_seat_ids: selected });
-        if (error) throw new Error(error.message);
-        const row = Array.isArray(data) ? data[0] : data;
-        const skipped = (row?.skipped ?? []) as string[];
+        const { updated, skipped } = await setSeatZonesChunked(ev, zoneKey, selected);
         const label = ev === eventId ? 'Esta sessão' : (siblings.find(s => s.id === ev)?.label ?? 'Outra sessão');
-        parts.push(`${label}: ${row?.updated ?? 0} lugar(es)${skipped.length ? `, ${skipped.length} ocupado(s) mantido(s)` : ''}`);
+        parts.push(`${label}: ${updated} lugar(es)${skipped.length ? `, ${skipped.length} ocupado(s) mantido(s)` : ''}`);
       }
       setSelected([]);
       await loadZoneRows();

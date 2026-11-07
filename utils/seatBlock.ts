@@ -121,3 +121,13 @@ export function reasonsBySeat(list: Array<{ seat_id: string; block_reason: strin
   }
   return out;
 }
+
+/** Máximo de assentos que a RPC set_event_seat_zones aceita por chamada. */
+export const SEAT_ZONE_RPC_MAX = 600;
+
+/** Divide a lista em blocos de até `size` itens (ordem preservada). */
+export function chunkIds<T>(ids: T[], size: number = SEAT_ZONE_RPC_MAX): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
