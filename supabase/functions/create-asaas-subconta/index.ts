@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
 import { loadAsaasEnvForProducer } from '../_shared/asaas-env-loader.ts'
+import { pickRecoverableAccount } from '../_shared/asaas-account-match.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -188,8 +189,8 @@ Deno.serve(async (req) => {
 
       console.log(`[create-asaas-subconta] subconta duplicada detectada (${errMsg}) — tentando recuperar via GET`)
 
-      // Tenta 3 estratégias: por email, por CPF/CNPJ, e por busca geral (mais lenta).
-      // O Asaas valida duplicidade em vários campos — qual deles bateu varia.
+      // Tenta por e-mail e por CPF/CNPJ. O Asaas valida duplicidade em vários campos —
+      // qual deles bateu varia — mas só aceitamos a conta se o CPF/CNPJ dela for o do produtor.
       const tryLookup = async (params: string, label: string): Promise<any | null> => {
         const url = `${ASAAS_BASE_URL}/accounts?${params}&limit=10`
         console.log(`[create-asaas-subconta] ${label}: GET ${url}`)
@@ -200,12 +201,9 @@ Deno.serve(async (req) => {
         const data = await res.json()
         console.log(`[create-asaas-subconta] ${label} resposta: status=${res.status} count=${Array.isArray(data?.data) ? data.data.length : 'N/A'}`)
         if (!res.ok || !Array.isArray(data.data) || data.data.length === 0) return null
-        // Match exato por CPF ou email — em caso de múltiplas subcontas no resultado
-        const match = data.data.find((a: any) =>
-          (a.cpfCnpj && a.cpfCnpj.replace(/\D/g, '') === cpfLimpo) ||
-          (a.email && a.email.toLowerCase() === email.toLowerCase())
-        )
-        return match ?? data.data[0]
+        // Só vale conta com CPF/CNPJ igual ao do solicitante. E-mail não prova dono e o
+        // primeiro resultado muito menos: vincular conta alheia desvia o split pra um terceiro.
+        return pickRecoverableAccount(data.data, cpfLimpo)
       }
 
       let existing: any = null
