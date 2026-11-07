@@ -8,6 +8,7 @@ import {
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { Event } from '../types';
+import { priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing';
 import { precoVigente } from '../utils/lotes';
 
 const UFS = [
@@ -117,7 +118,7 @@ const Festivais = () => {
         // manual aqui.
         const { data, error } = await supabase
           .from('events')
-          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, start_date, end_date, location, city, state, formacoes_config, ingressos_config, audience_sales_enabled, politica_ingressos, edition_year, is_public')
+          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, start_date, end_date, location, city, state, formacoes_config, ingressos_config, audience_sales_enabled, politica_ingressos, edition_year, is_public, session_group_id, event_time, sessao_status, seat_zones, seat_map_enabled')
           .eq('is_public', true)
           .eq('payment_sandbox', false)   // evento de teste (sandbox) nunca aparece na vitrine
           .order('start_date', { ascending: false });
@@ -131,7 +132,30 @@ const Festivais = () => {
         // completa depois e aparece sozinho, sem produtor precisar
         // "republicar" nada.
         const complete = (data ?? []).filter((e: any) => e.cover_url && e.description?.trim());
-        setEvents(complete as Event[]);
+        // Espetáculo com várias sessões = UM festival na vitrine: mostra só o evento principal
+        // (events.id = session_group_id) e carrega junto as sessões que ainda vão acontecer.
+        // Sessão cancelada não conta. Sem principal visível, a 1ª sessão faz o papel dele.
+        const groups = new Map<string, any[]>();
+        for (const e of complete as any[]) {
+          if (!e.session_group_id) continue;
+          groups.set(e.session_group_id, [...(groups.get(e.session_group_id) ?? []), e]);
+        }
+        const shown = (complete as any[]).filter(e => {
+          const g = e.session_group_id ? groups.get(e.session_group_id) : null;
+          if (!g || g.length < 2) return true;
+          const anchor = g.find(x => x.id === e.session_group_id) ?? [...g].sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? '') || (a.event_time ?? '').localeCompare(b.event_time ?? ''))[0];
+          return anchor.id === e.id;
+        }).map(e => {
+          const g = e.session_group_id ? groups.get(e.session_group_id) : null;
+          if (!g || g.length < 2) return e;
+          const sessions = g.filter(x => x.sessao_status !== 'cancelada')
+            .map(x => ({ start_date: x.start_date as string | null, event_time: x.event_time as string | null }))
+            .sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? '') || (a.event_time ?? '').localeCompare(b.event_time ?? ''));
+          const live = g.filter(x => x.sessao_status !== 'cancelada');
+          const first = sessions[0];
+          return { ...e, __sessions: sessions, __all: live.length > 0 ? live : [e], start_date: first?.start_date ?? e.start_date, end_date: first?.start_date ? (live.length > 0 ? live.reduce((m: string, x: any) => ((x.end_date ?? x.start_date ?? '') > m ? (x.end_date ?? x.start_date ?? '') : m), '') || e.end_date : e.end_date) : e.end_date };
+        });
+        setEvents(shown as Event[]);
       } catch (err) {
         console.error('[Festivais] erro ao buscar eventos:', err);
       } finally {
@@ -181,9 +205,12 @@ const Festivais = () => {
   // gratuita" mesmo com preço real configurado. precoVigente() já resolve
   // lote → fee, mesma lógica que a página do evento usa de verdade.
   const minPrice = (e: Event): number | null => {
-    if (!e.formacoes_config?.length) return null;
-    const prices = e.formacoes_config
-      .map((m: any) => precoVigente(m))
+    // Espetáculo com várias sessões: vale o menor preço entre as sessões (cada uma pode ter o seu).
+    const all: any[] = (e as any).__all ?? [e];
+    const withForm = all.filter(x => x.formacoes_config?.length);
+    if (withForm.length === 0) return null;
+    const prices = withForm
+      .flatMap(x => x.formacoes_config.map((m: any) => precoVigente(m)))
       .filter((n: number) => n > 0);
     if (!prices.length) return 0;
     return Math.min(...prices);
@@ -193,11 +220,20 @@ const Festivais = () => {
   // mostrar "Inscrições em breve" — o público quer saber que dá pra comprar.
   // null = sem venda de ingresso (mantém o texto de inscrição de sempre).
   const ticketLabel = (e: Event): string | null => {
-    const ev = e as any;
-    const selling = ev.audience_sales_enabled === true && ev.politica_ingressos === 'INTERNO';
-    const tipos: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config.filter((t: any) => t?.nome) : [];
-    if (!selling || tipos.length === 0) return null;
-    const prices = tipos.map((t: any) => precoVigente(t)).filter((n: number) => n > 0);
+    const all: any[] = (e as any).__all ?? [e];
+    const sellingEvs = all.filter(ev => ev.audience_sales_enabled === true && ev.politica_ingressos === 'INTERNO');
+    const todayBR = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+    // Mapa com zonas: o "a partir de" é o menor preço entre as zonas, não o preço-base.
+    const tipos: number[] = sellingEvs.flatMap(ev => {
+      const list: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [];
+      const zones = ev.seat_map_enabled && Array.isArray(ev.seat_zones) ? ev.seat_zones : [];
+      return list.flatMap((t: any, i: number) => {
+        if (!t?.nome) return [];
+        return [zones.length > 0 ? priceRangeForType(t, i, zones, todayBR, { includeBase: false }).min || precoVigente(t) : precoVigente(t)];
+      });
+    });
+    if (sellingEvs.length === 0 || tipos.length === 0) return null;
+    const prices = tipos.filter((n: number) => n > 0);
     if (!prices.length) return 'Ingressos disponíveis';
     return `Ingressos a partir de R$ ${Math.min(...prices).toFixed(2)}`;
   };
@@ -440,6 +476,13 @@ const EventCard: React.FC<{
 }> = ({ event, minPrice, ticketLabel, dateLabel, muted }) => {
   const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || (event as any).location;
   const target = `/evento/${event.slug ?? event.id}`;
+  // Várias sessões do mesmo espetáculo: "2 sessões · 15h30 e 19h30" (mesmo dia) ou só a contagem.
+  const sessions: Array<{ start_date: string | null; event_time: string | null }> = (event as any).__sessions ?? [];
+  const hhmm = (t?: string | null) => (t ? t.slice(0, 5).replace(':', 'h') : '');
+  const sessionsLabel = sessions.length >= 2
+    ? `${sessions.length} sessões${sessions.every(x => x.start_date === sessions[0].start_date) && sessions.every(x => x.event_time)
+        ? ` · ${sessions.map(x => hhmm(x.event_time)).join(' e ')}` : ''}`
+    : null;
 
   return (
     <Link
@@ -468,9 +511,16 @@ const EventCard: React.FC<{
           )}
         </div>
         <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff0068]/90 backdrop-blur rounded-full">
-            <Calendar size={12} />
-            <span className="text-[10px] font-black uppercase tracking-widest">{dateLabel}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff0068]/90 backdrop-blur rounded-full">
+              <Calendar size={12} />
+              <span className="text-[10px] font-black uppercase tracking-widest">{dateLabel}</span>
+            </div>
+            {sessionsLabel && (
+              <span className="px-3 py-1.5 bg-black/70 backdrop-blur border border-white/20 rounded-full text-[10px] font-black uppercase tracking-widest">
+                {sessionsLabel}
+              </span>
+            )}
           </div>
         </div>
       </div>
