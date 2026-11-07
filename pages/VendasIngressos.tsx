@@ -20,6 +20,8 @@ import VendasTabs from '../components/VendasTabs';
 import EventPickerSheet from '../components/EventPickerSheet';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
+import SeatZoneLegend from '../components/SeatZoneLegend';
+import { priceForZone, priceRangeForType, zonePricingActive, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
 import { useSeatMap } from '../hooks/useSeatMap';
@@ -177,6 +179,7 @@ const VendasIngressos: React.FC = () => {
 
   // Assento numerado (Fase 2 Stage 4) — mini-mapa read-only + seletor no PDV
   const [seatMapEnabled, setSeatMapEnabled] = useState(false);
+  const [seatZones, setSeatZones] = useState<SeatZone[]>([]);
   const [pdvSelectedSeats, setPdvSelectedSeats] = useState<string[]>([]);
   // Venda PCD + acompanhante na MESMA venda (padrão Ticketmaster/Bilheteria Digital).
   const [pdvCompanion, setPdvCompanion] = useState(false);
@@ -203,11 +206,12 @@ const VendasIngressos: React.FC = () => {
     setErr(null);
     try {
       setEventId(targetEventId);
-      const { data: ev, error: evErr } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time, venue_id, session_group_id').eq('id', targetEventId).maybeSingle();
+      const { data: ev, error: evErr } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time, venue_id, session_group_id, seat_zones').eq('id', targetEventId).maybeSingle();
       if (evErr) console.error('[VendasIngressos] leitura do evento:', evErr.message);
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
+      setSeatZones(Array.isArray((ev as any)?.seat_zones) ? (ev as any).seat_zones : []);
       setSiblingSessions([]);
       if ((ev as any)?.session_group_id && (ev as any)?.seat_map_enabled && (ev as any)?.venue_id) {
         const { data: sibs, error: sibErr } = await supabase.from('events')
@@ -311,9 +315,11 @@ const VendasIngressos: React.FC = () => {
   }, [selectedEventId]);
 
   // ─── Assento numerado: layout (1x) + status (30s parado, 10s com PDV aberto) ─
-  const { rowsConfig, seatStatuses, refresh: refreshSeats } = useSeatMap({
+  const zonePriced = zonePricingActive(seatMapEnabled, seatZones, ticketTypes as any[]);
+  const { rowsConfig, seatStatuses, refresh: refreshSeats, zoneBySeat } = useSeatMap({
     eventId,
     enabled: seatMapEnabled,
+    withZones: zonePriced,
     pollMs: pdvOpen ? 10_000 : 30_000,
   });
 
@@ -1524,7 +1530,11 @@ const VendasIngressos: React.FC = () => {
                       className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50"
                     >
                       {ticketTypes.map((t, idx) => (
-                        <option key={idx} value={idx}>{t.nome} — {formatBRL(resolveDisplayPreco(t))}</option>
+                        <option key={idx} value={idx}>{t.nome} — {(() => {
+                          if (!zonePriced) return formatBRL(resolveDisplayPreco(t));
+                          const r = priceRangeForType(t as any, idx, seatZones, new Date().toISOString().slice(0, 10), { includeBase: true });
+                          return r.min === r.max ? formatBRL(r.min) : `${formatBRL(r.min)} a ${formatBRL(r.max)}`;
+                        })()}</option>
                       ))}
                     </select>
                   </div>
@@ -1569,8 +1579,15 @@ const VendasIngressos: React.FC = () => {
                           onBlocked={setPdvError}
                           canSellBlocked={canManageBlocks}
                           blockReasons={blockReasons}
+                          seatZoneColors={zonePriced ? Object.fromEntries(Object.entries(zoneBySeat).flatMap(([id, k]) => { const c = seatZones.find(z => z.key === k)?.cor; return c ? [[id, c]] : []; })) : undefined}
                         />
                         <SeatLegend rowsConfig={rowsConfig} variant="auto" showBlocked={canManageBlocks} />
+                        {zonePriced && (
+                          <SeatZoneLegend
+                            zones={seatZones}
+                            types={[{ idx: pdvTypeIdx, nome: ticketTypes[pdvTypeIdx]?.nome ?? '', priceByZone: Object.fromEntries(seatZones.map(z => [z.key, priceForZone((ticketTypes[pdvTypeIdx] ?? {}) as any, z.key, new Date().toISOString().slice(0, 10))])) }]}
+                          />
+                        )}
                       </div>
                       {pdvCompanionOffer && (
                         <div className="mt-2 flex items-center gap-3 bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 text-xs text-sky-700 dark:text-sky-200">
