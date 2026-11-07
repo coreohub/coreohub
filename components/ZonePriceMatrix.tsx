@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, Wand2 } from 'lucide-react';
 import {
-  isInteira, isMeia, meiaCeiling, missingZonePrices, validateZonePricing,
+  isInteira, isMeia, meiaCeiling, missingZonePrices, validateZonePricing, inteiraPriceAt, lotePeriod, ALL_TIME,
   type SeatZone, type ZoneLote, type ZonePrices, type ZonePricedType,
 } from '../supabase/functions/_shared/seat-zone-pricing';
 
@@ -78,11 +78,8 @@ export default function ZonePriceMatrix<T extends TicketLike>({ zones, ingressos
     if (!inteira) return;
     const t = ingressos[i];
     const half = (n: number) => Math.floor(Math.round(n * 100) / 2) / 100;
-    const inteiraLotes = inteira.lotes ?? [];
-    const priceAt = (loteIdx: number | null, zoneKey: string): number => {
-      const src = loteIdx == null || inteiraLotes.length === 0 ? inteira : inteiraLotes[Math.min(loteIdx, inteiraLotes.length - 1)];
-      return Number(src.precos_por_zona?.[zoneKey] ?? src.preco ?? 0);
-    };
+    const priceAt = (loteIdx: number | null, zoneKey: string): number =>
+      inteiraPriceAt(inteira, loteIdx == null ? ALL_TIME : lotePeriod(t.lotes, loteIdx), zoneKey);
     const build = (loteIdx: number | null): ZonePrices => {
       const out: ZonePrices = {};
       for (const z of zones) {

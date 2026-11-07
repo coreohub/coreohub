@@ -120,11 +120,38 @@ export function meiaCeiling(inteira: number): number {
   return Math.ceil(Math.round(inteira * 100) / 2) / 100
 }
 
-/** Preço (inteira) do mesmo lote e zona que uma meia; sem lote equivalente usa o último. */
-function inteiraPriceAt(inteira: ZonePricedType, loteIdx: number, zoneKey: string): number {
+/** Período de um lote: vale de `from` (exclusive) até `to` (inclusive); null = sem limite. */
+export type LotePeriod = { from: string | null; to: string | null }
+export const ALL_TIME: LotePeriod = { from: null, to: null }
+
+/** Período do lote j: depois da virada do lote anterior até a própria virada. */
+export function lotePeriod(lotes: ZoneLote[] | null | undefined, j: number): LotePeriod {
+  const ls = Array.isArray(lotes) ? lotes : []
+  return { from: j > 0 ? (ls[j - 1]?.data_virada ?? null) : null, to: ls[j]?.data_virada ?? null }
+}
+
+function periodsOverlap(a: LotePeriod, b: LotePeriod): boolean {
+  const froms = [a.from, b.from].filter((x): x is string => !!x)
+  const tos = [a.to, b.to].filter((x): x is string => !!x)
+  if (froms.length === 0 || tos.length === 0) return true
+  return froms.reduce((m, x) => (x > m ? x : m)) < tos.reduce((m, x) => (x < m ? x : m))
+}
+
+/**
+ * ÚNICA fonte da regra "meia = 50% da inteira do mesmo lote e zona". Lotes se alinham
+ * pelas DATAS, não pelo índice: devolve o menor preço de inteira (> 0) entre os lotes
+ * cujo período cruza `period` — o mais restritivo vale pro teto. Inteira sem lotes
+ * vale o tempo todo; sem lote cruzando, usa o último.
+ */
+export function inteiraPriceAt(inteira: ZonePricedType, period: LotePeriod, zoneKey: string): number {
   const lotes = Array.isArray(inteira.lotes) ? inteira.lotes : []
   if (lotes.length === 0) return priceOf(inteira, zoneKey)
-  return priceOf(lotes[Math.min(loteIdx, lotes.length - 1)], zoneKey)
+  const prices = lotes
+    .filter((_, k) => periodsOverlap(period, lotePeriod(lotes, k)))
+    .map(l => priceOf(l, zoneKey))
+    .filter(p => p > 0)
+  if (prices.length > 0) return Math.min(...prices)
+  return priceOf(lotes[lotes.length - 1], zoneKey)
 }
 
 /** Zonas × lotes sem preço informado (o servidor usa o preço-base; o painel avisa). */
@@ -192,7 +219,7 @@ export function validateMeiaCeiling(zones: SeatZone[], types: ZonePricedType[] &
       for (const { j, src } of slots) {
         for (const zk of zoneKeys) {
           const m = priceOf(src, zk)
-          const i = inteiraPriceAt(inteira, j, zk)
+          const i = inteiraPriceAt(inteira, lotes.length > 0 ? lotePeriod(lotes, j) : ALL_TIME, zk)
           if (m > 0 && i > 0 && round2(m) > meiaCeiling(i)) {
             const nomeZona = zk === DEFAULT_ZONE_KEY ? 'zona geral' : `zona "${zones.find(z => z.key === zk)?.nome ?? zk}"`
             errors.push(`${meia.nome ?? 'Meia'}${lotes.length > 0 ? ` (lote ${j + 1})` : ''}: preço acima de 50% da inteira na ${nomeZona}.`)
@@ -201,6 +228,34 @@ export function validateMeiaCeiling(zones: SeatZone[], types: ZonePricedType[] &
       }
     }
     }
+  }
+  return errors
+}
+
+/**
+ * Teto da meia NA VENDA: só o que está sendo comprado — meia do carrinho, na zona do
+ * assento, no lote vigente de hoje contra a inteira vigente hoje. Config errada num lote
+ * futuro (ou numa zona/tipo que ninguém comprou) não trava a venda; o salvamento do
+ * editor segue com a validação completa (validateMeiaCeiling).
+ */
+export function validateMeiaCeilingForSale(
+  types: ZonePricedType[],
+  picks: Array<{ idx: number; zoneKey: string }>,
+  today: string,
+): string[] {
+  const inteira = types.find(isInteira)
+  if (!inteira) return []
+  const errors: string[] = []
+  const seen = new Set<string>()
+  for (const { idx, zoneKey } of picks) {
+    const meia = types[idx]
+    if (!meia || !isMeia(meia) || (meia as { assento_tipo?: string | null }).assento_tipo) continue
+    const zk = normalizeZoneKey(zoneKey)
+    if (seen.has(`${idx}:${zk}`)) continue
+    seen.add(`${idx}:${zk}`)
+    const m = priceForZone(meia, zk, today)
+    const i = priceForZone(inteira, zk, today)
+    if (m > 0 && i > 0 && round2(m) > meiaCeiling(i)) errors.push(`${(meia as { nome?: string }).nome ?? 'Meia'}: preço acima de 50% da inteira.`)
   }
   return errors
 }
@@ -255,10 +310,6 @@ export function applyZonePricing<T extends { idx: number; quantity: number; seat
   zones?: SeatZone[] | null
 }): { resolved: Array<T & { zoneKey: string }>; seatIds: string[] } {
   const { resolved, ingressos, seatIds, seatInfo, assignments, today, quotePrices, zones } = opts
-  if (Array.isArray(zones)) {
-    const bad = validateMeiaCeiling(zones, ingressos as any)
-    if (bad.length > 0) throw new Error('Preço da meia-entrada acima do limite legal de 50% da inteira. Fale com a organização do evento.')
-  }
   const total = resolved.reduce((s, r) => s + r.quantity, 0)
   if (seatIds.length !== total) throw new Error(`Selecione exatamente ${total} assento(s)`)
 
@@ -322,6 +373,10 @@ export function applyZonePricing<T extends { idx: number; quantity: number; seat
       outItems.push({ ...r, quantity: ids.length, precoUnit: preco, zoneKey: zk })
       outSeats.push(...ids)
     }
+  }
+  if (Array.isArray(zones)) {
+    const bad = validateMeiaCeilingForSale(ingressos, outItems.map(o => ({ idx: o.idx, zoneKey: o.zoneKey })), today)
+    if (bad.length > 0) throw new Error('Preço da meia-entrada acima do limite legal de 50% da inteira. Fale com a organização do evento.')
   }
   return { resolved: outItems, seatIds: outSeats }
 }

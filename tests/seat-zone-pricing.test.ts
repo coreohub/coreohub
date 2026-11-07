@@ -143,7 +143,7 @@ describe('validateZonePricing', () => {
   })
 })
 
-import { validateMeiaCeiling, applyZonePricing, zonePricingActive, quoteZonePrices, resolveSeatAssignments, priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing'
+import { validateMeiaCeiling, inteiraPriceAt, lotePeriod, ALL_TIME, validateMeiaCeilingForSale, applyZonePricing, zonePricingActive, quoteZonePrices, resolveSeatAssignments, priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing'
 
 describe('zonePricingActive / quoteZonePrices', () => {
   it('só ativa com mapa, zonas e algum preço por zona', () => {
@@ -297,5 +297,55 @@ describe('travas de servidor (code review)', () => {
   it('meia de assento especial (PCD cadastrado como meia) não entra no teto de 50%', () => {
     const pcd = { nome: 'Plateia PCD', kind: 'meia', assento_tipo: 'pcd', preco: 50 } as ZonePricedType
     expect(validateMeiaCeiling(zones, [inteira, pcd])).toEqual([])
+  })
+})
+
+describe('teto da meia: alinhamento por data e escopo da venda', () => {
+  const inteiraD: ZonePricedType = {
+    nome: 'Inteira', kind: 'inteira', preco: 100,
+    lotes: [
+      { data_virada: '2026-11-30', preco: 100, precos_por_zona: { frente: 100 } },
+      { data_virada: null, preco: 120, precos_por_zona: { frente: 120 } },
+    ],
+  }
+  // Meia com lote futuro ERRADO (80 > 50% de 120), lote atual correto.
+  const meiaD: ZonePricedType = {
+    nome: 'Meia', kind: 'meia', preco: 50,
+    lotes: [
+      { data_virada: '2026-11-30', preco: 50, precos_por_zona: { frente: 50 } },
+      { data_virada: null, preco: 80, precos_por_zona: { frente: 80 } },
+    ],
+  }
+  const z: SeatZone[] = [{ key: 'frente', nome: 'Frente', cor: '#ff0068' }]
+
+  it('alinha lotes pela data: o menor preço de inteira que cruza o período', () => {
+    expect(inteiraPriceAt(inteiraD, lotePeriod(meiaD.lotes, 0), 'frente')).toBe(100)
+    expect(inteiraPriceAt(inteiraD, lotePeriod(meiaD.lotes, 1), 'frente')).toBe(120)
+    expect(inteiraPriceAt(inteiraD, ALL_TIME, 'frente')).toBe(100)
+  })
+  it('viradas diferentes: meia usa a inteira mais restritiva que cruza o período', () => {
+    const inteiraX: ZonePricedType = { ...inteiraD, lotes: [
+      { data_virada: '2026-11-15', preco: 60, precos_por_zona: { frente: 60 } },
+      { data_virada: null, preco: 120, precos_por_zona: { frente: 120 } },
+    ] }
+    // lote 0 da meia (até 30/11) cruza os dois lotes da inteira => 60
+    expect(inteiraPriceAt(inteiraX, lotePeriod(meiaD.lotes, 0), 'frente')).toBe(60)
+  })
+  it('o editor (validação completa) continua pegando o lote futuro errado', () => {
+    const errs = validateMeiaCeiling(z, [inteiraD, meiaD])
+    expect(errs.length).toBeGreaterThan(0)
+    expect(errs.every(e => e.includes('lote 2'))).toBe(true)
+  })
+  it('venda: lote futuro errado da meia não bloqueia a compra de Inteira nem da Meia vigente', () => {
+    const info = new Map([['A-1', { zone_key: 'frente', seat_tipo: 'comum' }]])
+    const item = (idx: number) => ({ idx, quantity: 1, seatKind: 'comum' as const, precoUnit: 0, nome: `t${idx}`, kind: idx === 1 ? 'meia' : 'inteira', quantidadeTotal: null })
+    for (const idx of [0, 1]) {
+      expect(() => applyZonePricing({ resolved: [item(idx)], ingressos: [inteiraD, meiaD], today: '2026-11-10', seatInfo: info, seatIds: ['A-1'], zones: z })).not.toThrow()
+    }
+  })
+  it('venda: meia vigente acima do teto continua barrada; depois da virada vale o lote novo', () => {
+    expect(validateMeiaCeilingForSale([inteiraD, meiaD], [{ idx: 1, zoneKey: 'frente' }], '2026-11-10')).toEqual([])
+    expect(validateMeiaCeilingForSale([inteiraD, meiaD], [{ idx: 1, zoneKey: 'frente' }], '2026-12-01').length).toBe(1)
+    expect(validateMeiaCeilingForSale([inteiraD, meiaD], [{ idx: 0, zoneKey: 'frente' }], '2026-12-01')).toEqual([])
   })
 })
