@@ -150,16 +150,24 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const [eventSessions, setEventSessions] = useState<Array<{
     id: string; slug: string | null; name: string; start_date: string | null; event_time: string | null; is_current: boolean;
   }>>([]);
-  // Escolher uma sessão no seletor: a sessão padrão (primeira futura) fica sem ?sessao= quando é a
-  // do próprio link principal; as demais levam a chave legível do slug (?sessao=sessao-2). Sempre explícito
-  // se não for a padrão, senão a regra de abrir na primeira sessão futura devolveria o comprador pra outra.
+  // Várias sessões e nenhuma escolhida (sem ?sessao=): os ingressos ficam bloqueados até o comprador escolher.
+  const needsSessionChoice = eventSessions.length > 1 && !sessaoParam && !forcedSlug;
+  // Depois de escolher, rola até os ingressos quando a sessão terminar de carregar.
+  const scrollToTicketsRef = React.useRef(false);
   const pickSession = (s: { id: string; slug: string | null; start_date: string | null; event_time: string | null }) => {
-    const today = todayISO();
-    const firstFuture = eventSessions.find(x => x.start_date && String(x.start_date) >= today);
-    const isPrincipal = !!event?.session_group_id && s.id === event.session_group_id;
     const principalSlug = eventSessions.find(x => x.id === event?.session_group_id)?.slug ?? idOrSlug ?? null;
-    selectSessao(isPrincipal && firstFuture?.id === s.id ? null : sessionKey(principalSlug, s));
+    scrollToTicketsRef.current = true;
+    selectSessao(sessionKey(principalSlug, s));
   };
+  useEffect(() => {
+    if (!scrollToTicketsRef.current || loading || !event) return;
+    scrollToTicketsRef.current = false;
+    const t = setTimeout(() => {
+      const el = document.getElementById('ingressos');
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - HEADER_HEIGHT - 8, behavior: 'smooth' });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [loading, event?.id]);
   // Página pública do produtor — preenche o espaço vazio da coluna da foto
   // no hero (abaixo dos ícones de rede social) só quando o produtor ativou
   // a própria página em /profile. null = não tem página pública ativa.
@@ -354,21 +362,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             if (error) console.error('[PublicEventPage] erro ao buscar sessões:', error);
             const list = Array.isArray(data) ? (data as any[]) : [];
             setEventSessions(list);
-            // Sem ?sessao=: abre na primeira sessão futura (a lista já vem ordenada por data).
-            if (!sessaoParam && !forcedSlug && list.length > 1) {
-              const today = todayISO();
-              const sortKey = (s: any) => `${s.start_date ?? ''} ${s.event_time ?? ''}`;
-              const firstFuture = list.find(s => s.start_date && String(s.start_date) >= today);
-              const current = list.find(s => s.is_current);
-              // Empate de data/hora: fica na sessão atual em vez de pular pra irmã.
-              const currentIsEarliest = !!current?.start_date && String(current.start_date) >= today
-                && !!firstFuture && sortKey(current) <= sortKey(firstFuture);
-              if (firstFuture && !firstFuture.is_current && !currentIsEarliest) {
-                const next = new URLSearchParams(searchParams);
-                next.set('sessao', sessionKey(eventData.slug, firstFuture));
-                setSearchParams(next, { replace: true });
-              }
-            }
+            // Sem ?sessao=: nenhuma sessão vem marcada — o comprador escolhe antes de ver os ingressos.
           },
           () => setEventSessions([]),
         );
@@ -1001,7 +995,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       return { kind: 'link' as const, to: `/festival/${slugOrId}/register`, label: 'Inscreva-se' };
     }
     if (!eventOver && hasPurchasableIngressos) {
-      return { kind: 'anchor' as const, id: 'ingressos', label: 'Comprar ingresso' };
+      return needsSessionChoice
+        ? { kind: 'anchor' as const, id: 'sessoes', label: 'Escolher sessão' }
+        : { kind: 'anchor' as const, id: 'ingressos', label: 'Comprar ingresso' };
     }
     if (!eventOver && hasWorkshopsSection) {
       return { kind: 'anchor' as const, id: 'workshops', label: 'Ver workshops' };
@@ -1494,32 +1490,27 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <Calendar size={24} className="text-[#ff0068]" /> Escolha a sessão
             </h2>
-            <div className="space-y-2">
+            {needsSessionChoice && (
+              <p className="text-xs text-slate-400">Escolha a sessão que você quer assistir para ver os ingressos.</p>
+            )}
+            <div role="radiogroup" aria-label="Sessões" className={`grid grid-cols-1 gap-3 ${eventSessions.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
               {eventSessions.map(s => {
-                const inner = (
-                  <>
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm text-white">{formatDate(s.start_date ?? undefined)}</p>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{s.name}</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-2xl font-black text-[#ff0068] tabular-nums tracking-tighter">{s.event_time?.slice(0, 5) || '--:--'}</p>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        {s.is_current ? 'Sessão escolhida' : 'Escolher'}
-                      </p>
-                    </div>
-                  </>
-                );
-                const base = 'flex items-center justify-between gap-4 p-4 border rounded-2xl transition-colors ';
-                return s.is_current ? (
-                  <div key={s.id} aria-current="true" className={base + 'bg-[#ff0068]/10 border-[#ff0068]/40'}>{inner}</div>
-                ) : (
+                const selected = !needsSessionChoice && s.is_current;
+                return (
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => { pickSession(s); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                    className={base + 'w-full text-left bg-white/5 border-white/10 hover:border-[#ff0068]/30'}
-                  >{inner}</button>
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => { if (!selected) pickSession(s); else scrollToSection('ingressos'); }}
+                    className={`relative text-left p-5 border rounded-2xl transition-colors ${selected ? 'bg-[#ff0068]/10 border-[#ff0068] ring-1 ring-[#ff0068]/50' : 'bg-white/5 border-white/10 hover:border-[#ff0068]/50'}`}
+                  >
+                    <p className="font-bold text-sm text-white">{formatDate(s.start_date ?? undefined)}</p>
+                    <p className="text-4xl font-black text-[#ff0068] tabular-nums tracking-tighter mt-2">{s.event_time?.slice(0, 5) || '--:--'}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">
+                      {selected ? 'Sessão escolhida' : 'Escolher esta sessão'}
+                    </p>
+                  </button>
                 );
               })}
             </div>
@@ -1538,6 +1529,25 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               : 'NAO_DEFINIDO');
 
           if (politica === 'NAO_DEFINIDO') return null;
+
+          // Várias sessões e nenhuma escolhida: aviso visível em vez de preços (a sessão muda data, lugares e preço).
+          if (needsSessionChoice && politica !== 'GRATUITO') {
+            return (
+              <div id="ingressos" className="space-y-4 scroll-mt-20">
+                <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+                  <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => scrollToSection('sessoes')}
+                  className="w-full text-left bg-white/5 border border-dashed border-[#ff0068]/40 rounded-2xl p-5 hover:border-[#ff0068] transition-colors"
+                >
+                  <p className="font-black uppercase text-sm text-[#ff0068]">Escolha a sessão para ver os ingressos</p>
+                  <p className="text-xs text-slate-400 mt-1">Dia, horário e lugares mudam de uma sessão para outra.</p>
+                </button>
+              </div>
+            );
+          }
 
           if (politica === 'GRATUITO') {
             const notaCustom = config?.entrada_gratuita_nota?.trim();
