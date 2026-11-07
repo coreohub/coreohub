@@ -111,7 +111,7 @@ const TagToggle = ({
 /* Main Page                                                   */
 /* ────────────────────────────────────────────────────────── */
 
-interface EventOption { id: string; name: string; is_demo?: boolean | null; edition_year?: number | null; start_date?: string | null; }
+interface EventOption { id: string; name: string; is_demo?: boolean | null; edition_year?: number | null; start_date?: string | null; event_time?: string | null; }
 
 const JudgesManagement = () => {
   const [judges, setJudges] = useState<Judge[]>([]);
@@ -316,7 +316,7 @@ const JudgesManagement = () => {
       if (!user) return;
       const { data } = await supabase
         .from('events')
-        .select('id, name, is_demo, edition_year, start_date')
+        .select('id, name, is_demo, edition_year, start_date, event_time')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {

@@ -80,7 +80,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (!user) return;
       const { data } = await supabase
         .from('events')
-        .select('id, name, edition_year, is_demo, start_date')
+        .select('id, name, edition_year, is_demo, start_date, event_time')
         .eq('created_by', user.id)
         .order('is_demo', { ascending: true })
         .order('created_at', { ascending: false });

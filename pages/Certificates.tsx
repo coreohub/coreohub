@@ -225,7 +225,7 @@ const Certificates: React.FC = () => {
     const teamEventIds = await fetchMyTeamEventIds();
     const { data: evs } = await supabase
       .from('events')
-      .select('id, name, edition_year, is_demo, start_date')
+      .select('id, name, edition_year, is_demo, start_date, event_time')
       .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
       .order('is_demo', { ascending: true })
       .order('created_at', { ascending: false });

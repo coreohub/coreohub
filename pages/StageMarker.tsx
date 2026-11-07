@@ -103,7 +103,7 @@ const StageMarker = () => {
       const teamEventIds = await fetchMyTeamEventIds();
       const query = supabase
         .from('events')
-        .select('id,name,edition_year,start_date,created_at,is_demo')
+        .select('id,name,edition_year,start_date,event_time,created_at,is_demo')
         .order('created_at', { ascending: false });
       const { data } = await query.or(ownedOrTeamEventsFilter(user.id, teamEventIds));
       if (data && data.length > 0) {

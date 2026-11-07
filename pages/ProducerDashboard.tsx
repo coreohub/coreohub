@@ -161,7 +161,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const [funnelCohort, setFunnelCohort] = useState<'all' | 'week' | 'month'>('all');
 
   /* ── Edition selector ── */
-  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; formacoes_config?: any[]; is_demo?: boolean; event_type?: string; setup_fee_paid_at?: string | null; setup_fee_grandfathered?: boolean; setup_fee_tier_chave?: string | null }[]>([]);
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; event_time?: string | null; formacoes_config?: any[]; is_demo?: boolean; event_type?: string; setup_fee_paid_at?: string | null; setup_fee_grandfathered?: boolean; setup_fee_tier_chave?: string | null }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [asaasConnected, setAsaasConnected] = useState(false);
   // Taxa de ativação de evento gratuito (Modelo B, 2026-08-02) — ver bloco
@@ -182,7 +182,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
       }
       const { data } = await supabase
         .from('events')
-        .select('id,name,slug,is_public,edition_year,start_date,formacoes_config,is_demo,created_at,event_type,setup_fee_paid_at,setup_fee_grandfathered,setup_fee_tier_chave')
+        .select('id,name,slug,is_public,edition_year,start_date,event_time,formacoes_config,is_demo,created_at,event_type,setup_fee_paid_at,setup_fee_grandfathered,setup_fee_tier_chave')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
