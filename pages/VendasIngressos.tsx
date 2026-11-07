@@ -292,7 +292,10 @@ const VendasIngressos: React.FC = () => {
       ]);
       if (events) setAllEvents(events);
       if (!defaultId) { setErr('Nenhum evento ativo encontrado.'); setLoading(false); return; }
-      setSelectedEventId(prev => prev ?? defaultId);
+      // ?evento=<id> abre direto num evento (só vale se ele estiver na lista deste usuário).
+      const wanted = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('evento') : null;
+      const wantedOk = wanted && (events ?? []).some((e: any) => e.id === wanted) ? wanted : null;
+      setSelectedEventId(prev => prev ?? wantedOk ?? defaultId);
     })();
   }, []);
 

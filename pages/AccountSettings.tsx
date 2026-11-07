@@ -3877,7 +3877,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </p>
                   <button
                     type="button"
-                    onClick={() => navigate('/vendas-ingressos?aba=tipos')}
+                    onClick={() => navigate(`/vendas-ingressos?aba=tipos${activeEventId ? `&evento=${activeEventId}` : ''}`)}
                     className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
                   >
                     Abrir tipos e preços
