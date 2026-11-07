@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
@@ -11,7 +10,6 @@ import BrandIcon from '../components/BrandIcon';
 import { Event } from '../types';
 import { priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing';
 import { precoVigente } from '../utils/lotes';
-import { sessionPath } from '../utils/sessionCode';
 
 const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT',
@@ -151,7 +149,7 @@ const Festivais = () => {
           const g = e.session_group_id ? groups.get(e.session_group_id) : null;
           if (!g || g.length < 2) return e;
           const sessions = g.filter(x => x.sessao_status !== 'cancelada')
-            .map(x => ({ id: x.id as string, slug: x.slug as string | null, start_date: x.start_date as string | null, event_time: x.event_time as string | null }))
+            .map(x => ({ start_date: x.start_date as string | null, event_time: x.event_time as string | null }))
             .sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? '') || (a.event_time ?? '').localeCompare(b.event_time ?? ''));
           const live = g.filter(x => x.sessao_status !== 'cancelada');
           const first = sessions[0];
@@ -479,27 +477,17 @@ const EventCard: React.FC<{
   const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || (event as any).location;
   const target = `/evento/${event.slug ?? event.id}`;
   // Várias sessões do mesmo espetáculo: "2 sessões · 15h30 e 19h30" (mesmo dia) ou só a contagem.
-  const sessions: Array<{ id: string; slug: string | null; start_date: string | null; event_time: string | null }> = (event as any).__sessions ?? [];
-  const [pickOpen, setPickOpen] = useState(false);
-  const navigate = useNavigate();
-  const multi = sessions.length >= 2;
+  const sessions: Array<{ start_date: string | null; event_time: string | null }> = (event as any).__sessions ?? [];
   const hhmm = (t?: string | null) => (t ? t.slice(0, 5).replace(':', 'h') : '');
   const sessionsLabel = sessions.length >= 2
     ? `${sessions.length} sessões${sessions.every(x => x.start_date === sessions[0].start_date) && sessions.every(x => x.event_time)
         ? ` · ${sessions.map(x => hhmm(x.event_time)).join(' e ')}` : ''}`
     : null;
 
-  const cardClass = `group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 hover:border-[#ff0068]/40 transition-all flex flex-col text-left w-full ${muted ? 'opacity-70 hover:opacity-100' : ''}`;
-  // Sempre um link real (crawlável); com várias sessões o clique abre o seletor em vez de navegar.
-  const Wrapper: any = Link;
-  const wrapperProps: any = multi ? { to: target, onClick: (e: React.MouseEvent) => { e.preventDefault(); setPickOpen(true); } } : { to: target };
-  const fmtDay = (d?: string | null) => d ? new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long' }) : '';
-
   return (
-    <>
-    <Wrapper
-      {...wrapperProps}
-      className={cardClass}
+    <Link
+      to={target}
+      className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 hover:border-[#ff0068]/40 transition-all flex flex-col ${muted ? 'opacity-70 hover:opacity-100' : ''}`}
     >
       <div className="relative aspect-[1200/630] overflow-hidden bg-slate-900">
         {event.cover_url ? (
@@ -560,33 +548,7 @@ const EventCard: React.FC<{
           <ChevronRight size={16} className="text-[#ff0068] group-hover:translate-x-1 transition-transform" />
         </div>
       </div>
-    </Wrapper>
-    {pickOpen && createPortal(
-      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 p-4" onClick={() => setPickOpen(false)}>
-        <div role="dialog" aria-modal="true" aria-label="Escolha a sessão" className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0b0b] p-6" onClick={e => e.stopPropagation()}>
-          <div className="flex items-start justify-between gap-4 mb-1">
-            <h2 className="text-xl font-black uppercase tracking-tighter italic text-white">Escolha a sessão</h2>
-            <button type="button" aria-label="Fechar" onClick={() => setPickOpen(false)} className="p-1 text-slate-400 hover:text-white"><X size={20} /></button>
-          </div>
-          <p className="text-xs text-slate-400 mb-4">{event.name}</p>
-          <div className="space-y-2">
-            {sessions.map(x => (
-              <button
-                key={x.id}
-                type="button"
-                onClick={() => navigate(sessionPath(event.slug ?? event.id, x, event.id))}
-                className="w-full flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 hover:border-[#ff0068]/60 px-4 py-3 transition-colors"
-              >
-                <span className="text-sm font-bold text-white capitalize">{fmtDay(x.start_date)}</span>
-                <span className="text-xl font-black text-[#ff0068]">{x.event_time ? x.event_time.slice(0, 5) : ''}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
-    </>
+    </Link>
   );
 };
 
