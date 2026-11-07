@@ -108,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const evCols = 'id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original,session_group_id';
+    const evCols = 'id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,seat_zones,seat_map_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original,session_group_id';
     const restUrl = `${SUPABASE_URL}/rest/v1/events?select=${evCols}&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
@@ -138,8 +138,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       state: string | null;
       location: string | null;
       formacoes_config: Array<{ name: string; is_active?: boolean }> | null;
-      ingressos_config: Array<{ nome?: string; preco?: number | string; lotes?: Array<{ preco?: number | string; data_inicio?: string | null; data_virada?: string | null }> }> | null;
+      ingressos_config: Array<{ nome?: string; preco?: number | string; precos_por_zona?: Record<string, number | string> | null; lotes?: Array<{ preco?: number | string; precos_por_zona?: Record<string, number | string> | null; data_inicio?: string | null; data_virada?: string | null }> }> | null;
       audience_sales_enabled: boolean | null;
+      seat_zones?: Array<{ key: string; nome: string }> | null;
+      seat_map_enabled?: boolean | null;
       payment_sandbox: boolean | null;
       sessao_status: string | null;
       sessao_motivo: string | null;
@@ -300,17 +302,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // pra esta função em vez de rodar o React de verdade.
     // Ingressos de plateia (só com venda pelo CoreoHub ligada): preço vigente
     // do lote de hoje, com URL do checkout — Google exige offers.url crawleável.
-    const todayIso = new Date().toISOString().slice(0, 10);
+    // Data de hoje no Brasil (UTC-3): a virada de lote é por dia local, não UTC.
+    const todayIso = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
     // Sessão cancelada: ingressos e workshops deixam de ser ofertáveis para o Google.
     const offerAvailability = sessaoCancelada ? 'https://schema.org/Discontinued' : 'https://schema.org/InStock';
+    // Preço por zona do mapa (ex.: Meio / Laterais): uma Offer por zona, com o
+    // preço do lote vigente — senão o Google/IA só enxergariam o preço-base.
+    const seatZones = ev.seat_map_enabled && Array.isArray(ev.seat_zones) ? ev.seat_zones : [];
     const ticketOffers = (ev.audience_sales_enabled && Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [])
-      .map((t, idx) => {
+      .flatMap((t, idx) => {
         const lotes = Array.isArray(t.lotes) ? t.lotes : [];
         const vigente = lotes.find((l) => (!l.data_inicio || l.data_inicio <= todayIso) && (!l.data_virada || l.data_virada >= todayIso));
-        const price = Number(vigente?.preco ?? t.preco ?? 0);
-        return { nome: t.nome, price, idx };
+        const basePrice = Number(vigente?.preco ?? t.preco ?? 0);
+        const zonePrices = (vigente?.precos_por_zona ?? t.precos_por_zona ?? {}) as Record<string, number | string>;
+        const lines: Array<{ nome: string; price: number }> = [];
+        if (seatZones.length > 0) {
+          for (const z of seatZones) {
+            const zp = zonePrices[z.key];
+            const price = zp != null && Number(zp) > 0 ? Number(zp) : basePrice;
+            lines.push({ nome: `${t.nome} - ${z.nome}`, price });
+          }
+        } else {
+          lines.push({ nome: t.nome ?? '', price: basePrice });
+        }
+        return lines.map((l) => ({ ...l, idx, hasName: !!t.nome }));
       })
-      .filter((t) => t.nome && t.price > 0)
+      .filter((t) => t.hasName && t.price > 0)
       .map((t) => ({
         '@type': 'Offer',
         name: t.nome,
