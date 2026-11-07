@@ -17,6 +17,39 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const SITE_URL = 'https://coreohub.com';
+const APP_URL = 'https://app.coreohub.com';
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://ghpltzzijlvykiytwslu.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+
+// Lista de eventos futuros para o HTML do bot em /festivais (quem não roda JavaScript não vê a lista React).
+// Mesmos filtros da vitrine: público, não sandbox, com capa e descrição. Sessões extras viram ?sessao=<chave>.
+type EvRow = { id: string; slug: string | null; name: string; start_date: string | null; event_time: string | null; city: string | null; state: string | null; session_group_id: string | null; sessao_status: string | null };
+const fetchUpcomingEventLinks = async (): Promise<Array<{ href: string; label: string }>> => {
+  if (!SUPABASE_ANON_KEY) return [];
+  try {
+    const today = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+    const q = `${SUPABASE_URL}/rest/v1/events?select=id,slug,name,start_date,event_time,city,state,session_group_id,sessao_status&is_public=eq.true&payment_sandbox=eq.false&cover_url=not.is.null&description=not.is.null&start_date=gte.${today}&order=start_date.asc&limit=100`;
+    const r = await fetch(q, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+    if (!r.ok) return [];
+    const rows = ((await r.json()) as EvRow[]).filter((e) => e.slug && e.sessao_status !== 'cancelada');
+    const principalSlugById = new Map(rows.filter((e) => e.session_group_id === e.id).map((e) => [e.id, e.slug as string]));
+    return rows.map((e) => {
+      const principal = e.session_group_id && e.session_group_id !== e.id ? principalSlugById.get(e.session_group_id) : undefined;
+      const slug = e.slug as string;
+      const href = principal
+        ? `${APP_URL}/evento/${principal}?sessao=${slug.startsWith(`${principal}-`) ? slug.slice(principal.length + 1) : slug}`
+        : `${APP_URL}/evento/${slug}`;
+      const [y, m, d] = (e.start_date ?? '').split('-');
+      const hora = e.event_time && /^\d{1,2}:\d{2}/.test(e.event_time) ? ` ${e.event_time.slice(0, 5)}` : '';
+      const where = [e.city, e.state].filter(Boolean).join('/');
+      return { href, label: `${e.name} — ${d}/${m}/${y}${hora}${where ? ` — ${where}` : ''}` };
+    });
+  } catch (err) {
+    console.error('[api/og-marketing] eventos futuros falhou:', err);
+    return [];
+  }
+};
 const DEFAULT_IMAGE = `${SITE_URL}/og-image.jpg`;
 
 const esc = (s: string): string =>
@@ -504,7 +537,7 @@ const PAGES: Record<string, PageMeta> = {
   },
 };
 
-const html = (meta: PageMeta): string => {
+const html = (meta: PageMeta, eventLinks: Array<{ href: string; label: string }> = []): string => {
   const url = `${SITE_URL}${meta.path}`;
   const image = meta.image ?? DEFAULT_IMAGE;
   const ogTitle = meta.ogTitle ?? meta.title;
@@ -543,6 +576,10 @@ ${meta.jsonLd ? `<script type="application/ld+json">${JSON.stringify(meta.jsonLd
 <p>${esc(meta.description)}</p>
 ${meta.bullets ? `<ul>\n${meta.bullets.map((b) => `<li>${esc(b)}</li>`).join('\n')}\n</ul>` : ''}
 ${meta.faq ? meta.faq.map((i) => `<h2>${esc(i.q)}</h2>\n<p>${esc(i.a)}</p>`).join('\n') : ''}
+${eventLinks.length > 0 ? `<h2>Próximos eventos</h2>
+<ul>
+${eventLinks.map((l) => `<li><a href="${esc(l.href)}">${esc(l.label)}</a></li>`).join('\n')}
+</ul>` : ''}
 <p><a href="${esc(url)}">Acesse a página completa</a></p>
 <nav aria-label="Páginas da CoreoHub">
 <ul>
@@ -564,5 +601,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
-  res.status(200).send(html(meta));
+  const eventLinks = page === 'festivais' ? await fetchUpcomingEventLinks() : [];
+  res.status(200).send(html(meta, eventLinks));
 }
