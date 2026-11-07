@@ -108,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const evCols = 'id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,seat_zones,seat_map_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original,session_group_id,created_by';
+    const evCols = 'id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,seat_zones,seat_map_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original,session_group_id,created_by,billing_plan';
     const restUrl = `${SUPABASE_URL}/rest/v1/events?select=${evCols}&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
@@ -148,6 +148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessao_data_original: string | null;
       session_group_id: string | null;
       created_by?: string | null;
+      billing_plan?: string | null;
     }>;
 
     // `let` porque ?sessao= troca pelo evento da sessão; o `as` mantém o tipo sem undefined dentro dos callbacks.
@@ -254,7 +255,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? 'Sessão cancelada'
       : sessaoAdiada
         ? 'Sessão adiada'
-        : isRegistrationOpen
+        : ev.billing_plan === 'espetaculo'
+          // Espetáculo não tem inscrição de festival: o status é de venda de ingresso, não de prazo de inscrição.
+          ? (eventOver ? 'Evento encerrado' : ev.audience_sales_enabled ? 'Ingressos à venda' : 'Evento confirmado')
+          : isRegistrationOpen
       ? 'Inscrições abertas'
       : eventOver
         ? 'Confira o resultado'

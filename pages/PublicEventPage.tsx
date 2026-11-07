@@ -96,6 +96,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const [event, setEvent] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // Troca de sessão dentro do mesmo evento: a página continua visível (sem spinner de tela cheia);
+  // só a área de ingressos fica esmaecida até os dados da sessão nova chegarem.
+  const [switchingSession, setSwitchingSession] = useState(false);
+  const loadedForRef = React.useRef<string | null>(null);
   const [copied, setCopied] = useState(false);
   // Fase 4B — gate que adia view_event até ProducerPixels ter configurado o
   // GA4/Pixel do produtor. Sem isso, eventos disparados antes do `config`
@@ -188,7 +192,8 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     if (!idOrSlug) return;
 
     const fetchData = async () => {
-      setLoading(true);
+      if (loadedForRef.current === idOrSlug) setSwitchingSession(true);
+      else setLoading(true);
       setCart({});
       try {
         // UUID v4 tem 36 chars com hifens — se nao for UUID, trata como slug
@@ -515,7 +520,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       } catch (err) {
         console.error('Erro ao carregar evento:', err);
       } finally {
+        loadedForRef.current = idOrSlug;
         setLoading(false);
+        setSwitchingSession(false);
       }
     };
 
@@ -790,7 +797,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Funciona pra Googlebot (executa JS no indexing). Bots de preview do WhatsApp/
   // Telegram/Insta NÃO executam JS — preview neles continua genérico até Subfase 3.2
   // (prerender server-side via Vercel Edge Middleware).
-  const seoStatusLabel = isRegistrationOpen
+  const seoStatusLabel = isEspetaculo
+    ? (eventOver ? 'Evento encerrado' : (event as any).audience_sales_enabled ? 'Ingressos à venda' : 'Evento confirmado')
+    : isRegistrationOpen
     ? 'Inscrições abertas'
     : eventOver
       ? 'Confira o resultado'
@@ -1534,7 +1543,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           // Várias sessões e nenhuma escolhida: aviso visível em vez de preços (a sessão muda data, lugares e preço).
           if (needsSessionChoice && politica !== 'GRATUITO') {
             return (
-              <div id="ingressos" className="space-y-4 scroll-mt-20">
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
@@ -1553,7 +1562,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           if (politica === 'GRATUITO') {
             const notaCustom = config?.entrada_gratuita_nota?.trim();
             return (
-              <div id="ingressos" className="space-y-4 scroll-mt-20">
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-emerald-400" /> Ingressos
                 </h2>
@@ -1579,7 +1588,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
           if (politica === 'EXTERNO' && config?.url_ingressos) {
             return (
-              <div id="ingressos" className="space-y-4 scroll-mt-20">
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
@@ -1620,7 +1629,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               .filter((t: any) => !salesEnabled || precoVigenteIngresso(t) > 0);
             if (visibleTypes.length === 0) return null;
             return (
-              <div id="ingressos" className="space-y-4 scroll-mt-20">
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
