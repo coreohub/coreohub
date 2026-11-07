@@ -3,7 +3,14 @@ import { termsVersionAtLeast } from '../supabase/functions/_shared/terms-version
 
 export type Bullet = { title: string; text: string; clauses: string };
 
-// Novidade da 1.10: vale para todos, inclusive quem já aceitou a 1.9.
+// Novidade da 1.11: vale para todos, inclusive quem já aceitou a 1.10.
+const BULLET_V111: Bullet = {
+  title: 'Meia-entrada: responsabilidade e regresso',
+  text: 'A CoreoHub responde perante o consumidor como comercializadora primária. Como a conferência do documento na portaria é sua, se a CoreoHub tiver que pagar multa ou indenização por meia-entrada ofertada ou conferida em desacordo com a lei, você responde em regresso, na medida da sua culpa, com memória de cálculo e compensação conforme a cláusula 13.',
+  clauses: 'cláusula 6.4',
+};
+
+// Novidade da 1.10: vale para quem aceitou uma versão anterior à 1.10.
 const BULLET_V110: Bullet = {
   title: 'Transferência do saldo liberado',
   text: 'O botão "Transferir agora" passa a enviar só o saldo que já passou dos 7 dias de retenção. Não há mais antecipação do saldo ainda retido. O saldo liberado continua indo automaticamente para o seu PIX, sem custo.',
@@ -29,8 +36,10 @@ const BULLETS_V19: Bullet[] = [
   },
 ];
 
-/** Resumo certo para cada produtor: quem está na 1.9 vê só o que a 1.10 mudou; os demais veem tudo. */
+/** Resumo certo para cada produtor: quem está na 1.10 vê só o que a 1.11 mudou; quem está na 1.9 vê a 1.10 e a 1.11; os demais veem tudo. */
 export function termoBullets(acceptedVersion: string | null | undefined): Bullet[] {
-  return termsVersionAtLeast(acceptedVersion, '1.9') ? [BULLET_V110] : [...BULLETS_V19, BULLET_V110];
+  if (termsVersionAtLeast(acceptedVersion, '1.10')) return [BULLET_V111];
+  if (termsVersionAtLeast(acceptedVersion, '1.9')) return [BULLET_V110, BULLET_V111];
+  return [...BULLETS_V19, BULLET_V110, BULLET_V111];
 }
 

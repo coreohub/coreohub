@@ -57,6 +57,9 @@ import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 // 1.9 → 1.10 (2026-10-20): cláusula 12.3 deixa de prever antecipação do saldo retido e passa a tratar
 // só da transferência do saldo já liberado; 12.4 tira "o mecanismo de antecipação"; 11.12 remete à
 // cláusula 11.11. Sem renumeração.
+// 1.10 → 1.11 (2026-11-07): cláusula 6 ganha 6.4 (responsabilidade perante o consumidor e regresso
+// do Produtor por meia-entrada ofertada ou conferida em desacordo com a lei, na medida da culpa,
+// com memória de cálculo e compensação pela cláusula 13). Sem renumeração. Vigência 2026-11-14.
 export { TERMO_PRODUTOR_VERSION };
 
 const TermoProdutor: React.FC = () => {
@@ -249,6 +252,13 @@ const TermoProdutor: React.FC = () => {
             <p>
               6.3. O Produtor confere, na portaria, o documento que comprova o direito à meia-entrada e cobra a diferença de quem não comprovar. Se o
               ingresso for transferido, a comprovação passa a ser exigida do novo titular.
+            </p>
+            <p>
+              6.4. <strong>Responsabilidade perante o consumidor e regresso.</strong> Perante o consumidor, a CoreoHub responde como comercializadora primária
+              (Decreto nº 13.108/2026, art. 4º, §1º). Como a definição dos tipos de ingresso e a conferência do documento na portaria cabem ao Produtor
+              (cláusulas 6.2 e 6.3), o Produtor responde, em regresso, pelos valores que a CoreoHub pagar ou deixar de receber em razão de meia-entrada
+              ofertada ou conferida em desacordo com a lei, na medida da sua culpa, inclusive multas e indenizações. A CoreoHub informa o Produtor,
+              apresenta a memória de cálculo e pode compensar o valor nos termos da cláusula 13.
             </p>
           </section>
 

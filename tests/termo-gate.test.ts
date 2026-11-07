@@ -33,18 +33,23 @@ describe('termoGateStatus (aviso antes, tela obrigatória na vigência)', () => 
 });
 
 describe('resumo do aceite por versão aceita', () => {
-  it('quem está na 1.9 vê só a novidade da 1.10', () => {
-    const b = termoBullets('1.9');
+  it('quem está na 1.10 vê só a novidade da 1.11', () => {
+    const b = termoBullets('1.10');
     expect(b).toHaveLength(1);
+    expect(b[0].clauses).toContain('6.4');
+  });
+  it('quem está na 1.9 vê as novidades da 1.10 e da 1.11', () => {
+    const b = termoBullets('1.9');
+    expect(b).toHaveLength(2);
     expect(b[0].clauses).toContain('12.3');
   });
   it('versão mais antiga ou ausente vê o resumo completo', () => {
-    expect(termoBullets('1.8')).toHaveLength(4);
-    expect(termoBullets(null)).toHaveLength(4);
+    expect(termoBullets('1.8')).toHaveLength(5);
+    expect(termoBullets(null)).toHaveLength(5);
   });
   it('1.10 é maior que 1.9 (comparação numérica, não de texto)', () => {
     expect(termsVersionAtLeast('1.10', '1.9')).toBe(true);
     expect(termsVersionAtLeast('1.9', '1.10')).toBe(false);
-    expect(TERMO_PRODUTOR_VERSION).toBe('1.10');
+    expect(TERMO_PRODUTOR_VERSION).toBe('1.11');
   });
 });

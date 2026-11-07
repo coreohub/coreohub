@@ -2,15 +2,15 @@
 // telas leves (wizard de criação, avisos) poderem comparar a versão aceita sem
 // puxar a página inteira do Termo (pages/TermoProdutor.tsx, que a re-exporta).
 // O histórico de mudanças de cada versão está em pages/TermoProdutor.tsx.
-export const TERMO_PRODUTOR_VERSION = '1.10';
+export const TERMO_PRODUTOR_VERSION = '1.11';
 
 /**
  * Data de vigência da versão atual do Termo (estilo "avisamos antes, vale para todos a partir de X").
  * Antes dela o produtor vê um aviso e pode aceitar quando quiser; a partir dela a tela de aceite é
- * obrigatória no painel (sem "ver depois"). 1.10: vigência 2026-10-27 (7 dias depois da publicação, com aviso no painel).
+ * obrigatória no painel (sem "ver depois"). 1.11: vigência 2026-11-14 (7 dias depois da publicação, com aviso no painel).
  * Ao publicar uma versão nova, trocar esta data junto com TERMO_PRODUTOR_VERSION.
  */
-export const TERMO_PRODUTOR_VIGENCIA_ISO = '2026-10-27T00:00:00-03:00';
+export const TERMO_PRODUTOR_VIGENCIA_ISO = '2026-11-14T00:00:00-03:00';
 
 /** Versão que tirou a antecipação do saldo retido (cláusula 12.3). */
 export const TERMO_ANTECIPACAO_OFF_VERSION = '1.10';
