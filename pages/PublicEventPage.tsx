@@ -2216,11 +2216,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           </div>
         )}
 
-        {/* CTA */}
+        {/* CTA (só com inscrição; evento só de ingresso/workshop não tem bloco 'Pronto pra viver...') */}
+        {hasFormacoes && (
         <div className="bg-gradient-to-r from-[#ff0068]/20 to-transparent border border-[#ff0068]/20 rounded-[3rem] p-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
             <h3 className="text-3xl font-black uppercase tracking-tighter italic">
-              {hasFormacoes ? 'Pronto para dançar?' : 'Pronto pra viver essa experiência?'}
+              Pronto para dançar?
             </h3>
             <p className="text-slate-400 text-sm mt-2">
               {hasFormacoes
@@ -2267,6 +2268,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             )}
           </div>
         </div>
+        )}
 
         {/* Redes sociais do evento — só mobile agora. No desktop já aparece
             em versão compacta embaixo da capa no hero (evita duplicar o
@@ -2348,27 +2350,6 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           </div>
         )}
 
-        {/* Compartilhar */}
-        <div className="space-y-4">
-          <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-            <Share2 size={22} className="text-[#ff0068]" /> Compartilhar
-          </h2>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={handleShareWhatsapp}
-              className="flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
-            >
-              <WhatsAppIcon size={16} /> Enviar via WhatsApp
-            </button>
-            <button
-              onClick={handleShareCopy}
-              className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
-            >
-              {copied ? (<><Check size={16} className="text-emerald-400" /> Link copiado!</>) : (<><Copy size={16} /> Copiar link</>)}
-            </button>
-          </div>
-        </div>
-
         {/* Live YouTube */}
         {config?.url_live && (
           <div className="bg-gradient-to-r from-red-600/10 to-transparent border border-red-500/20 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -2397,6 +2378,27 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
         {/* Informações e regras + FAQ — fim da página (padrão Guichê Web/Eventbrite) */}
         {showInfo && <EventInfoSection info={infoConfig} />}
+
+        {/* Compartilhar */}
+        <div className="space-y-4">
+          <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+            <Share2 size={22} className="text-[#ff0068]" /> Compartilhar
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleShareWhatsapp}
+              className="flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
+            >
+              <WhatsAppIcon size={16} /> Enviar via WhatsApp
+            </button>
+            <button
+              onClick={handleShareCopy}
+              className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
+            >
+              {copied ? (<><Check size={16} className="text-emerald-400" /> Link copiado!</>) : (<><Copy size={16} /> Copiar link</>)}
+            </button>
+          </div>
+        </div>
 
         {/* Link redundante removido — politica_ingressos=EXTERNO acima ja
             renderiza o botao "Comprar Ingressos" quando aplicavel (#11) */}
