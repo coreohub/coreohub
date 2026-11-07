@@ -143,7 +143,7 @@ describe('validateZonePricing', () => {
   })
 })
 
-import { applyZonePricing, zonePricingActive, quoteZonePrices } from '../supabase/functions/_shared/seat-zone-pricing'
+import { applyZonePricing, zonePricingActive, quoteZonePrices, resolveSeatAssignments, priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing'
 
 describe('zonePricingActive / quoteZonePrices', () => {
   it('só ativa com mapa, zonas e algum preço por zona', () => {
@@ -219,5 +219,40 @@ describe('applyZonePricing', () => {
   })
   it('quantidade de assentos diferente da de ingressos é recusada', () => {
     expect(() => applyZonePricing({ resolved: [base(0, 2)], ingressos, today: TODAY, seatInfo: info, seatIds: ['A-1'] })).toThrow(/exatamente 2/)
+  })
+})
+
+describe('resolveSeatAssignments', () => {
+  const tipos = new Map([['A-1', 'comum'], ['A-2', 'comum'], ['L-1', 'comum'], ['P-1', 'cadeirante']])
+  const lines = (...q: Array<[number, number, 'comum' | 'pcd']>) => q.map(([idx, qty, seatKind]) => ({ idx, qty, seatKind }))
+  it('padrão: tipos em ordem nos assentos escolhidos', () => {
+    const out = resolveSeatAssignments({ lines: lines([0, 2, 'comum'], [1, 1, 'comum']), seatIds: ['A-1', 'A-2', 'L-1'], tipoById: tipos })
+    expect(out).toEqual([{ seat_id: 'A-1', ticket_type_idx: 0 }, { seat_id: 'A-2', ticket_type_idx: 0 }, { seat_id: 'L-1', ticket_type_idx: 1 }])
+  })
+  it('preferência troca com outro assento e mantém as quantidades', () => {
+    const out = resolveSeatAssignments({ lines: lines([0, 2, 'comum'], [1, 1, 'comum']), seatIds: ['A-1', 'A-2', 'L-1'], tipoById: tipos, prefs: { 'A-1': 1 } })
+    expect(out.find(o => o.seat_id === 'A-1')?.ticket_type_idx).toBe(1)
+    expect(out.find(o => o.seat_id === 'L-1')?.ticket_type_idx).toBe(0)
+    expect(out.filter(o => o.ticket_type_idx === 0).length).toBe(2)
+    expect(out.filter(o => o.ticket_type_idx === 1).length).toBe(1)
+  })
+  it('PCD fica no assento PCD e preferência não mexe em tipo especial', () => {
+    const out = resolveSeatAssignments({ lines: lines([0, 1, 'comum'], [2, 1, 'pcd']), seatIds: ['A-1', 'P-1'], tipoById: tipos, prefs: { 'P-1': 0, 'A-1': 2 } })
+    expect(out.find(o => o.seat_id === 'P-1')?.ticket_type_idx).toBe(2)
+    expect(out.find(o => o.seat_id === 'A-1')?.ticket_type_idx).toBe(0)
+  })
+  it('preferência por tipo que não está no carrinho é ignorada', () => {
+    const out = resolveSeatAssignments({ lines: lines([0, 1, 'comum']), seatIds: ['A-1'], tipoById: tipos, prefs: { 'A-1': 9 } })
+    expect(out).toEqual([{ seat_id: 'A-1', ticket_type_idx: 0 }])
+  })
+})
+
+describe('priceRangeForType', () => {
+  it('menor e maior entre as zonas, com ou sem o preço-base', () => {
+    expect(priceRangeForType(inteira, 0, zones, TODAY)).toEqual({ min: 40, max: 80 })
+    expect(priceRangeForType({ ...inteira, lotes: [{ data_virada: null, preco: 30, precos_por_zona: { frente: 80 } }] }, 0, zones, TODAY, { includeBase: true })).toEqual({ min: 30, max: 80 })
+  })
+  it('cotação travada vence o preço ao vivo', () => {
+    expect(priceRangeForType(inteira, 0, zones, TODAY, { quotePrices: { '0:frente': { preco: 90 } } }).max).toBe(90)
   })
 })

@@ -45,6 +45,8 @@ interface UseSeatMapOptions {
    * (nunca aparecem como ocupados pra ele). Sem token = v1 (PDV do produtor).
    */
   holdToken?: string | null;
+  /** Preço por zona: carrega a zona de cada assento (RPC pública, 1x por evento). */
+  withZones?: boolean;
 }
 
 /**
@@ -52,9 +54,11 @@ interface UseSeatMapOptions {
  * (Fase 2 — assento numerado). Compartilhado entre checkout público
  * (CheckoutIngresso.tsx) e PDV do produtor (VendasIngressos.tsx).
  */
-export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, onStatusUpdate, holdToken }: UseSeatMapOptions) {
+export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, onStatusUpdate, holdToken, withZones }: UseSeatMapOptions) {
   const [rowsConfig, setRowsConfig] = useState<SeatRow[] | null>(null);
   const [seatStatuses, setSeatStatuses] = useState<Record<string, SeatStatus>>({});
+  // seat_id -> zona (só assentos com zona; o resto é "sem zona" = preço-base).
+  const [zoneBySeat, setZoneBySeat] = useState<Record<string, string>>({});
   // Força uma releitura imediata do status (ex.: logo depois de bloquear lugares).
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -63,7 +67,22 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
   useEffect(() => {
     setRowsConfig(null);
     setSeatStatuses({});
+    setZoneBySeat({});
   }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId || !enabled || !withZones) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('get_event_seat_zones_public', { p_event_id: eventId });
+      if (cancelled) return;
+      if (error) { console.error('[useSeatMap] erro get_event_seat_zones_public:', error.message); return; }
+      const map: Record<string, string> = {};
+      for (const r of (data ?? []) as Array<{ seat_id: string; zone_key: string | null }>) if (r.zone_key) map[r.seat_id] = r.zone_key;
+      setZoneBySeat(map);
+    })();
+    return () => { cancelled = true; };
+  }, [eventId, enabled, withZones]);
 
   useEffect(() => {
     if (!eventId || !enabled) return;
@@ -118,5 +137,5 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
 
   const refresh = () => setRefreshKey(k => k + 1);
 
-  return { rowsConfig, seatStatuses, markSeatsOccupied, refresh };
+  return { rowsConfig, seatStatuses, markSeatsOccupied, refresh, zoneBySeat };
 }

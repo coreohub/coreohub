@@ -29,6 +29,9 @@ import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
 import SessionStatusBanner from '../components/SessionStatusBanner';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
+import SeatZoneLegend from '../components/SeatZoneLegend';
+import SeatZoneSelection from '../components/SeatZoneSelection';
+import { applyZonePricing, priceForZone, priceRangeForType, resolveSeatAssignments, zonePricingActive, DEFAULT_ZONE_KEY, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { companionBySpecial, isSpecialTipo, seatsSatisfyRules, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
 import { ticketSeatKind, type TicketSeatKind } from '../supabase/functions/_shared/seat-rules';
@@ -178,7 +181,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state, max_installments, event_time, session_group_id')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state, max_installments, event_time, session_group_id, seat_zones')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -371,9 +374,14 @@ export default function CheckoutIngresso() {
     setSelectedSeats([]);
   }, [event?.id]);
 
-  const { rowsConfig, seatStatuses, markSeatsOccupied } = useSeatMap({
+  // Preço por zona: só com mapa, zonas e algum preço por zona configurado.
+  const seatZones: SeatZone[] = Array.isArray((event as any)?.seat_zones) ? (event as any).seat_zones : [];
+  const zonePriced = zonePricingActive(seatMapEnabled, seatZones, Array.isArray(event?.ingressos_config) ? event.ingressos_config : []);
+
+  const { rowsConfig, seatStatuses, markSeatsOccupied, zoneBySeat } = useSeatMap({
     eventId: event?.id,
     enabled: seatMapEnabled,
+    withZones: zonePriced,
     pollMs: 15_000,
     holdToken,
     onLayoutError: setError,
@@ -544,7 +552,32 @@ export default function CheckoutIngresso() {
   };
 
   // ─── Cupom: aplica + re-valida quando o total muda (cart-level) ───────────
-  const totalBase = useMemo(() => round2(lines.reduce((s, l) => s + l.precoUnit * l.qty, 0)), [lines]);
+  // Preço por zona: com todos os lugares escolhidos, cada ingresso passa a custar o preço da zona do
+  // seu lugar (mesma função que o servidor usa). Antes disso vale o preço-base, só de estimativa.
+  const [seatPrefs, setSeatPrefs] = useState<Record<string, number>>({});
+  const zoneIngressos: any[] = Array.isArray(event?.ingressos_config) ? event.ingressos_config : [];
+  const seatAssignments = useMemo(() => {
+    if (!zonePriced || selectedSeats.length !== totalQty || totalQty === 0) return null;
+    const tipoById = new Map(selectedSeats.map(id => [id, String(seatStatuses[id]?.seat_tipo ?? 'comum')]));
+    return resolveSeatAssignments({ lines, seatIds: selectedSeats, tipoById, prefs: seatPrefs });
+  }, [zonePriced, selectedSeats, totalQty, lines, seatStatuses, seatPrefs]);
+  const zoned = useMemo(() => {
+    if (!seatAssignments) return null;
+    try {
+      const seatInfo = new Map(selectedSeats.map(id => [id, { zone_key: zoneBySeat[id] ?? null, seat_tipo: seatStatuses[id]?.seat_tipo ?? null }]));
+      return applyZonePricing({
+        resolved: lines.map(l => ({ ...l, quantity: l.qty })),
+        ingressos: zoneIngressos, seatIds: selectedSeats, seatInfo, assignments: seatAssignments,
+        today: todayISO(), quotePrices: quote?.prices ?? null,
+      });
+    } catch { return null; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatAssignments, selectedSeats, zoneBySeat, lines, quote]);
+  const pricedLines = useMemo<Array<LineItem & { zoneKey?: string }>>(
+    () => zoned ? zoned.resolved.map(r => ({ ...r, qty: r.quantity })) : lines,
+    [zoned, lines],
+  );
+  const totalBase = useMemo(() => round2(pricedLines.reduce((s, l) => s + l.precoUnit * l.qty, 0)), [pricedLines]);
 
   const validateCoupon = async (code: string): Promise<{ discount: number } | { error: string }> => {
     const { data, error: invokeErr } = await supabase.functions.invoke('validate-audience-coupon', {
@@ -600,7 +633,7 @@ export default function CheckoutIngresso() {
   const computeFor = (method: 'pix' | 'card', n: number) => {
     const feeMode = quote?.feeMode ?? event.audience_fee_mode ?? 'repassar';
     return computeAudienceCheckout({
-      resolved: lines.map(l => ({
+      resolved: pricedLines.map(l => ({
         idx: l.idx, nome: l.nome, kind: l.kind,
         quantity: l.qty, precoUnit: l.precoUnit, quantidadeTotal: l.quantidadeTotal,
       })),
@@ -635,7 +668,7 @@ export default function CheckoutIngresso() {
       return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event, lines, totalBase, couponDiscount, quote, feeEnabled, payMethod, installments]);
+  }, [event, pricedLines, totalBase, couponDiscount, quote, feeEnabled, payMethod, installments]);
 
   // Totais de cada forma de pagamento (Pix, cartão à vista, 2x a 12x) pro comprador comparar.
   const payOptions = useMemo(() => {
@@ -652,7 +685,7 @@ export default function CheckoutIngresso() {
       return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event, lines, totalBase, couponDiscount, quote, feeEnabled]);
+  }, [event, pricedLines, totalBase, couponDiscount, quote, feeEnabled]);
 
   // ─── Submit ────────────────────────────────────────────────────────────────
   const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
@@ -683,6 +716,7 @@ export default function CheckoutIngresso() {
           quote_id: quote?.id,
           ...(feeEnabled ? { payment_method: payMethod, installments: payMethod === 'card' ? installments : 1 } : {}),
           ...(seatMapEnabled ? { seat_ids: selectedSeats, hold_token: holdToken ?? undefined } : {}),
+          ...(zonePriced && seatAssignments ? { seat_assignments: seatAssignments } : {}),
         },
       });
       if (invokeErr) {
@@ -833,7 +867,16 @@ export default function CheckoutIngresso() {
                   {l.loteNome && (
                     <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{l.loteNome}</p>
                   )}
-                  <p className="text-xs text-slate-400 mt-0.5">{formatBRL(l.precoUnit)} cada</p>
+                  {zonePriced ? (() => {
+                    const range = priceRangeForType(zoneIngressos[l.idx] ?? {}, l.idx, seatZones, todayISO(), { includeBase: true, quotePrices: quote?.prices ?? null });
+                    return (
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {range.min === range.max ? `${formatBRL(range.min)} cada` : `${formatBRL(range.min)} a ${formatBRL(range.max)} (conforme o lugar)`}
+                      </p>
+                    );
+                  })() : (
+                    <p className="text-xs text-slate-400 mt-0.5">{formatBRL(l.precoUnit)} cada</p>
+                  )}
                   {soldOut && <p className="text-[10px] font-bold text-rose-300 mt-0.5">Esgotado</p>}
                   {!soldOut && remaining !== Infinity && remaining <= 10 && (
                     <p className="text-[10px] font-bold text-amber-300 mt-0.5">Últimos {remaining}</p>
@@ -974,7 +1017,42 @@ export default function CheckoutIngresso() {
               compQty={compQty}
               comumQty={comumQty}
               onBlocked={setSeatLostNotice}
+              seatZoneColors={zonePriced ? Object.fromEntries(Object.entries(zoneBySeat).flatMap(([id, k]) => { const c = seatZones.find(z => z.key === k)?.cor; return c ? [[id, c]] : []; })) : undefined}
             />
+
+            {zonePriced && (
+              <SeatZoneLegend
+                zones={seatZones}
+                types={lines.map(l => ({
+                  idx: l.idx,
+                  nome: l.nome,
+                  priceByZone: Object.fromEntries(seatZones.map(z => {
+                    const q = quote?.prices?.[`${l.idx}:${z.key}`]?.preco;
+                    return [z.key, q != null && q > 0 ? q : priceForZone(zoneIngressos[l.idx] ?? {}, z.key, todayISO())];
+                  })),
+                }))}
+                freeByZone={Object.values(seatStatuses).reduce<Record<string, number>>((acc, st) => {
+                  const k = zoneBySeat[st.seat_id];
+                  if (k && st.status === 'livre') acc[k] = (acc[k] ?? 0) + 1;
+                  return acc;
+                }, {})}
+              />
+            )}
+
+            {zonePriced && selectedSeats.length > 0 && (
+              <SeatZoneSelection
+                zones={seatZones}
+                rows={selectedSeats.map(id => {
+                  const a = seatAssignments?.find(x => x.seat_id === id);
+                  const zk = zoneBySeat[id] ?? DEFAULT_ZONE_KEY;
+                  const g = zoned?.resolved.find(r => r.idx === a?.ticket_type_idx && r.zoneKey === zk);
+                  return { seatId: id, zoneKey: zoneBySeat[id] ?? null, typeIdx: a?.ticket_type_idx ?? null, price: g ? g.precoUnit : null };
+                })}
+                swappable={lines.filter(l => l.seatKind === 'comum').map(l => ({ idx: l.idx, nome: l.nome }))}
+                typeNameByIdx={Object.fromEntries(lines.map(l => [l.idx, l.nome]))}
+                onChangeType={(seatId, typeIdx) => setSeatPrefs(prev => ({ ...prev, [seatId]: typeIdx }))}
+              />
+            )}
 
             {companionOffer && (
               <div className="mt-3 flex items-center gap-3 bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 text-xs text-sky-200">
@@ -1052,8 +1130,8 @@ export default function CheckoutIngresso() {
         {/* Resumo de valores */}
         {breakdown && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-2">
-            {lines.map(l => (
-              <Row key={l.idx} label={`${l.qty}× ${l.nome}`} value={formatBRL(l.precoUnit * l.qty)} />
+            {pricedLines.map(l => (
+              <Row key={`${l.idx}:${l.zoneKey ?? ''}`} label={`${l.qty}× ${l.nome}${l.zoneKey ? ` · ${seatZones.find(z => z.key === l.zoneKey)?.nome ?? 'Sem zona'}` : ''}`} value={formatBRL(l.precoUnit * l.qty)} />
             ))}
             {breakdown.totalDiscount > 0 && (
               <Row label={`Cupom ${appliedCouponCode ?? ''}`} value={`−${formatBRL(breakdown.totalDiscount)}`} />
