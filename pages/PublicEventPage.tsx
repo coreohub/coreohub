@@ -17,6 +17,7 @@ import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, HEADER_HEIGHT, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
+import { priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing';
 import { resolveLote, diffDias, formatDataBRComDia, todayISO, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
 import SandboxBanner from '../components/SandboxBanner';
@@ -238,7 +239,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
             regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
-            politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
+            politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled, seat_zones,
             sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original,
             audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent, payment_sandbox,
             processing_fee_enabled, audience_processing_payer, max_installments,
@@ -1637,7 +1638,17 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       const realIdx = event.ingressos_config.findIndex((x: any) => x === t);
                       const lotes: Lote[] = Array.isArray(t.lotes) ? t.lotes : [];
                       const r = resolveLote(lotes, today);
-                      const preco = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+                      const basePreco = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+                      // Preço por zona do mapa: mostra a faixa (ex.: R$ 40 a R$ 50) em vez de só o preço-base.
+                      const zones = event.seat_map_enabled && Array.isArray(event.seat_zones) ? event.seat_zones : [];
+                      const zoneRange = zones.length > 0 ? priceRangeForType(t, realIdx, zones, today, { includeBase: false }) : null;
+                      const zoned = !!zoneRange && zoneRange.max > 0 && zoneRange.min !== zoneRange.max;
+                      const preco = zoneRange && zoneRange.min > 0 ? zoneRange.min : basePreco;
+                      let nextRange: { min: number; max: number } | null = null;
+                      if (zoned && r?.lote.data_virada) {
+                        const d = new Date(`${r.lote.data_virada}T12:00:00`); d.setDate(d.getDate() + 1);
+                        nextRange = priceRangeForType(t, realIdx, zones, d.toISOString().slice(0, 10), { includeBase: false });
+                      }
                       const nomeLote: string | null = r ? nomeDoLote(lotes, r.idx) : null;
                       const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
                         ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
@@ -1662,8 +1673,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                             </div>
                             <div className="text-right">
                               <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-[#ff0068]'}`}>
-                                {preco > 0 ? `R$ ${formatPrecoBR(preco)}` : 'Grátis'}
+                                {preco > 0 ? (zoned ? `R$ ${formatPrecoBR(zoneRange!.min)} a R$ ${formatPrecoBR(zoneRange!.max)}` : `R$ ${formatPrecoBR(preco)}`) : 'Grátis'}
                               </p>
+                              {zoned && <p className="text-[10px] font-bold text-slate-400">conforme o lugar</p>}
                               {/* "+ taxas" com "?" (Decreto 13.108/2026, art. 4º VI e 7º): mesma conta do checkout
                                   (computeAudienceCheckout) — o total desde o primeiro contato vai no "?". */}
                               {preco > 0 && salesEnabled && (
@@ -1708,7 +1720,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
                           {hint && !soldOut && (
                             <p className="text-[10px] font-bold text-[#ff0068]">
-                              <AvisoViradaLote preco={hint.proximoPreco} dataVirada={hint.dataVirada} dias={hint.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
+                              <AvisoViradaLote preco={hint.proximoPreco} dataVirada={hint.dataVirada} dias={hint.dias} formatPreco={n => (nextRange && nextRange.min > 0 && nextRange.min !== nextRange.max ? `R$ ${formatPrecoBR(nextRange.min)} a R$ ${formatPrecoBR(nextRange.max)}` : `R$ ${formatPrecoBR(n)}`)} />
                             </p>
                           )}
 
