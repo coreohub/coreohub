@@ -4387,7 +4387,21 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Preço por zona do mapa</h3>
                   <p className="text-xs text-slate-500 mt-0.5">Cobre valores diferentes por região da plateia (frente, fundo, laterais...).</p>
                 </div>
-                <SeatZonesEditor eventId={activeEventId} zones={seatZones} onZonesSaved={setSeatZones} />
+                <SeatZonesEditor eventId={activeEventId} zones={seatZones} onZonesSaved={(next) => {
+                  setSeatZones(next);
+                  // Zona removida: apaga os preços dela (tipo e lotes) pra não travar o próximo 'Salvar'.
+                  const keep = new Set(next.map(z => z.key));
+                  const clean = (m: any) => {
+                    if (!m) return m;
+                    const out = Object.fromEntries(Object.entries(m).filter(([k]) => k === 'geral' || keep.has(k)));
+                    return Object.keys(out).length > 0 ? out : undefined;
+                  };
+                  setIngressos(list => list.map((t: any) => ({
+                    ...t,
+                    ...(t.precos_por_zona ? { precos_por_zona: clean(t.precos_por_zona) } : {}),
+                    ...(Array.isArray(t.lotes) ? { lotes: t.lotes.map((l: any) => (l.precos_por_zona ? { ...l, precos_por_zona: clean(l.precos_por_zona) } : l)) } : {}),
+                  })));
+                }} />
                 {seatZones.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preços por zona</p>

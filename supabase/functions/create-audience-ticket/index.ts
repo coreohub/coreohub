@@ -362,7 +362,7 @@ Deno.serve(async (req) => {
         const applied = applyZonePricing({
           resolved, ingressos, seatIds, seatInfo,
           assignments: Array.isArray(seatAssignmentsRaw) ? seatAssignmentsRaw : null,
-          today: todayBR, quotePrices,
+          today: todayBR, quotePrices, zones: (event as any).seat_zones,
         })
         resolved = applied.resolved
         seatIds = applied.seatIds

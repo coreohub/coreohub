@@ -73,15 +73,18 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
   useEffect(() => {
     if (!eventId || !enabled || !withZones) return;
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       const { data, error } = await supabase.rpc('get_event_seat_zones_public', { p_event_id: eventId });
       if (cancelled) return;
       if (error) { console.error('[useSeatMap] erro get_event_seat_zones_public:', error.message); return; }
       const map: Record<string, string> = {};
       for (const r of (data ?? []) as Array<{ seat_id: string; zone_key: string | null }>) if (r.zone_key) map[r.seat_id] = r.zone_key;
-      setZoneBySeat(map);
-    })();
-    return () => { cancelled = true; };
+      setZoneBySeat(prev => (JSON.stringify(prev) === JSON.stringify(map) ? prev : map));
+    };
+    void load();
+    // O produtor pode repintar zonas com a venda aberta: relê a cada minuto pra cor/preço não ficarem velhos.
+    const id = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
   }, [eventId, enabled, withZones]);
 
   useEffect(() => {

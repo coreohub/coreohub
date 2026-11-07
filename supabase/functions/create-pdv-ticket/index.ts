@@ -277,6 +277,7 @@ Deno.serve(async (req) => {
           resolved, ingressos, seatIds, seatInfo,
           assignments: Array.isArray(seatAssignmentsRaw) ? seatAssignmentsRaw : null,
           today: todayBR,
+          zones: (event as any).seat_zones,
         })
         resolved = applied.resolved
         seatIds = applied.seatIds
