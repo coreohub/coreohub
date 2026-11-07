@@ -25,6 +25,7 @@ import { priceForZone, priceRangeForType, zonePricingActive, type SeatZone } fro
 import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
 import { useSeatMap } from '../hooks/useSeatMap';
+import { salesByZone } from '../utils/salesByZone';
 import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '../utils/seatSelection';
 import { BLOCK_REASON_SUGGESTIONS, expandRange, expandRow, partitionSelection, reasonsBySeat, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
 import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
@@ -324,6 +325,10 @@ const VendasIngressos: React.FC = () => {
   });
 
   const seatSummary = useMemo(() => seatCapacity(seatStatuses), [seatStatuses]);
+  const zoneSales = useMemo(
+    () => (seatZones.length > 0 ? salesByZone(seatZones, zoneBySeat, seatStatuses, rows) : []),
+    [seatZones, zoneBySeat, seatStatuses, rows],
+  );
 
   // ─── Bloqueio de lugares ──────────────────────────────────────────────────
   const loadBlockedList = async (evId: string) => {
@@ -1068,6 +1073,44 @@ const VendasIngressos: React.FC = () => {
       )}
 
       {/* Bloqueio de lugares (só dono e super admin) */}
+      {seatMapEnabled && zoneSales.length > 0 && (
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-3">Vendas por zona</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[420px]">
+              <thead>
+                <tr className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="pb-2 pr-3">Zona</th>
+                  <th className="pb-2 pr-3 text-right">Vendidos</th>
+                  <th className="pb-2 pr-3 text-right">Receita</th>
+                  <th className="pb-2 text-right">Livres</th>
+                </tr>
+              </thead>
+              <tbody>
+                {zoneSales.map(z => (
+                  <tr key={z.key} className="border-t border-slate-100 dark:border-white/5">
+                    <td className="py-2 pr-3 font-black text-slate-900 dark:text-white">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle bg-slate-300" style={z.cor ? { backgroundColor: z.cor } : undefined} />
+                      {z.nome}
+                    </td>
+                    <td className="py-2 pr-3 text-right text-slate-700 dark:text-slate-200">{z.vendidos}</td>
+                    <td className="py-2 pr-3 text-right text-slate-700 dark:text-slate-200">{formatBRL(z.receita)}</td>
+                    <td className="py-2 text-right text-slate-500">{z.livres} de {z.vendaveis}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-slate-200 dark:border-white/10 font-black text-slate-900 dark:text-white">
+                  <td className="pt-2 pr-3">Total</td>
+                  <td className="pt-2 pr-3 text-right">{zoneSales.reduce((a, z) => a + z.vendidos, 0)}</td>
+                  <td className="pt-2 pr-3 text-right">{formatBRL(zoneSales.reduce((a, z) => a + z.receita, 0))}</td>
+                  <td className="pt-2 text-right">{zoneSales.reduce((a, z) => a + z.livres, 0)} de {zoneSales.reduce((a, z) => a + z.vendaveis, 0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2">Receita = preço dos ingressos pagos e não estornados, sem taxas. A zona vem do lugar escolhido.</p>
+        </div>
+      )}
+
       {seatMapEnabled && canManageBlocks && blockOpen && (
         <div className="bg-white dark:bg-white/5 border border-amber-300/60 dark:border-amber-500/30 rounded-2xl p-4 space-y-4">
           <div>
