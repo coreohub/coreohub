@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { pickDefaultEvent } from '../utils/defaultEvent';
 import { createPortal } from 'react-dom';
+import PrecoInput from '../components/PrecoInput';
 import AdvancedSection from '../components/AdvancedSection';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
@@ -20,9 +21,6 @@ import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import EventSessionsCard from '../components/EventSessionsCard';
-import SeatZonesEditor from '../components/SeatZonesEditor';
-import ZonePriceMatrix from '../components/ZonePriceMatrix';
-import { validateZonePricing, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2, Check, Info,
   Music2, DollarSign, Users, AlertTriangle,
@@ -429,23 +427,6 @@ const DEFAULT_GENERAL = {
 interface ProgramItem { hora: string; atividade: string }
 const DEFAULT_PROGRAMACAO: ProgramItem[] = [];
 
-interface TicketLote { data_virada: string | null; preco: number; /** Preço por zona do mapa ({zona: preço}); zona sem preço usa `preco`. */ precos_por_zona?: Record<string, number> }
-interface TicketType {
-  nome: string;
-  preco: number;
-  obs?: string;
-  link?: string;
-  /** Modo lotes: quando presente e com 2+ itens, vence o `preco` (que vira fallback). */
-  lotes?: TicketLote[];
-  /** Preço por zona do mapa quando o tipo não tem lotes ({zona: preço}); zona sem preço usa `preco`. */
-  precos_por_zona?: Record<string, number>;
-  /** Estoque total (Tier 2). null/undefined = ilimitado. */
-  quantidade_total?: number | null;
-  /** Promocional: política comercial do produtor, fora da cota de meia-entrada (Decreto 13.108 art. 10). */
-  promocional?: boolean;
-  /** Assento que o ingresso aceita (mapa numerado): comum (padrão), PCD/cadeirante ou acompanhante de PCD. */
-  assento_tipo?: 'comum' | 'pcd' | 'obeso' | 'acompanhante';
-}
 interface Sponsor    { nome: string; logo_url: string; link?: string }
 
 const SCORE_SCALE_OPTIONS: { id: ScoreScale; label: string; desc: string; example: string }[] = [
@@ -830,40 +811,6 @@ const detectarMaxComposto = (nome: string | undefined): number | null => {
 /** Teto de preço pra qualquer campo de inscrição/ingresso/workshop — nenhum
  *  valor real de mercado (mesmo festivais grandes tipo Joinville) passa
  *  disso. Trava digitação tipo "2222222222" (achado real 2026-08-02). */
-const MAX_PRECO = 99999.99;
-
-/** Input de preço em BRL com prefixo "R$" e formato 1.234,56 ao perder foco.
- *  State local guarda o que o user digita, normaliza no blur via parsePrecoBR. */
-const PrecoInput: React.FC<{
-  value: number;
-  onChange: (n: number) => void;
-  className?: string;
-}> = ({ value, onChange, className }) => {
-  const [draft, setDraft] = React.useState<string>(value ? formatPrecoBR(value) : '');
-  React.useEffect(() => {
-    setDraft(value ? formatPrecoBR(value) : '');
-  }, [value]);
-  return (
-    <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold pointer-events-none">R$</span>
-      <input
-        type="text"
-        inputMode="decimal"
-        maxLength={12}
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => {
-          const num = Math.min(parsePrecoBR(draft), MAX_PRECO);
-          onChange(num);
-          setDraft(num ? formatPrecoBR(num) : '');
-        }}
-        placeholder="0,00"
-        className={className}
-      />
-    </div>
-  );
-};
-
 // Nomes legíveis das colunas que sync_session_group_shared copia pras sessões irmãs.
 const SYNC_COLUMN_LABELS: Record<string, string> = {
   name: 'Título', description: 'Descrição', descricao: 'Descrição',
@@ -1652,30 +1599,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     }
   };
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
-  const [ingressos, setIngressos]     = useState<TicketType[]>([]);
   const [politicaIngressos, setPoliticaIngressos] = useState<'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO'>('NAO_DEFINIDO');
   const [urlIngressosExterno, setUrlIngressosExterno] = useState<string>('');
   // Nota livre no card "Entrada gratuita" da vitrine (ex: "1kg de alimento
   // não perecível") — vazio cai no texto padrão "Não é necessário ingresso...".
   const [entradaGratuitaNota, setEntradaGratuitaNota] = useState<string>('');
-  // Tier 1 paid tickets (vivem em events.audience_*)
-  const [audienceSalesEnabled, setAudienceSalesEnabled] = useState<boolean>(false);
-  const [audienceCommissionPercent, setAudienceCommissionPercent] = useState<number>(10);
-  // TRUE quando o admin editou audienceCommissionPercent na mão nesta tela —
-  // enquanto FALSE, o trigger de banco mantém esse valor em sincronia com o
-  // billing_plan do evento (ver migration 20260913d). Só sobrescrevemos pra
-  // TRUE quando o próprio input é tocado, nunca em qualquer outro save da
-  // página (senão o save genérico de qualquer produtor reenviaria o valor
-  // carregado e apagaria a distinção "nunca foi tocado" vs "foi customizado").
-  const [audienceCommissionPercentManual, setAudienceCommissionPercentManual] = useState<boolean>(false);
-  const [audienceFeeMode, setAudienceFeeMode] = useState<'repassar' | 'absorver'>('repassar');
-  const [audienceMaxPerCpf, setAudienceMaxPerCpf] = useState<number>(6);
-  const [audienceMaxPerPurchase, setAudienceMaxPerPurchase] = useState<number>(6);
-  // Tier 2: tempo de reserva temporária (10min default)
-  const [audienceReservationMinutes, setAudienceReservationMinutes] = useState<number>(15);
+  // Marcado só quando o produtor escolhe 'Vender pela CoreoHub' nesta sessão de edição (liga a venda no save).
+  const [justChoseInterno, setJustChoseInterno] = useState(false);
   const [eventSeatMap, setEventSeatMap] = useState(false);
-  // Zonas do mapa de assentos (events.seat_zones) — o preço por zona vive em cada ingresso.
-  const [seatZones, setSeatZones] = useState<SeatZone[]>([]);
   const [coverDragOver, setCoverDragOver] = useState(false);
   // Mesmo caminho pro clique e pro arrastar-e-soltar. A compressão (<=250KB, webp)
   // acontece dentro de uploadEventCover.
@@ -2191,28 +2122,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 ga4_mp_last_at:       (secrets as any).ga4_mp_last_at       ?? null,
               });
             }
-            // Tier 1: configurações de venda de ingressos (events.audience_*)
-            if (typeof (myEvent as any).audience_sales_enabled === 'boolean') {
-              setAudienceSalesEnabled((myEvent as any).audience_sales_enabled);
-            }
-            if ((myEvent as any).audience_commission_percent != null) {
-              setAudienceCommissionPercent(Number((myEvent as any).audience_commission_percent));
-            }
-            setAudienceCommissionPercentManual(!!(myEvent as any).audience_commission_percent_manual);
-            if ((myEvent as any).audience_fee_mode) {
-              setAudienceFeeMode((myEvent as any).audience_fee_mode);
-            }
-            if ((myEvent as any).audience_max_per_cpf != null) {
-              setAudienceMaxPerCpf(Number((myEvent as any).audience_max_per_cpf));
-            }
-            if ((myEvent as any).audience_max_per_purchase != null) {
-              setAudienceMaxPerPurchase(Number((myEvent as any).audience_max_per_purchase));
-            }
             setEventSeatMap(Boolean((myEvent as any).seat_map_enabled));
-            setSeatZones(Array.isArray((myEvent as any).seat_zones) ? (myEvent as any).seat_zones : []);
-            if ((myEvent as any).audience_reservation_minutes != null) {
-              setAudienceReservationMinutes(Number((myEvent as any).audience_reservation_minutes));
-            }
           }
         }
         if (!data) {
@@ -2292,9 +2202,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           if (Array.isArray(data.programacao) && data.programacao.length > 0) setProgramacao(data.programacao);
           else if (Array.isArray(evt.programacao_config)) setProgramacao(evt.programacao_config);
           else if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
-          if (Array.isArray(data.ingressos_audiencia) && data.ingressos_audiencia.length > 0) setIngressos(data.ingressos_audiencia);
-          else if (Array.isArray(evt.ingressos_config)) setIngressos(evt.ingressos_config);
-          else if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
           setEntradaGratuitaNota(data.entrada_gratuita_nota ?? '');
           // Politica de ingressos (#11). Se a coluna nao veio (banco sem migration ainda),
           // infere a partir dos dados pra nao quebrar UI: lista preenchida -> INTERNO,
@@ -2417,14 +2324,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       setError('Marque pelo menos um tipo de apresentação (Competitiva ou Avaliada) em "Geral".');
       return;
     }
-    // Preço por zona: não deixa salvar tabela inválida (ex.: meia acima de 50% da inteira da zona).
-    if (eventSeatMap && seatZones.length > 0) {
-      const zoneErrors = validateZonePricing(seatZones, ingressos);
-      if (zoneErrors.length > 0) {
-        setError(`Preço por zona: ${zoneErrors[0]}${zoneErrors.length > 1 ? ` (e mais ${zoneErrors.length - 1})` : ''}`);
-        return;
-      }
-    }
     saveInFlightRef.current = true;
     setSaving(true);
     setError(null);
@@ -2508,7 +2407,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         descricao:           general.description || null,
         hora_evento:         general.eventTime || null,
         programacao:         programacao,
-        ingressos_audiencia: ingressos,
         politica_ingressos:  politicaIngressos,
         entrada_gratuita_nota: entradaGratuitaNota.trim() || null,
         url_ingressos:       politicaIngressos === 'EXTERNO' ? (urlIngressosExterno || null) : null,
@@ -2730,19 +2628,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           formacoes_config:        formacoesAdapted,
           event_time:              general.eventTime || null,
           programacao_config:      programacao,
-          ingressos_config:        ingressos,
           politica_ingressos:      politicaIngressos,
           patrocinadores_config:   sponsors,
           is_public:               true,
           created_by:              user.id,
           // Tier 1 paid tickets
-          audience_sales_enabled:        audienceSalesEnabled && politicaIngressos === 'INTERNO',
-          audience_commission_percent:   audienceCommissionPercent,
-          audience_commission_percent_manual: audienceCommissionPercentManual,
-          audience_fee_mode:             audienceFeeMode,
-          audience_max_per_cpf:          audienceMaxPerCpf,
-          audience_max_per_purchase:     audienceMaxPerPurchase,
-          audience_reservation_minutes:  audienceReservationMinutes,
+          // Venda pela CoreoHub: o editor de Vendas > Ingressos é dono do audience_*; aqui só desliga
+          // ao sair de 'Vender pela CoreoHub' e liga ao escolher essa opção agora.
+          ...(politicaIngressos !== 'INTERNO' ? { audience_sales_enabled: false } : (justChoseInterno ? { audience_sales_enabled: true } : {})),
         };
 
         // myEvent.id já foi resolvido lá em cima (linha 1425) via `created_by = user.id`.
@@ -3917,7 +3810,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         // o checkbox "Vender ingressos" abaixo (o produtor obviamente quer).
                         // Pode desativar manualmente depois se quiser modo só informativo.
                         if (opt.v === 'INTERNO' && politicaIngressos !== 'INTERNO') {
-                          setAudienceSalesEnabled(true);
+                          setJustChoseInterno(true);
                         }
                         setPoliticaIngressos(opt.v);
                       }}
@@ -3979,439 +3872,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               )}
 
               {politicaIngressos === 'INTERNO' && (
-                <>
-                  <div className="flex items-center justify-end mb-3">
-                    <button
-                      onClick={() => setIngressos(t => [...t, { nome: '', preco: 0, obs: '' }])}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20"
-                    >
-                      <Plus size={12} /> Adicionar Tipo
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                {ingressos.length === 0 ? (
-                  <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum tipo. Ex: "Meia Entrada R$10" ou "Inteira R$20".</p>
-                ) : (
-                  ingressos.map((item, i) => {
-                    const lotes = Array.isArray(item.lotes) ? item.lotes : null;
-                    // Modo lotes ativo quando lista existe E tem 2+ entradas (1+ virada de preço).
-                    // 1 lote só sem virada == modo simples (preço fixo) — mantém UX legada.
-                    const isMultiLote = !!lotes && lotes.length >= 2;
-                    const updateField = (patch: Partial<TicketType>) =>
-                      setIngressos(t => t.map((x, idx) => idx === i ? { ...x, ...patch } : x));
-                    const startLotes = () => {
-                      // Converte simples → lotes: cria 1 lote com data + 1 final (sem virada).
-                      // Mantém preço atual no lote final como ponto de partida.
-                      const today = new Date().toISOString().slice(0, 10);
-                      const precoBase = Number(item.preco ?? 0);
-                      // Preços por zona acompanham: viram os dos dois lotes (não se perdem).
-                      const zonas = (item as any).precos_por_zona;
-                      updateField({
-                        lotes: [
-                          { data_virada: today, preco: precoBase, ...(zonas ? { precos_por_zona: { ...zonas } } : {}) },
-                          { data_virada: null, preco: precoBase, ...(zonas ? { precos_por_zona: { ...zonas } } : {}) },
-                        ],
-                        ...(zonas ? { precos_por_zona: undefined } : {}),
-                      } as any);
-                    };
-                    const stopLotes = () => {
-                      // Volta pra modo simples: usa preço do último lote como preço único.
-                      const ultimo = lotes?.[lotes.length - 1]?.preco ?? item.preco ?? 0;
-                      const zonasUltimo = (lotes?.[lotes.length - 1] as any)?.precos_por_zona;
-                      updateField({ lotes: undefined, preco: Number(ultimo), ...(zonasUltimo ? { precos_por_zona: { ...zonasUltimo } } : {}) } as any);
-                    };
-                    const updateLote = (loteIdx: number, patch: Partial<TicketLote>) => {
-                      const next = (lotes ?? []).map((l, idx) => idx === loteIdx ? { ...l, ...patch } : l);
-                      updateField({ lotes: next });
-                    };
-                    const addLoteIntermediario = () => {
-                      // Insere antes do último (que sempre tem data_virada=null)
-                      const today = new Date().toISOString().slice(0, 10);
-                      const next = [...(lotes ?? [])];
-                      const ultimoPreco = next[next.length - 1]?.preco ?? 0;
-                      const zonasUltimo = (next[next.length - 1] as any)?.precos_por_zona;
-                      next.splice(next.length - 1, 0, { data_virada: today, preco: ultimoPreco, ...(zonasUltimo ? { precos_por_zona: { ...zonasUltimo } } : {}) } as any);
-                      updateField({ lotes: next });
-                    };
-                    const removeLote = (loteIdx: number) => {
-                      const next = (lotes ?? []).filter((_, idx) => idx !== loteIdx);
-                      // Garante que o último seja sempre "sem virada" (preço final)
-                      if (next.length > 0) next[next.length - 1] = { ...next[next.length - 1], data_virada: null };
-                      // Se sobrou só 1 lote, volta pra modo simples automaticamente
-                      if (next.length <= 1) {
-                        updateField({ lotes: undefined, preco: Number(next[0]?.preco ?? item.preco ?? 0) });
-                      } else {
-                        updateField({ lotes: next });
-                      }
-                    };
-
-                    return (
-                      <div key={i} className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3 space-y-3">
-                        {/* Linha 1: nome + obs + delete */}
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
-                          <input
-                            type="text"
-                            value={item.nome}
-                            onChange={e => updateField({ nome: e.target.value })}
-                            placeholder="Nome (Ex: Meia Entrada)"
-                            className="sm:col-span-5 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                          />
-                          <input
-                            type="text"
-                            value={item.obs ?? ''}
-                            onChange={e => updateField({ obs: e.target.value })}
-                            placeholder="Observação (opc., ex: + 1kg alimento)"
-                            className="sm:col-span-6 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                          />
-                          <button
-                            onClick={() => setIngressos(t => t.filter((_, idx) => idx !== i))}
-                            aria-label={`Remover ingresso ${item.nome || 'sem nome'}`}
-                            className="sm:col-span-1 p-2 text-slate-400 hover:text-red-500 self-center justify-self-end sm:justify-self-center inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
-                          >
-                            <Trash2 size={14} />
-                            <span className="sm:hidden">Remover</span>
-                          </button>
-                        </div>
-
-                        {/* Tipo de assento (só com mapa numerado) */}
-                        {eventSeatMap && (
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <label htmlFor={`assento-tipo-${i}`} className="text-[10px] font-black uppercase tracking-widest text-slate-500 sm:w-32 shrink-0">Tipo de assento</label>
-                            <select
-                              id={`assento-tipo-${i}`}
-                              value={item.assento_tipo ?? 'comum'}
-                              onChange={e => {
-                                const v = e.target.value as 'comum' | 'pcd' | 'obeso' | 'acompanhante';
-                                const dica = v === 'pcd'
-                                  ? 'Assentos exclusivos para pessoas com deficiência, em área com acessibilidade ampliada.'
-                                  : v === 'obeso'
-                                  ? 'Assento largo, com estrutura reforcada, para pessoa obesa. Sem exigencia de comprovacao na compra.'
-                                  : v === 'acompanhante'
-                                    ? 'Um acompanhante por pessoa com deficiência, no assento ao lado.'
-                                    : undefined;
-                                updateField({ assento_tipo: v === 'comum' ? undefined : v, ...(dica && !item.obs?.trim() ? { obs: dica } : {}) });
-                              }}
-                              className="flex-1 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50"
-                            >
-                              <option value="comum">Comum — assentos comuns do mapa</option>
-                              <option value="pcd">PCD — espaço de cadeirante / assento PCD</option>
-                              <option value="obeso">Pessoa obesa — assento largo (mobilidade reduzida)</option>
-                              <option value="acompanhante">Acompanhante de PCD — assento ao lado do PCD (mesmo pedido)</option>
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Linha 2: preço (modo simples) OU editor de lotes */}
-                        {!isMultiLote ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-2">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preço</label>
-                              <PrecoInput
-                                value={Number(item.preco) || 0}
-                                onChange={n => updateField({ preco: n })}
-                                className="w-28 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 pl-8 pr-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={startLotes}
-                              className="ml-auto text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline inline-flex items-center gap-1"
-                            >
-                              <Plus size={12} /> Adicionar lote (com virada de data)
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="space-y-2 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-lg p-3">
-                            <div className="flex items-center justify-between">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                Lotes — preços por período
-                              </p>
-                              <button
-                                type="button"
-                                onClick={stopLotes}
-                                className="text-[9px] text-slate-500 hover:text-red-500 uppercase font-black tracking-widest"
-                              >
-                                Voltar a preço único
-                              </button>
-                            </div>
-                            {(lotes ?? []).map((lote, loteIdx) => {
-                              const isUltimo = loteIdx === (lotes!.length - 1);
-                              return (
-                                <div key={loteIdx} className="grid grid-cols-12 gap-2 items-center">
-                                  <div className="col-span-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                    {isUltimo ? 'Final' : `Lote ${loteIdx + 1}`}
-                                  </div>
-                                  <div className="col-span-5">
-                                    {isUltimo ? (
-                                      <input
-                                        type="text"
-                                        disabled
-                                        value="Sem virada (preço final)"
-                                        className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg py-2 px-3 text-slate-400 text-xs italic cursor-not-allowed"
-                                      />
-                                    ) : (
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">até</span>
-                                        <input
-                                          type="date"
-                                          value={lote.data_virada || ''}
-                                          onChange={e => updateLote(loteIdx, { data_virada: e.target.value || null })}
-                                          className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-2 text-slate-900 dark:text-white font-bold text-xs focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="col-span-3">
-                                    <PrecoInput
-                                      value={Number(lote.preco) || 0}
-                                      onChange={n => updateLote(loteIdx, { preco: n })}
-                                      className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 pl-7 pr-2 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-[#ff0068]/50"
-                                    />
-                                  </div>
-                                  <div className="col-span-1 flex justify-end">
-                                    {!isUltimo && (
-                                      <button
-                                        type="button"
-                                        onClick={() => removeLote(loteIdx)}
-                                        aria-label={`Remover lote ${loteIdx + 1}`}
-                                        className="p-1.5 text-slate-400 hover:text-red-500"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            <button
-                              type="button"
-                              onClick={addLoteIntermediario}
-                              className="text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline inline-flex items-center gap-1"
-                            >
-                              <Plus size={12} /> Adicionar lote
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Estoque (Tier 2): limite total por tipo. NULL = ilimitado.
-                            Toggle ON sem valor = 0 (= ilimitado, não força). Producer digita explicitamente. */}
-                        {(() => {
-                          // toggle is "on" se: tem limite > 0 OU está em modo edição (após click)
-                          const hasLimit = item.quantidade_total != null && item.quantidade_total > 0;
-                          // edição em curso: quantidade_total === 0 (toggle clicado, valor não digitado ainda)
-                          const editing = item.quantidade_total === 0;
-                          const showInput = hasLimit || editing;
-                          return (
-                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
-                              <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={showInput}
-                                  onChange={e => updateField({
-                                    quantidade_total: e.target.checked ? 0 : null,
-                                  })}
-                                  className="w-4 h-4 accent-[#ff0068]"
-                                />
-                                Limitar estoque
-                              </label>
-                              {showInput && (
-                                <>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={item.quantidade_total ?? ''}
-                                    onChange={e => updateField({ quantidade_total: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
-                                    placeholder="Ex: 100"
-                                    inputMode="numeric"
-                                    autoFocus={editing}
-                                    className="w-24 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-1.5 px-3 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-[#ff0068]/50"
-                                  />
-                                  <span className="text-[10px] text-slate-500">
-                                    {hasLimit ? 'ingressos no total' : 'digite o total (em branco = ilimitado)'}
-                                  </span>
-                                </>
-                              )}
-                              {!showInput && (
-                                <span className="text-[10px] text-slate-500">Sem limite (ilimitado)</span>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        {/* Promocional (Decreto 13.108 art. 10): política comercial do produtor,
-                            não conta na cota de 40% da meia-entrada e não acumula com ela. */}
-                        <label className="flex items-start gap-2 pt-2 border-t border-slate-200 dark:border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={item.promocional === true}
-                            onChange={e => updateField({ promocional: e.target.checked ? true : undefined })}
-                            className="mt-0.5 w-4 h-4 accent-[#ff0068]"
-                          />
-                          <span>
-                            Ingresso promocional
-                            <span className="block normal-case tracking-normal font-medium text-slate-500 mt-0.5">
-                              Cupom, convênio ou lote promocional próprio. Não conta na cota de meia-entrada.
-                            </span>
-                          </span>
-                        </label>
-                      </div>
-                    );
-                  })
-                )}
-                  </div>
-
-                  {/* Tier 1 — Vender ingressos pela CoreoHub */}
-                  <div className="mt-6 border-t border-slate-200 dark:border-white/10 pt-5 space-y-4">
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={audienceSalesEnabled}
-                        onChange={e => setAudienceSalesEnabled(e.target.checked)}
-                        className="mt-1 w-4 h-4 accent-[#ff0068]"
-                      />
-                      <div>
-                        <p className="text-sm font-black text-slate-900 dark:text-white">
-                          Vender ingressos pela CoreoHub
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                          Quando ativo, o botão "Comprar" na vitrine pública leva pra checkout interno
-                          (PIX/cartão/boleto via Asaas). Comprador recebe ingresso digital com QR no email.
-                          Quando inativo, mostra os tipos como informativo (com link externo se cadastrado).
-                        </p>
-                      </div>
-                    </label>
-
-                    {audienceSalesEnabled && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
-                        <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
-                            Comissão da plataforma
-                          </label>
-                          {isAdmin ? (
-                            <>
-                              <input
-                                type="number"
-                                min={0} max={100} step={0.5}
-                                value={audienceCommissionPercent}
-                                onChange={e => { setAudienceCommissionPercent(Number(e.target.value)); setAudienceCommissionPercentManual(true); }}
-                                className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                              />
-                              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold">⚙️ Admin: editável só pra você. Produtores veem como fixo.</p>
-                              {audienceCommissionPercentManual && (
-                                <p className="text-[10px] text-slate-400 mt-1">Customizado manualmente — não muda mais sozinho se o plano do evento trocar.</p>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-slate-700 dark:text-slate-300 text-sm font-bold flex items-center justify-between">
-                                <span>{audienceCommissionPercent}% sobre cada ingresso</span>
-                                <span className="text-[9px] uppercase tracking-widest text-slate-400">Fixo</span>
-                              </div>
-                              <p className="text-[10px] text-slate-500 mt-1">Definido pela CoreoHub e não pode ser alterado.</p>
-                            </>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
-                            Quem paga a taxa
-                          </label>
-                          <select
-                            value={audienceFeeMode}
-                            onChange={e => setAudienceFeeMode(e.target.value as 'repassar' | 'absorver')}
-                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                          >
-                            <option value="repassar">Repassar ao comprador (preço + taxa)</option>
-                            <option value="absorver">Absorver (eu pago a taxa)</option>
-                          </select>
-                          <p className="text-[10px] text-slate-500 mt-1">
-                            {audienceFeeMode === 'repassar'
-                              ? 'Comprador vê preço + taxa de serviço.'
-                              : 'Comprador vê só o preço; taxa sai do seu líquido.'}
-                          </p>
-                        </div>
-
-                        {adv(<>
-                        <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
-                            Máx ingressos por CPF
-                          </label>
-                          <input
-                            type="number"
-                            min={1} max={50}
-                            value={audienceMaxPerCpf}
-                            onChange={e => setAudienceMaxPerCpf(Math.max(1, Number(e.target.value)))}
-                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                          />
-                          <p className="text-[10px] text-slate-500 mt-1">Padrão 6 (cobre família). Meia-entrada tem limite legal de 1.</p>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
-                            Máx ingressos por compra
-                          </label>
-                          <input
-                            type="number"
-                            min={1} max={20}
-                            value={audienceMaxPerPurchase}
-                            onChange={e => setAudienceMaxPerPurchase(Math.max(1, Number(e.target.value)))}
-                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                          />
-                          <p className="text-[10px] text-slate-500 mt-1">Sympla padrão é 5. Para escolas de dança com famílias grandes, considere 6+.</p>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
-                            Tempo de reserva (min)
-                          </label>
-                          <input
-                            type="number"
-                            min={1} max={60}
-                            value={audienceReservationMinutes}
-                            onChange={e => setAudienceReservationMinutes(Math.min(60, Math.max(1, Number(e.target.value))))}
-                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                          />
-                          <p className="text-[10px] text-slate-500 mt-1">Quanto o ingresso fica reservado pro comprador antes de auto-cancelar. Padrão 10min (Eventbrite).</p>
-                        </div>
-                        </>, advHostGeral, 'bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-6 rounded-3xl grid grid-cols-1 md:grid-cols-3 gap-4')}
-                      </div>
-                    )}
-                  </div>
-                </>
+                <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 flex-1 min-w-[200px]">
+                    Tipos de ingresso, lotes, preço por zona e regras de venda ficam em <strong>Vendas &gt; Ingressos &gt; Tipos e preços</strong>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/vendas-ingressos?aba=tipos')}
+                    className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                  >
+                    Abrir tipos e preços
+                  </button>
+                </div>
               )}
             </div>
-
-            {/* Preço por zona do mapa de assentos */}
-            {activeEventId && eventSeatMap && politicaIngressos === 'INTERNO' && (
-              <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 md:p-8 rounded-3xl space-y-5">
-                <div>
-                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Preço por zona do mapa</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Cobre valores diferentes por região da plateia (frente, fundo, laterais...).</p>
-                </div>
-                <SeatZonesEditor eventId={activeEventId} zones={seatZones} onZonesSaved={(next) => {
-                  setSeatZones(next);
-                  // Zona removida: apaga os preços dela (tipo e lotes) pra não travar o próximo 'Salvar'.
-                  const keep = new Set(next.map(z => z.key));
-                  const clean = (m: any) => {
-                    if (!m) return m;
-                    const out = Object.fromEntries(Object.entries(m).filter(([k]) => k === 'geral' || keep.has(k)));
-                    return Object.keys(out).length > 0 ? out : undefined;
-                  };
-                  setIngressos(list => list.map((t: any) => ({
-                    ...t,
-                    ...(t.precos_por_zona ? { precos_por_zona: clean(t.precos_por_zona) } : {}),
-                    ...(Array.isArray(t.lotes) ? { lotes: t.lotes.map((l: any) => (l.precos_por_zona ? { ...l, precos_por_zona: clean(l.precos_por_zona) } : l)) } : {}),
-                  })));
-                }} />
-                {seatZones.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preços por zona</p>
-                    <ZonePriceMatrix zones={seatZones} ingressos={ingressos} onChange={setIngressos} />
-                    <p className="text-[10px] text-slate-500">Os preços entram quando você clicar em Salvar no fim da página.</p>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Sessões do mesmo espetáculo (evento por sessão, mesmo local) */}
             {activeEventId && (isEspetaculo || eventSeatMap) && <EventSessionsCard eventId={activeEventId} />}

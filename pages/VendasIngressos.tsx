@@ -9,7 +9,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 import { edgeErrorMessage } from '../utils/edgeError';
 import { supabase, resolveActiveEventId, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import {
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
+import TicketTypesEditor from '../components/TicketTypesEditor';
 import EventPickerSheet from '../components/EventPickerSheet';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
@@ -105,8 +105,7 @@ const STATUS_FILTERS: Array<{ id: string; label: string }> = [
 ];
 
 const VendasIngressos: React.FC = () => {
-  const navigate = useNavigate();
-  const [view, setView] = useState<'vendas' | 'tipos'>('vendas');
+  const [view, setView] = useState<'vendas' | 'tipos'>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('aba') === 'tipos' ? 'tipos' : 'vendas'));
   const [rows, setRows] = useState<Row[]>([]);
   const [eventName, setEventName] = useState<string>('');
   const [eventId, setEventId] = useState<string | null>(null);
@@ -190,6 +189,7 @@ const VendasIngressos: React.FC = () => {
 
   // Bloqueio de lugares (docs/plano-bloqueio-assentos.md): só dono e super admin.
   const [canManageBlocks, setCanManageBlocks] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
   const [blockSelected, setBlockSelected] = useState<string[]>([]);
   const [blockReason, setBlockReason] = useState('');
@@ -204,6 +204,15 @@ const VendasIngressos: React.FC = () => {
   const [applyToSiblings, setApplyToSiblings] = useState(true);
   // Motivos dos lugares bloqueados (leitura direta, so o dono passa na RLS). A LISTA vem do status ao vivo.
   const [blockedRows, setBlockedRows] = useState<Array<{ seat_id: string; block_reason: string | null }>>([]);
+
+  // Recarrega só tipos e zonas depois de salvar no editor (sem trocar a tela por spinner,
+  // para a mensagem de "salvo" continuar visível).
+  const refreshTypes = async (targetEventId: string) => {
+    const { data: ev, error } = await supabase.from('events').select('ingressos_config, seat_zones').eq('id', targetEventId).maybeSingle();
+    if (error) { console.error('[VendasIngressos] recarregar tipos:', error.message); return; }
+    setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
+    setSeatZones(Array.isArray((ev as any)?.seat_zones) ? (ev as any).seat_zones : []);
+  };
 
   const load = async (targetEventId: string) => {
     setLoading(true);
@@ -231,11 +240,14 @@ const VendasIngressos: React.FC = () => {
       try {
         const { data: { user: me } } = await supabase.auth.getUser();
         let allowed = Boolean(me && (ev as any)?.created_by === me.id);
-        if (me && !allowed) {
+        let superAdmin = false;
+        if (me) {
           const { data: prof, error: profErr } = await supabase.from('profiles').select('is_super_admin').eq('id', me.id).maybeSingle();
           if (profErr) console.error('[VendasIngressos] perfil (super admin):', profErr.message);
-          allowed = prof?.is_super_admin === true;
+          superAdmin = prof?.is_super_admin === true;
+          allowed = allowed || superAdmin;
         }
+        setIsSuperAdmin(superAdmin);
         setCanManageBlocks(allowed);
       } catch (e) {
         console.error('[VendasIngressos] checar permissão de bloqueio:', e);
@@ -976,11 +988,9 @@ const VendasIngressos: React.FC = () => {
       </div>
 
       {view === 'tipos' && (
-        <TicketTypesPanel
-          types={ticketTypes}
-          zones={seatMapEnabled ? seatZones : []}
-          onEdit={() => navigate('/account-settings?tab=Geral')}
-        />
+        eventId ? (
+          <TicketTypesEditor key={eventId} eventId={eventId} isAdmin={isSuperAdmin} onSaved={() => { void refreshTypes(eventId); }} />
+        ) : null
       )}
 
       {view === 'vendas' && (<>
@@ -2192,67 +2202,6 @@ const VendasIngressos: React.FC = () => {
         </div>
       )}
       </>)}
-    </div>
-  );
-};
-
-const TicketTypesPanel: React.FC<{ types: TicketTypeConfig[]; zones: SeatZone[]; onEdit: () => void }> = ({ types, zones, onEdit }) => {
-  const today = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
-  const zoned = zones.length > 0;
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-xs text-slate-500">Tipos de ingresso desta sessão. Para alterar, use a edição em Configurações.</p>
-        <button
-          onClick={onEdit}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
-        >
-          Editar
-        </button>
-      </div>
-      {types.length === 0 ? (
-        <div className="bg-white dark:bg-white/5 border border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-12 text-center">
-          <Ticket size={32} className="text-slate-400 mx-auto mb-3" />
-          <p className="text-sm font-bold text-slate-700 dark:text-white">Nenhum tipo de ingresso cadastrado</p>
-          <p className="text-xs text-slate-500 mt-1">Clique em Editar para criar o primeiro tipo e os preços.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {types.map((t, idx) => {
-            const lotes = Array.isArray(t.lotes) ? t.lotes : [];
-            const loteIdx = lotes.findIndex(l => !l.data_virada || l.data_virada >= today);
-            const vigente = lotes.length > 0 ? lotes[loteIdx >= 0 ? loteIdx : lotes.length - 1] : null;
-            const base = Number(vigente?.preco ?? t.preco ?? 0);
-            const range = zoned ? priceRangeForType(t as any, idx, zones, today, { includeBase: false }) : null;
-            const faixa = range && range.max > 0
-              ? (range.min === range.max ? formatBRL(range.min) : `${formatBRL(range.min)} a ${formatBRL(range.max)}`)
-              : formatBRL(base);
-            return (
-              <div key={`${t.nome}-${idx}`} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">{t.nome}</p>
-                  <span className="text-sm font-black text-[#ff0068] tabular-nums whitespace-nowrap">{faixa}</span>
-                </div>
-                {range && range.max > 0 && range.min !== range.max && (
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preço conforme a zona do lugar</p>
-                )}
-                {lotes.length > 0 ? (
-                  <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                    {lotes.map((l, i) => (
-                      <li key={i} className="flex justify-between gap-3">
-                        <span>Lote {i + 1}{l.data_virada ? ` até ${l.data_virada.split('-').reverse().join('/')}` : ''}{vigente === l ? ' (atual)' : ''}</span>
-                        <span className="tabular-nums">{formatBRL(Number(l.preco ?? 0))}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-slate-500">Lote único.</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 };
