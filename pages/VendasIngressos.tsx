@@ -9,6 +9,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { edgeErrorMessage } from '../utils/edgeError';
 import { supabase, resolveActiveEventId, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import {
@@ -104,6 +105,8 @@ const STATUS_FILTERS: Array<{ id: string; label: string }> = [
 ];
 
 const VendasIngressos: React.FC = () => {
+  const navigate = useNavigate();
+  const [view, setView] = useState<'vendas' | 'tipos'>('vendas');
   const [rows, setRows] = useState<Row[]>([]);
   const [eventName, setEventName] = useState<string>('');
   const [eventId, setEventId] = useState<string | null>(null);
@@ -955,6 +958,33 @@ const VendasIngressos: React.FC = () => {
         </div>
       </div>
 
+      {/* Abas da tela: Vendas (lista) e Tipos e preços (leitura do que está à venda) */}
+      <div role="tablist" aria-label="Ingressos" className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-2xl w-fit max-w-full overflow-x-auto">
+        {([['vendas', 'Vendas'], ['tipos', 'Tipos e preços']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+              view === id ? 'bg-white dark:bg-white/10 text-[#ff0068] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'tipos' && (
+        <TicketTypesPanel
+          types={ticketTypes}
+          zones={seatMapEnabled ? seatZones : []}
+          onEdit={() => navigate('/account-settings?tab=Geral')}
+        />
+      )}
+
+      {view === 'vendas' && (<>
+
       {/* Escolhas dos compradores numa sessão adiada/cancelada + restituição em lote (Decreto 13.108 arts. 20-22) */}
       {sessionInfo.status !== 'agendada' && (
         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-3">
@@ -1317,10 +1347,17 @@ const VendasIngressos: React.FC = () => {
       {filtered.length === 0 ? (
         <div className="bg-white dark:bg-white/5 border border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-12 text-center">
           <Ticket size={32} className="text-slate-400 mx-auto mb-3" />
-          <p className="text-sm font-bold text-slate-700 dark:text-white">Nenhum ingresso ainda</p>
+          <p className="text-sm font-bold text-slate-700 dark:text-white">{rows.length === 0 ? 'Nenhuma venda ainda' : 'Nenhuma venda com esse filtro'}</p>
           <p className="text-xs text-slate-500 mt-1">
-            Compras aparecem aqui assim que o pagamento é confirmado.
+            {rows.length === 0 && ticketTypes.length === 0
+              ? 'Este evento ainda não tem tipo de ingresso. Cadastre em "Tipos e preços" para começar a vender.'
+              : 'Compras aparecem aqui assim que o pagamento é confirmado.'}
           </p>
+          {rows.length === 0 && ticketTypes.length === 0 && (
+            <button onClick={() => setView('tipos')} className="mt-3 px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
+              Ver tipos e preços
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
@@ -2152,6 +2189,68 @@ const VendasIngressos: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+      </>)}
+    </div>
+  );
+};
+
+const TicketTypesPanel: React.FC<{ types: TicketTypeConfig[]; zones: SeatZone[]; onEdit: () => void }> = ({ types, zones, onEdit }) => {
+  const today = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+  const zoned = zones.length > 0;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-slate-500">Tipos de ingresso desta sessão. Para alterar, use a edição em Configurações.</p>
+        <button
+          onClick={onEdit}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+        >
+          Editar
+        </button>
+      </div>
+      {types.length === 0 ? (
+        <div className="bg-white dark:bg-white/5 border border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-12 text-center">
+          <Ticket size={32} className="text-slate-400 mx-auto mb-3" />
+          <p className="text-sm font-bold text-slate-700 dark:text-white">Nenhum tipo de ingresso cadastrado</p>
+          <p className="text-xs text-slate-500 mt-1">Clique em Editar para criar o primeiro tipo e os preços.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {types.map((t, idx) => {
+            const lotes = Array.isArray(t.lotes) ? t.lotes : [];
+            const loteIdx = lotes.findIndex(l => !l.data_virada || l.data_virada >= today);
+            const vigente = lotes.length > 0 ? lotes[loteIdx >= 0 ? loteIdx : lotes.length - 1] : null;
+            const base = Number(vigente?.preco ?? t.preco ?? 0);
+            const range = zoned ? priceRangeForType(t as any, idx, zones, today, { includeBase: false }) : null;
+            const faixa = range && range.max > 0
+              ? (range.min === range.max ? formatBRL(range.min) : `${formatBRL(range.min)} a ${formatBRL(range.max)}`)
+              : formatBRL(base);
+            return (
+              <div key={`${t.nome}-${idx}`} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">{t.nome}</p>
+                  <span className="text-sm font-black text-[#ff0068] tabular-nums whitespace-nowrap">{faixa}</span>
+                </div>
+                {range && range.max > 0 && range.min !== range.max && (
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preço conforme a zona do lugar</p>
+                )}
+                {lotes.length > 0 ? (
+                  <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                    {lotes.map((l, i) => (
+                      <li key={i} className="flex justify-between gap-3">
+                        <span>Lote {i + 1}{l.data_virada ? ` até ${l.data_virada.split('-').reverse().join('/')}` : ''}{vigente === l ? ' (atual)' : ''}</span>
+                        <span className="tabular-nums">{formatBRL(Number(l.preco ?? 0))}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-500">Lote único.</p>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
