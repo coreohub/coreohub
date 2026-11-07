@@ -378,13 +378,14 @@ export const resolveActiveEventId = async (eventIdHint?: string | null): Promise
   if (!user) return null;
   const { data: ev } = await supabase
     .from('events')
-    .select('id')
+    .select('id, session_group_id')
     .eq('created_by', user.id)
     .order('is_demo', { ascending: true })
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (ev?.id) return ev.id;
+  // Espetáculo com várias sessões: abre na principal (a primeira), não na sessão criada por último.
+  if (ev?.id) return ev.session_group_id ?? ev.id;
   // Membro de equipe não é dono de nenhum evento: cai no evento vinculado.
   const { data: profile } = await supabase
     .from('profiles')
