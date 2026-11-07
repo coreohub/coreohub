@@ -14,6 +14,8 @@
 //   - fee_mode 'absorver' = produtor absorve (charged = base; produtor recebe
 //     base - comissão).
 
+import { todayBR } from './today-br.ts';
+
 export const round2 = (n: number) => parseFloat(n.toFixed(2));
 
 /**
@@ -22,7 +24,7 @@ export const round2 = (n: number) => parseFloat(n.toFixed(2));
  */
 export function resolveTicketPrice(
   ticketType: { lotes?: Array<{ data_virada: string | null; preco: number; nome?: string }> | null; preco?: number | null },
-  todayISO: string = new Date().toISOString().slice(0, 10),
+  todayISO: string = todayBR(),
 ): { preco: number; lote: string | null } {
   const lotes = Array.isArray(ticketType.lotes) ? ticketType.lotes : [];
   if (lotes.length > 0) {

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { todayBR } from '../_shared/today-br.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
@@ -124,14 +125,12 @@ Deno.serve(async (req) => {
     const formacaoLotes: Array<{ preco: number; data_virada: string | null }> =
       formacaoEscolhida?.lotes ?? []
     if (formacaoLotes.length > 0) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      const today = todayBR()
       let lotPicked: typeof formacaoLotes[number] | null = null
       let allExpired = true
       for (const lot of formacaoLotes) {
         if (!lot.data_virada) { lotPicked = lot; allExpired = false; break }
-        const d = new Date(lot.data_virada + 'T23:59:59')
-        if (d.getTime() >= today.getTime()) { lotPicked = lot; allExpired = false; break }
+        if (lot.data_virada >= today) { lotPicked = lot; allExpired = false; break }  // até a data_virada, inclusive (calendário BR)
       }
       if (allExpired) throw new Error('Inscrições encerradas: prazo de todos os lotes vencido.')
       if (lotPicked && lotPicked.preco > 0) baseFee = lotPicked.preco

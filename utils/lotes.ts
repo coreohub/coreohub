@@ -11,10 +11,13 @@
  *   - data_virada = null → último lote, sem expiração.
  */
 
+import { todayBR } from '../supabase/functions/_shared/today-br';
+
 export type Lote = { data_virada: string | null; preco: number };
 
+/** Hoje no calendário brasileiro (o lote vira à meia-noite de Brasília, não do UTC). */
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayBR();
 }
 
 /** Retorna { lote vigente, idx, próximo lote } ou null se não houver lotes. */

@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { todayBR } from '../supabase/functions/_shared/today-br';
 import { createPortal } from 'react-dom';
 import { edgeErrorMessage } from '../utils/edgeError';
 import { supabase, resolveActiveEventId, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
@@ -648,7 +649,7 @@ const VendasIngressos: React.FC = () => {
   const resolveDisplayPreco = (t: TicketTypeConfig): number => {
     const lotes = Array.isArray(t.lotes) ? t.lotes : [];
     if (lotes.length > 0) {
-      const todayISO = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+      const todayISO = todayBR();
       const idx = lotes.findIndex(l => !l.data_virada || l.data_virada >= todayISO);
       return Number((idx >= 0 ? lotes[idx] : lotes[lotes.length - 1])?.preco ?? 0);
     }

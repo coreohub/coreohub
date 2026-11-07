@@ -38,6 +38,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { todayBR } from '../_shared/today-br.ts'
 import { round2 } from '../_shared/audience-pricing.ts'
 import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
 import { allocateProportional, normalizeInstallments } from '../_shared/processing-fee.ts'
@@ -96,7 +97,7 @@ function detectKind(nome: string, explicitKind?: string): string {
 function resolvePreco(ticketType: any): number {
   const lotes: Array<{ data_virada: string | null; preco: number }> =
     Array.isArray(ticketType.lotes) ? ticketType.lotes : []
-  const todayISO = new Date().toISOString().slice(0, 10)
+  const todayISO = todayBR()
   if (lotes.length > 0) {
     const idx = lotes.findIndex(l => !l.data_virada || l.data_virada >= todayISO)
     const lote = idx >= 0 ? lotes[idx] : lotes[lotes.length - 1]
@@ -358,11 +359,11 @@ Deno.serve(async (req) => {
         }
         const seatInfo = new Map((seatRows ?? []).map((r: any) => [r.seat_id as string, { zone_key: r.zone_key as string | null, seat_tipo: r.seat_tipo as string | null }]))
         if (seatInfo.size !== seatIds.length) throw new Error('Assento inexistente neste evento')
-        const todayBR = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
+        const todayBRStr = todayBR()
         const applied = applyZonePricing({
           resolved, ingressos, seatIds, seatInfo,
           assignments: Array.isArray(seatAssignmentsRaw) ? seatAssignmentsRaw : null,
-          today: todayBR, quotePrices, zones: (event as any).seat_zones,
+          today: todayBRStr, quotePrices, zones: (event as any).seat_zones,
         })
         resolved = applied.resolved
         seatIds = applied.seatIds

@@ -19,6 +19,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { todayBR } from '../_shared/today-br.ts'
 import { resolveTicketPrice } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
 import { zonePricingActive, quoteZonePrices, type SeatZone } from '../_shared/seat-zone-pricing.ts'
@@ -115,8 +116,8 @@ Deno.serve(async (req) => {
     })
     // Preço por zona: chaves extras "idx:zona" (a "idx" segue sendo o preço-base).
     if (zonePricingActive(Boolean((event as any).seat_map_enabled), (event as any).seat_zones, ingressos)) {
-      const todayBR = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
-      Object.assign(prices, quoteZonePrices(ingressos, (event as any).seat_zones as SeatZone[], todayBR))
+      const todayBRStr = todayBR()
+      Object.assign(prices, quoteZonePrices(ingressos, (event as any).seat_zones as SeatZone[], todayBRStr))
     }
 
     const minutes = Math.min(Math.max(Number(event.audience_reservation_minutes ?? 15), 5), 30)

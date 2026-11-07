@@ -6,6 +6,7 @@
 // Webhook detecta este fluxo via externalReference prefix "AGG:".
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { todayBR } from '../_shared/today-br.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
@@ -40,12 +41,10 @@ function pickActiveLote(formacao: any): { preco: number; data_virada: string | n
   // retorna null (caller decide se trava ou usa baseFee config).
   const lotes: Array<{ preco: number; data_virada: string | null }> = formacao?.lotes ?? []
   if (lotes.length === 0) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = todayBR()
   for (const lot of lotes) {
     if (!lot.data_virada) return lot
-    const d = new Date(lot.data_virada + 'T23:59:59')
-    if (d.getTime() >= today.getTime()) return lot
+    if (lot.data_virada >= today) return lot  // vale até a data_virada, inclusive (calendário BR)
   }
   return null  // todos expiraram
 }
