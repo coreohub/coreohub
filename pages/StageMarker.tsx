@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { pickDefaultEvent } from '../utils/defaultEvent';
 import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X, Radio, RefreshCw, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
@@ -103,12 +104,12 @@ const StageMarker = () => {
       const teamEventIds = await fetchMyTeamEventIds();
       const query = supabase
         .from('events')
-        .select('id,name,edition_year,start_date,event_time,created_at,is_demo')
+        .select('id,name,edition_year,start_date,event_time,created_at,is_demo,session_group_id')
         .order('created_at', { ascending: false });
       const { data } = await query.or(ownedOrTeamEventsFilter(user.id, teamEventIds));
       if (data && data.length > 0) {
         setAllEvents(data);
-        setSelectedEventId(prev => prev ?? data[0].id);
+        setSelectedEventId(prev => prev ?? pickDefaultEvent(data[0], data).id);
       } else {
         setLoading(false);
       }

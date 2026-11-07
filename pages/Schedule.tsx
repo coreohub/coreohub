@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { pickDefaultEvent } from '../utils/defaultEvent';
 import { useNavigate } from 'react-router-dom';
 import {
   GripVertical, Sparkles, Download, Save, AlertCircle,
@@ -769,7 +770,7 @@ const Schedule = () => {
       const teamEventIds = await fetchMyTeamEventIds();
       const query = supabase
         .from('events')
-        .select('id,name,edition_year,start_date,created_at,is_demo')
+        .select('id,name,edition_year,start_date,created_at,is_demo,session_group_id')
         // Evento real sempre vence um evento DEMO mais recente (evita o
         // DEMO sombrear o Cronograma real — mesmo bug de resolveActiveEventId,
         // ver CLAUDE.md 2026-07-12). Dentro do mesmo grupo, o mais recente vence.
@@ -778,7 +779,7 @@ const Schedule = () => {
       const { data } = await query.or(ownedOrTeamEventsFilter(user.id, teamEventIds));
       if (data && data.length > 0) {
         setAllEvents(data);
-        setSelectedEventId(prev => prev ?? data[0].id);
+        setSelectedEventId(prev => prev ?? pickDefaultEvent(data[0], data).id);
       } else {
         fetchData(null);
       }

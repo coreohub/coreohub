@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { pickDefaultEvent } from '../utils/defaultEvent';
 import { createPortal } from 'react-dom';
 import AdvancedSection from '../components/AdvancedSection';
 import { useNavigate } from 'react-router-dom';
@@ -2094,13 +2095,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       if (!user) return;
       const { data } = await supabase
         .from('events')
-        .select('id, name, edition_year, is_demo, start_date, event_time')
+        .select('id, name, edition_year, is_demo, start_date, event_time, session_group_id')
         .eq('created_by', user.id)
         .order('is_demo', { ascending: true })
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setPickerEvents(data);
-        setSelectedEventId(prev => prev ?? data[0].id);
+        setSelectedEventId(prev => prev ?? pickDefaultEvent(data[0], data).id);
       }
     })();
   }, []);
@@ -3352,7 +3353,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     if (alreadyUsing) {
                       return (
                         <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1.5 flex items-center gap-1">
-                          ✓ Usando a página oficial da vitrine no CoreoHub
+                          ✓ Usando a página oficial da vitrine na CoreoHub
                         </p>
                       );
                     }
@@ -3902,7 +3903,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-5">
                 {([
                   { v: 'GRATUITO', label: 'Gratuito',      desc: 'Entrada livre, sem ingresso',           recommended: false },
-                  { v: 'INTERNO',  label: 'Vender pelo CoreoHub', desc: 'Receba via PIX • QR digital • check-in unificado', recommended: true },
+                  { v: 'INTERNO',  label: 'Vender pela CoreoHub', desc: 'Receba via PIX • QR digital • check-in unificado', recommended: true },
                   { v: 'EXTERNO',  label: 'Ticketeira externa',  desc: 'Sympla, Eventbrite etc.',         recommended: false },
                 ] as const).map(opt => {
                   const active = politicaIngressos === opt.v;
@@ -3912,7 +3913,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       key={opt.v}
                       type="button"
                       onClick={() => {
-                        // Smart default: ao migrar PRA "Vender pelo CoreoHub", pre-seleciona
+                        // Smart default: ao migrar PRA "Vender pela CoreoHub", pre-seleciona
                         // o checkbox "Vender ingressos" abaixo (o produtor obviamente quer).
                         // Pode desativar manualmente depois se quiser modo só informativo.
                         if (opt.v === 'INTERNO' && politicaIngressos !== 'INTERNO') {
@@ -3926,7 +3927,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
                       }`}
                     >
-                      {/* Badge "Recomendado" no botão Vender pelo CoreoHub */}
+                      {/* Badge "Recomendado" no botão Vender pela CoreoHub */}
                       {recommended && (
                         <span className="absolute -top-2 right-3 px-2 py-0.5 bg-[#ff0068] text-white text-[8px] font-black uppercase tracking-widest rounded-full shadow-md shadow-[#ff0068]/40">
                           Recomendado
@@ -4259,7 +4260,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 )}
                   </div>
 
-                  {/* Tier 1 — Vender ingressos pelo CoreoHub */}
+                  {/* Tier 1 — Vender ingressos pela CoreoHub */}
                   <div className="mt-6 border-t border-slate-200 dark:border-white/10 pt-5 space-y-4">
                     <label className="flex items-start gap-3 cursor-pointer">
                       <input
@@ -4270,7 +4271,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       />
                       <div>
                         <p className="text-sm font-black text-slate-900 dark:text-white">
-                          Vender ingressos pelo CoreoHub
+                          Vender ingressos pela CoreoHub
                         </p>
                         <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                           Quando ativo, o botão "Comprar" na vitrine pública leva pra checkout interno

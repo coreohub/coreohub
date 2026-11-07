@@ -3,7 +3,7 @@ import { Download, X, Copy, Check } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 /**
- * Botão discreto pra instalar o CoreoHub como PWA.
+ * Botão discreto pra instalar a CoreoHub como PWA.
  *
  * Comportamento:
  * - Chrome/Edge/Android: usa o evento `beforeinstallprompt` e mostra botão

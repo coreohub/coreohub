@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { pickDefaultEvent } from '../utils/defaultEvent';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, FileText, CheckCircle2, AlertTriangle, RefreshCw,
@@ -80,13 +81,13 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (!user) return;
       const { data } = await supabase
         .from('events')
-        .select('id, name, edition_year, is_demo, start_date, event_time')
+        .select('id, name, edition_year, is_demo, start_date, event_time, session_group_id')
         .eq('created_by', user.id)
         .order('is_demo', { ascending: true })
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setPickerEvents(data);
-        setSelectedEventId(prev => prev ?? data[0].id);
+        setSelectedEventId(prev => prev ?? pickDefaultEvent(data[0], data).id);
       }
     })();
   }, []);

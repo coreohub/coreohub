@@ -234,7 +234,7 @@ const PublicWorkshopPage: React.FC = () => {
   const seoDescription = (workshop.description ?? '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 160) || `Workshop de ${workshop.name} com ${workshop.professor_name} — inscrições abertas no CoreoHub.`;
+    .slice(0, 160) || `Workshop de ${workshop.name} com ${workshop.professor_name} — inscrições abertas na CoreoHub.`;
   const seoTitle = `${workshop.name} com ${workshop.professor_name} | CoreoHub`;
 
   const breadcrumbJsonLd = {

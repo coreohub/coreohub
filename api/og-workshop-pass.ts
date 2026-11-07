@@ -127,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const title = `${pass.name} — ${eventName} | CoreoHub`;
     const description =
       (pass.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 160) ||
-      `${pass.name} — pacote de aulas do ${eventName}, inscrições abertas no CoreoHub.`;
+      `${pass.name} — pacote de aulas do ${eventName}, inscrições abertas na CoreoHub.`;
     const canonicalSlug = pass.slug ?? pass.id;
     const url = `${SITE_URL}/checkout-workshop-pass/${canonicalSlug}`;
 

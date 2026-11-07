@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { pickDefaultEvent } from '../utils/defaultEvent';
 import {
   UserPlus, Pencil, Trash2, Instagram, Fingerprint,
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
@@ -316,7 +317,7 @@ const JudgesManagement = () => {
       if (!user) return;
       const { data } = await supabase
         .from('events')
-        .select('id, name, is_demo, edition_year, start_date, event_time')
+        .select('id, name, is_demo, edition_year, start_date, event_time, session_group_id')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
@@ -325,7 +326,7 @@ const JudgesManagement = () => {
         // se for o único evento existente. É o fix direto do bug de
         // sombreamento (demo criado depois do real virando "o ativo" à toa).
         const nonDemo = data.find(e => !e.is_demo);
-        setSelectedEventId(prev => prev ?? (nonDemo?.id ?? data[0].id));
+        setSelectedEventId(prev => prev ?? pickDefaultEvent(nonDemo ?? data[0], data).id);
       }
     })();
   }, []);

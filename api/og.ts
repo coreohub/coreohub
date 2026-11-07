@@ -22,7 +22,7 @@
  * 3. Retorna HTML completo com og:title, og:description, og:image dinâmicos
  *    + JSON-LD Event + conteúdo textual rico no <body>
  * 4. Bot vê o preview E o conteúdo indexável do festival específico (não o
- *    genérico do CoreoHub, e não mais um resumo raso)
+ *    genérico da CoreoHub, e não mais um resumo raso)
  *
  * Roda no Vercel Node runtime (não Edge — precisa de fetch + JSON parsing
  * relaxado; Edge é mais restrito). Latência ~50-200ms na request do bot;
@@ -306,7 +306,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (fullDescription.length <= 158
         ? fullDescription
         : `${fullDescription.slice(0, 157).replace(/s+S*$/, '')}…`) ||
-      `${statusLabel} — ${ev.name}, festival de dança no CoreoHub.`;
+      `${statusLabel} — ${ev.name}, festival de dança na CoreoHub.`;
     const metaDescription = sessionLabel ? `Sessão de ${sessionLabel}. ${shortDescription}` : shortDescription;
     const image = ev.cover_url || DEFAULT_IMAGE;
     const canonicalSlug = ev.slug ?? ev.id;
@@ -322,7 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // bot (Googlebot incluso — ver comentário no topo do arquivo) recebia
     // dado estruturado pra este evento, já que todos são redirecionados
     // pra esta função em vez de rodar o React de verdade.
-    // Ingressos de plateia (só com venda pelo CoreoHub ligada): preço vigente
+    // Ingressos de plateia (só com venda pela CoreoHub ligada): preço vigente
     // do lote de hoje, com URL do checkout — Google exige offers.url crawleável.
     // Data de hoje no Brasil (UTC-3): a virada de lote é por dia local, não UTC.
     const todayIso = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);

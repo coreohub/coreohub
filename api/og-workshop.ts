@@ -120,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const title = `${displayName} | CoreoHub`;
     const description =
       (ws.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 160) ||
-      `Workshop de ${displayName} — inscrições abertas no CoreoHub.`;
+      `Workshop de ${displayName} — inscrições abertas na CoreoHub.`;
     // og:image PRECISA ser URL http(s) — WhatsApp/Telegram/etc não renderizam
     // `data:` URI. Capa/foto do professor são salvas base64 inline (decisão
     // "sem depender de bucket", ver WorkshopsManagement.tsx), então tem que

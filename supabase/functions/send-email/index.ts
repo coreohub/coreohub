@@ -390,7 +390,7 @@ function buildAdminNewProducer(p: { produtorNome?: string; produtorEmail: string
     html: baseLayout({
       preheader: `Novo cadastro de produtor: ${p.produtorEmail}`,
       title: 'Novo produtor cadastrado',
-      intro: 'Notificação interna — alguém acabou de criar conta de produtor no CoreoHub.',
+      intro: 'Notificação interna — alguém acabou de criar conta de produtor na CoreoHub.',
       contentHtml,
       // Notificação interna pro admin — não é comunicação financeira com o produtor.
       includeAsaasSeal: false,
@@ -455,7 +455,7 @@ function buildProducerWelcome(p: ProducerWelcomePayload) {
     html: baseLayout({
       preheader: `Sua conta de produtor está pronta. Veja os próximos passos para colocar seu festival no ar.`,
       title: 'Conta de produtor criada!',
-      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, sua conta no CoreoHub foi criada e está pronta para receber inscrições. Aqui vai um guia rápido:`,
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, sua conta na CoreoHub foi criada e está pronta para receber inscrições. Aqui vai um guia rápido:`,
       contentHtml,
       ctaLabel: 'Acessar painel do produtor',
       ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/qg-organizador`,
@@ -492,7 +492,7 @@ function buildEventCreatedProducer(p: EventCreatedPayload) {
   return {
     subject: `Evento criado — ${p.eventoNome ?? 'CoreoHub'}`,
     html: baseLayout({
-      preheader: `Seu evento ${p.eventoNome ?? ''} foi configurado com sucesso no CoreoHub.`,
+      preheader: `Seu evento ${p.eventoNome ?? ''} foi configurado com sucesso na CoreoHub.`,
       title: 'Seu evento está no ar!',
       intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, as configurações do seu evento foram salvas. Tudo pronto para começar!`,
       contentHtml,
@@ -1437,7 +1437,7 @@ function buildTrilhaReminder(p: TrilhaReminderPayload) {
     <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       ${isLastChance
         ? 'Depois do prazo a coreografia pode ser desclassificada — o evento precisa fechar o cronograma com as trilhas em mãos.'
-        : 'Suba o arquivo de áudio (MP3/WAV) pelo CoreoHub. Verifica também os dados dos bailarinos (CPF e data de nascimento) — sem eles não emitimos certificado.'}
+        : 'Suba o arquivo de áudio (MP3/WAV) pela CoreoHub. Verifica também os dados dos bailarinos (CPF e data de nascimento) — sem eles não emitimos certificado.'}
     </p>`
 
   return {
@@ -1751,7 +1751,7 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
       <p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#475569;">pra fechar inscrição em <strong>${escape(p.eventoNome)}</strong></p>
     </div>
     <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
-      Você criou conta no CoreoHub mas ainda não confirmou sua participação. Garanta sua vaga antes que o prazo feche.
+      Você criou conta na CoreoHub mas ainda não confirmou sua participação. Garanta sua vaga antes que o prazo feche.
     </p>`
 
   return {
@@ -1763,7 +1763,7 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
       contentHtml,
       ctaLabel: 'Inscrever agora',
       ctaUrl,
-      footerNote: 'Você está recebendo este email porque criou conta no CoreoHub mas ainda não completou inscrição. Se não quiser participar, basta ignorar.',
+      footerNote: 'Você está recebendo este email porque criou conta na CoreoHub mas ainda não completou inscrição. Se não quiser participar, basta ignorar.',
       // Reengajamento de lead (marketing) — sem transação envolvida.
       includeAsaasSeal: false,
     }),
@@ -2385,7 +2385,7 @@ Deno.serve(async (req) => {
         subject = tpl.subject
         html = tpl.html
 
-        // Em paralelo, dispara notificação interna pro admin do CoreoHub
+        // Em paralelo, dispara notificação interna pro admin da CoreoHub
         // (best-effort — falha não bloqueia o producer_welcome).
         const adminEmail = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'
         try {
@@ -2667,7 +2667,7 @@ Deno.serve(async (req) => {
         // próprio (não pagamentos@, que é só pra emails de cobrança/repasse).
         fromOverride = 'CoreoHub <contato@coreohub.com>'
 
-        // Em paralelo, dispara notificação interna pro admin do CoreoHub
+        // Em paralelo, dispara notificação interna pro admin da CoreoHub
         // avisando que um novo lead chegou (best-effort — falha não bloqueia
         // o e-mail de proposta pro lead). Mesmo padrão de admin_new_producer.
         const adminEmail = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'

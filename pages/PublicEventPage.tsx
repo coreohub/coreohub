@@ -821,7 +821,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const seoDescription = (event.description ?? '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 160) || `${seoStatusLabel} — ${event.name}, festival de dança no CoreoHub.`;
+    .slice(0, 160) || `${seoStatusLabel} — ${event.name}, festival de dança na CoreoHub.`;
   const seoImage = event.cover_url || 'https://app.coreohub.com/coreohub-avatar.png';
   // Canonical = link do evento principal; sessões que não são a principal levam ?sessao=. Sem utm e
   // outros parâmetros (antes era window.location.href inteiro).
@@ -1624,7 +1624,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           }
 
           if (politica === 'INTERNO' && Array.isArray(event.ingressos_config) && event.ingressos_config.filter((t: any) => t.nome).length > 0) {
-            // Tier 1: se audience_sales_enabled = true, vendemos pelo CoreoHub
+            // Tier 1: se audience_sales_enabled = true, vendemos pela CoreoHub
             // (botão "Comprar" leva pra /checkout-ingresso). Senão, exibe só os
             // tipos como informativo (ou link externo legado se cadastrado).
             const salesEnabled = !!event.audience_sales_enabled && event.sessao_status !== 'cancelada';

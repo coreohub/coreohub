@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { pickDefaultEvent } from '../utils/defaultEvent';
 import { createPortal } from 'react-dom';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { UserRole } from '../types';
@@ -182,13 +183,13 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
       }
       const { data } = await supabase
         .from('events')
-        .select('id,name,slug,is_public,edition_year,start_date,event_time,formacoes_config,is_demo,created_at,event_type,setup_fee_paid_at,setup_fee_grandfathered,setup_fee_tier_chave')
+        .select('id,name,slug,is_public,session_group_id,edition_year,start_date,event_time,formacoes_config,is_demo,created_at,event_type,setup_fee_paid_at,setup_fee_grandfathered,setup_fee_tier_chave')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setAllEvents(data);
         const demo = data.find(e => (e as any).is_demo);
-        setSelectedEventId(prev => prev ?? (demo?.id ?? data[0].id));
+        setSelectedEventId(prev => prev ?? pickDefaultEvent((demo ?? data[0]) as any, data as any[]).id);
       } else {
         setLoading(false);
       }

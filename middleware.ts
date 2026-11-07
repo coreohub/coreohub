@@ -5,7 +5,7 @@
  * + user-agent de bot) pra raiz "/", mas Vercel dá precedência ao filesystem sobre
  * rewrites quando o path bate com um arquivo literal — "/" sempre resolve pro
  * index.html do build, então o rewrite nunca era avaliado e bots (WhatsApp,
- * Telegram, etc) recebiam o preview genérico do CoreoHub em vez do evento.
+ * Telegram, etc) recebiam o preview genérico da CoreoHub em vez do evento.
  * Middleware roda antes desse estágio, então intercepta a tempo.
  *
  * Mapeamento domínio→slug espelha o que estava (sem efeito) em vercel.json.

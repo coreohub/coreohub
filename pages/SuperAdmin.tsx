@@ -1748,7 +1748,7 @@ const EventCommissionModal: React.FC<{
  *  nativos do browser (feedback real 2026-08-02: inconsistente com o resto
  *  da UI e o motivo de auditoria era um prompt() cru, sem estar visualmente
  *  associado à ação). Mesma lógica (zera comissão, fee_mode='absorver',
- *  grava acesso_liberado_nota), só com o design system do CoreoHub. */
+ *  grava acesso_liberado_nota), só com o design system da CoreoHub. */
 /** Fase 3 (docs/pricing-model-spec.md) — acerto de fechamento do
  *  componente variável do plano Escala. Busca a prévia ao abrir; confirmar
  *  gera cobrança complementar (se devido > coletado) ou fecha na hora (se

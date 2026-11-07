@@ -379,8 +379,8 @@ const Deliberacoes: React.FC = () => {
     tie: 'Empate no Voto Popular — escolha o vencedor na mão.',
     no_votes: 'Nenhum voto registrado ainda no Voto Popular.',
     festival_not_found: 'Este evento não está vinculado a um festival no Voto Popular.',
-    group_not_linked: 'A coreografia vencedora não está vinculada a essa inscrição no CoreoHub.',
-    registration_not_found: 'Inscrição vencedora não encontrada no CoreoHub.',
+    group_not_linked: 'A coreografia vencedora não está vinculada a essa inscrição na CoreoHub.',
+    registration_not_found: 'Inscrição vencedora não encontrada na CoreoHub.',
     unauthorized: 'Sessão expirada — recarregue a página e tente de novo.',
   };
   const pullVotoPopular = async (awardId: string) => {

@@ -187,11 +187,11 @@ function renderEmail(payload: HookPayload): RenderedEmail {
   switch (ed.email_action_type) {
     case 'signup': {
       return {
-        subject: 'Confirme seu e-mail no CoreoHub',
+        subject: 'Confirme seu e-mail na CoreoHub',
         html: baseLayout({
           preheader: 'Falta só um clique pra ativar sua conta CoreoHub.',
           title: 'Confirme seu e-mail',
-          intro: `Olá! Recebemos seu cadastro no CoreoHub com o e-mail <strong>${escape(user.email)}</strong>. Pra ativar a conta, clique no botão abaixo.`,
+          intro: `Olá! Recebemos seu cadastro na CoreoHub com o e-mail <strong>${escape(user.email)}</strong>. Pra ativar a conta, clique no botão abaixo.`,
           contentHtml: `
             <p style="margin:0;font-size:13px;line-height:1.6;color:#475569;">
               O link expira em 1 hora. Se o botão não funcionar, copie e cole o endereço completo no navegador.
@@ -225,7 +225,7 @@ function renderEmail(payload: HookPayload): RenderedEmail {
         subject: 'Seu link de acesso CoreoHub',
         html: baseLayout({
           preheader: 'Login direto sem digitar senha.',
-          title: 'Entrar no CoreoHub',
+          title: 'Entrar na CoreoHub',
           intro: `Use o botão abaixo pra entrar com o e-mail <strong>${escape(user.email)}</strong>. Sem senha — direto na conta.`,
           contentHtml: `
             <p style="margin:0;font-size:13px;line-height:1.6;color:#475569;">
@@ -239,7 +239,7 @@ function renderEmail(payload: HookPayload): RenderedEmail {
     }
     case 'invite': {
       return {
-        subject: 'Você foi convidado pro CoreoHub',
+        subject: 'Você foi convidado pra CoreoHub',
         html: baseLayout({
           preheader: 'Confirme o convite pra acessar.',
           title: 'Convite CoreoHub',
@@ -275,7 +275,7 @@ function renderEmail(payload: HookPayload): RenderedEmail {
     }
     case 'reauthentication': {
       return {
-        subject: 'Confirme que é você no CoreoHub',
+        subject: 'Confirme que é você na CoreoHub',
         html: baseLayout({
           preheader: 'Use o código abaixo pra confirmar a operação.',
           title: 'Reautenticação necessária',
