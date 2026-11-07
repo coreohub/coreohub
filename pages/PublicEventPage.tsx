@@ -2216,12 +2216,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           </div>
         )}
 
-        {/* CTA (só com inscrição; evento só de ingresso/workshop não tem bloco 'Pronto pra viver...') */}
-        {hasFormacoes && (
+        {/* CTA: com inscrição ('Pronto para dançar?') ou com workshops ('Ver workshops'). Evento só de ingresso não tem bloco. */}
+        {(hasFormacoes || hasWorkshopsSection) && (
         <div className="bg-gradient-to-r from-[#ff0068]/20 to-transparent border border-[#ff0068]/20 rounded-[3rem] p-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
             <h3 className="text-3xl font-black uppercase tracking-tighter italic">
-              Pronto para dançar?
+              {hasFormacoes ? 'Pronto para dançar?' : 'Garanta sua vaga nos workshops'}
             </h3>
             <p className="text-slate-400 text-sm mt-2">
               {hasFormacoes
