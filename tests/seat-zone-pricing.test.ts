@@ -143,7 +143,7 @@ describe('validateZonePricing', () => {
   })
 })
 
-import { validateMeiaCeiling, inteiraPriceAt, lotePeriod, ALL_TIME, validateMeiaCeilingForSale, applyZonePricing, zonePricingActive, quoteZonePrices, resolveSeatAssignments, priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing'
+import { pruneZonePrices, validateMeiaCeiling, inteiraPriceAt, lotePeriod, ALL_TIME, validateMeiaCeilingForSale, applyZonePricing, zonePricingActive, quoteZonePrices, resolveSeatAssignments, priceRangeForType } from '../supabase/functions/_shared/seat-zone-pricing'
 
 describe('zonePricingActive / quoteZonePrices', () => {
   it('só ativa com mapa, zonas e algum preço por zona', () => {
@@ -347,5 +347,29 @@ describe('teto da meia: alinhamento por data e escopo da venda', () => {
     expect(validateMeiaCeilingForSale([inteiraD, meiaD], [{ idx: 1, zoneKey: 'frente' }], '2026-11-10')).toEqual([])
     expect(validateMeiaCeilingForSale([inteiraD, meiaD], [{ idx: 1, zoneKey: 'frente' }], '2026-12-01').length).toBe(1)
     expect(validateMeiaCeilingForSale([inteiraD, meiaD], [{ idx: 0, zoneKey: 'frente' }], '2026-12-01')).toEqual([])
+  })
+})
+
+describe('pruneZonePrices (zona removida)', () => {
+  const t: ZonePricedType[] = [
+    { nome: 'Inteira', kind: 'inteira', preco: 50, precos_por_zona: { fundo: 20, meio: 50, geral: 45 }, lotes: [
+      { data_virada: '2026-11-30', preco: 50, precos_por_zona: { fundo: 20, meio: 50 } },
+      { data_virada: null, preco: 60, precos_por_zona: { fundo: 30 } },
+    ] },
+  ]
+  it('tira só a zona removida, em tipo e lotes; geral fica', () => {
+    const out = pruneZonePrices(t, ['meio'])
+    expect(out[0].precos_por_zona).toEqual({ meio: 50, geral: 45 })
+    expect(out[0].lotes![0].precos_por_zona).toEqual({ meio: 50 })
+    expect(out[0].lotes![1].precos_por_zona).toBeUndefined()
+  })
+  it('não muda a entrada', () => {
+    pruneZonePrices(t, ['meio'])
+    expect(t[0].precos_por_zona).toEqual({ fundo: 20, meio: 50, geral: 45 })
+  })
+  it('depois de podar, validateZonePricing não reclama de zona inexistente', () => {
+    const zs: SeatZone[] = [{ key: 'meio', nome: 'Meio', cor: '#ff0068' }]
+    expect(validateZonePricing(zs, t).some(e => e.includes('inexistente'))).toBe(true)
+    expect(validateZonePricing(zs, pruneZonePrices(t, ['meio']))).toEqual([])
   })
 })

@@ -5,7 +5,7 @@ import SeatGrid from './SeatGrid';
 import { useSeatMap, type SeatStatus } from '../hooks/useSeatMap';
 import { expandRow, toggleMany } from '../utils/seatBlock';
 import {
-  MAX_SEAT_ZONES, validateZonePricing, zoneKeyFromName, type SeatZone,
+  MAX_SEAT_ZONES, validateZonePricing, zoneKeyFromName, pruneZonePrices, type SeatZone,
 } from '../supabase/functions/_shared/seat-zone-pricing';
 
 const PALETTE = ['#ff0068', '#1de7f2', '#e3ff0a', '#a78bfa', '#34d399', '#fb923c', '#60a5fa', '#f472b6'];
@@ -154,6 +154,24 @@ export default function SeatZonesEditor({ eventId, zones, onZonesSaved }: Props)
         for (const ev of targetIds()) {
           const { error } = await supabase.rpc('set_event_seat_zones', { p_event_id: ev, p_zone_key: null, p_seat_ids: ids });
           if (error) throw new Error(error.message);
+        }
+      }
+      // Sessões irmãs: preço e ingresso são POR SESSÃO, então o preço da zona removida também
+      // precisa sair do ingressos_config delas (senão o Salvar da irmã barra "zona inexistente").
+      if (removed.length > 0 && applyToSiblings) {
+        const keep = next.map(z => z.key);
+        for (const sib of siblings) {
+          const { data: ev, error: rErr } = await supabase.from('events').select('ingressos_config').eq('id', sib.id).maybeSingle();
+          if (rErr) throw new Error(rErr.message);
+          const list = Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as any[]) : null;
+          if (!list) continue;
+          const pruned = pruneZonePrices(list, keep);
+          if (JSON.stringify(pruned) === JSON.stringify(list)) continue;
+          const { error: uErr } = await supabase.from('events').update({ ingressos_config: pruned }).eq('id', sib.id);
+          if (uErr) throw new Error(uErr.message);
+          // Espelho legado (mesma lista que o editor de ingressos grava).
+          const { error: mErr } = await supabase.from('configuracoes').update({ ingressos_audiencia: pruned, atualizado_em: new Date().toISOString() }).eq('id', sib.id);
+          if (mErr) console.warn('[SeatZonesEditor] espelho legado da irmã:', mErr.message);
         }
       }
       onZonesSaved(next);

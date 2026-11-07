@@ -71,6 +71,28 @@ export function priceForZone(type: ZonePricedType, zoneKey: unknown, today: stri
   return priceOf(type, zk)
 }
 
+/**
+ * Descarta preços de zona que não existem mais (tipo e lotes). `geral` fica. Devolve
+ * cópias novas (não muda a entrada); mapa que fica vazio vira undefined. Usado quando uma
+ * zona é removida (inclusive nas sessões irmãs) e antes de salvar o editor de ingressos.
+ */
+export function pruneZonePrices<T extends ZonePricedType>(types: T[], zoneKeys: Iterable<string>): T[] {
+  const keep = new Set(zoneKeys)
+  const clean = (m: ZonePrices | null | undefined): ZonePrices | undefined => {
+    if (!m || typeof m !== 'object') return undefined
+    const out = Object.fromEntries(Object.entries(m).filter(([k]) => k === DEFAULT_ZONE_KEY || keep.has(k)))
+    return Object.keys(out).length > 0 ? out : undefined
+  }
+  return (Array.isArray(types) ? types : []).map(t => {
+    const next: T = { ...t }
+    if (t.precos_por_zona) next.precos_por_zona = clean(t.precos_por_zona)
+    if (Array.isArray(t.lotes)) {
+      next.lotes = t.lotes.map(l => (l.precos_por_zona ? { ...l, precos_por_zona: clean(l.precos_por_zona) } : l))
+    }
+    return next
+  })
+}
+
 /** O tipo tem algum preço por zona configurado (em qualquer lote)? */
 export function hasZonePricing(type: ZonePricedType): boolean {
   const filled = (m: ZonePrices | null | undefined) => !!m && Object.keys(m).length > 0

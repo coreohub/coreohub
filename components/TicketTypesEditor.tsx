@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import PrecoInput from './PrecoInput';
 import SeatZonesEditor from './SeatZonesEditor';
 import ZonePriceMatrix from './ZonePriceMatrix';
-import { validateZonePricing, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
+import { validateZonePricing, pruneZonePrices, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 
 interface TicketLote { data_virada: string | null; preco: number; precos_por_zona?: Record<string, number> }
 interface TicketType {
@@ -95,8 +95,11 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
   const handleSave = async () => {
     if (!loaded || saving) return;
     setMsg(null);
+    // Preço de zona que não existe mais (ex.: zona removida em outra tela/sessão) é descartado
+    // antes de validar e salvar, em vez de travar o Salvar sem campo pra apagar.
+    const ingressosToSave: typeof ingressos = eventSeatMap ? pruneZonePrices(ingressos as any, seatZones.map(z => z.key)) as any : ingressos;
     if (eventSeatMap && seatZones.length > 0) {
-      const zoneErrors = validateZonePricing(seatZones, ingressos as any);
+      const zoneErrors = validateZonePricing(seatZones, ingressosToSave as any);
       if (zoneErrors.length > 0) {
         setMsg({ kind: 'err', text: `Preço por zona: ${zoneErrors[0]}${zoneErrors.length > 1 ? ` (e mais ${zoneErrors.length - 1})` : ''}` });
         return;
@@ -109,7 +112,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
     setSaving(true);
     try {
       const eventPatch: Record<string, unknown> = {
-        ingressos_config: ingressos,
+        ingressos_config: ingressosToSave,
         audience_sales_enabled: audienceSalesEnabled && politicaIngressos === 'INTERNO',
         audience_fee_mode: audienceFeeMode,
         audience_max_per_cpf: audienceMaxPerCpf,
@@ -124,12 +127,13 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
       // Espelho legado: configuracoes.ingressos_audiencia (mesma lista).
       const { data: cfgUpd, error: cfgErr } = await supabase
         .from('configuracoes')
-        .update({ ingressos_audiencia: ingressos, atualizado_em: new Date().toISOString() })
+        .update({ ingressos_audiencia: ingressosToSave, atualizado_em: new Date().toISOString() })
         .eq('id', eventId)
         .select('id');
       if (cfgErr) throw cfgErr;
       if (!cfgUpd || cfgUpd.length === 0) console.warn('[TicketTypesEditor] sem linha em configuracoes para o evento; espelho legado não atualizado.');
 
+      if (JSON.stringify(ingressosToSave) !== JSON.stringify(ingressos)) setIngressos(ingressosToSave);
       setMsg({ kind: 'ok', text: 'Tipos e preços salvos.' });
       onSaved?.();
     } catch (e: any) {
@@ -576,17 +580,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
                   setSeatZones(next);
                   onSaved?.();
                   // Zona removida: apaga os preços dela (tipo e lotes) pra não travar o próximo 'Salvar'.
-                  const keep = new Set(next.map(z => z.key));
-                  const clean = (m: any) => {
-                    if (!m) return m;
-                    const out = Object.fromEntries(Object.entries(m).filter(([k]) => k === 'geral' || keep.has(k)));
-                    return Object.keys(out).length > 0 ? out : undefined;
-                  };
-                  setIngressos(list => list.map((t: any) => ({
-                    ...t,
-                    ...(t.precos_por_zona ? { precos_por_zona: clean(t.precos_por_zona) } : {}),
-                    ...(Array.isArray(t.lotes) ? { lotes: t.lotes.map((l: any) => (l.precos_por_zona ? { ...l, precos_por_zona: clean(l.precos_por_zona) } : l)) } : {}),
-                  })));
+                  setIngressos(list => pruneZonePrices(list as any, next.map(z => z.key)) as any);
                 }} />
                 {seatZones.length > 0 && (
                   <div className="space-y-2">
