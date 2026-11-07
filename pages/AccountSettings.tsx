@@ -808,9 +808,6 @@ const detectarMaxComposto = (nome: string | undefined): number | null => {
   return null;
 };
 
-/** Teto de preço pra qualquer campo de inscrição/ingresso/workshop — nenhum
- *  valor real de mercado (mesmo festivais grandes tipo Joinville) passa
- *  disso. Trava digitação tipo "2222222222" (achado real 2026-08-02). */
 // Nomes legíveis das colunas que sync_session_group_shared copia pras sessões irmãs.
 const SYNC_COLUMN_LABELS: Record<string, string> = {
   name: 'Título', description: 'Descrição', descricao: 'Descrição',
@@ -2039,6 +2036,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
   useEffect(() => {
     if (!selectedEventId) return;
+    setJustChoseInterno(false);
     const fetchConfig = async () => {
       try {
         // Multi-tenant: tenta ler da row do evento selecionado no picker.
@@ -2051,7 +2049,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, seat_map_enabled, seat_zones, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan, session_group_id')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, seat_map_enabled, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, politica_ingressos, billing_plan, session_group_id')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2685,6 +2683,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         });
       }
 
+      setJustChoseInterno(false);
       if (onSaveSuccess) onSaveSuccess();
       // Evento principal de um espetáculo com sessões: o que mudou nos campos compartilhados só
       // vai pras irmãs depois de o produtor ver a lista e confirmar (a RPC em dry-run não grava nada).

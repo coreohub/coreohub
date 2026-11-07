@@ -189,7 +189,7 @@ const VendasIngressos: React.FC = () => {
 
   // Bloqueio de lugares (docs/plano-bloqueio-assentos.md): só dono e super admin.
   const [canManageBlocks, setCanManageBlocks] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
   const [blockSelected, setBlockSelected] = useState<string[]>([]);
   const [blockReason, setBlockReason] = useState('');
@@ -241,13 +241,15 @@ const VendasIngressos: React.FC = () => {
         const { data: { user: me } } = await supabase.auth.getUser();
         let allowed = Boolean(me && (ev as any)?.created_by === me.id);
         let superAdmin = false;
+        let adminLike = false;
         if (me) {
-          const { data: prof, error: profErr } = await supabase.from('profiles').select('is_super_admin').eq('id', me.id).maybeSingle();
+          const { data: prof, error: profErr } = await supabase.from('profiles').select('is_super_admin, role').eq('id', me.id).maybeSingle();
           if (profErr) console.error('[VendasIngressos] perfil (super admin):', profErr.message);
           superAdmin = prof?.is_super_admin === true;
+          adminLike = superAdmin || (prof as any)?.role === 'COREOHUB_ADMIN';
           allowed = allowed || superAdmin;
         }
-        setIsSuperAdmin(superAdmin);
+        setIsAdmin(adminLike);
         setCanManageBlocks(allowed);
       } catch (e) {
         console.error('[VendasIngressos] checar permissão de bloqueio:', e);
@@ -325,10 +327,10 @@ const VendasIngressos: React.FC = () => {
   // Recarrega quando aba volta a ficar visível (ex: produtor confere após
   // teste de pagamento em outra aba)
   useEffect(() => {
-    const onFocus = () => { if (document.visibilityState === 'visible' && selectedEventId) load(selectedEventId); };
+    const onFocus = () => { if (document.visibilityState === 'visible' && selectedEventId && view === 'vendas') load(selectedEventId); };
     document.addEventListener('visibilitychange', onFocus);
     return () => document.removeEventListener('visibilitychange', onFocus);
-  }, [selectedEventId]);
+  }, [selectedEventId, view]);
 
   // ─── Assento numerado: layout (1x) + status (30s parado, 10s com PDV aberto) ─
   const zonePriced = zonePricingActive(seatMapEnabled, seatZones, ticketTypes as any[]);
@@ -989,8 +991,10 @@ const VendasIngressos: React.FC = () => {
 
       {view === 'tipos' && (
         eventId ? (
-          <TicketTypesEditor key={eventId} eventId={eventId} isAdmin={isSuperAdmin} onSaved={() => { void refreshTypes(eventId); }} />
-        ) : null
+          <TicketTypesEditor key={eventId} eventId={eventId} isAdmin={isAdmin} onSaved={() => { void refreshTypes(eventId); }} />
+        ) : (
+          <div className="bg-white dark:bg-white/5 border border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-8 text-center text-sm text-slate-500">Escolha um evento para ver os tipos e preços.</div>
+        )
       )}
 
       {view === 'vendas' && (<>

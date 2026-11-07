@@ -63,15 +63,21 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
       setLoadError(error?.message ?? 'Evento não encontrado.');
       return;
     }
-    // events é a fonte real; configuracoes (legado) só entra se events nunca teve a lista.
-    let list: TicketType[] | null = Array.isArray(ev.ingressos_config) ? (ev.ingressos_config as TicketType[]) : null;
-    if (list === null) {
-      const { data: cfg, error: cfgErr } = await supabase.from('configuracoes').select('ingressos_audiencia').eq('id', eventId).maybeSingle();
-      if (cfgErr) console.error('[TicketTypesEditor] leitura de configuracoes:', cfgErr.message);
-      list = Array.isArray(cfg?.ingressos_audiencia) ? (cfg!.ingressos_audiencia as TicketType[]) : [];
-    }
+    // events é a fonte real; configuracoes (legado) só entra se events nunca teve a lista/política.
+    const { data: cfg, error: cfgErr } = await supabase.from('configuracoes').select('ingressos_audiencia, politica_ingressos, url_ingressos').eq('id', eventId).maybeSingle();
+    if (cfgErr) console.error('[TicketTypesEditor] leitura de configuracoes:', cfgErr.message);
+    const list: TicketType[] = Array.isArray(ev.ingressos_config)
+      ? (ev.ingressos_config as TicketType[])
+      : (Array.isArray(cfg?.ingressos_audiencia) ? (cfg!.ingressos_audiencia as TicketType[]) : []);
+    // Mesma regra de Configurações: events, depois configuracoes, depois deduz pelos dados.
+    const politicaResolvida: string =
+      (ev.politica_ingressos && ev.politica_ingressos !== 'NAO_DEFINIDO') ? (ev.politica_ingressos as string)
+      : (cfg?.politica_ingressos && cfg.politica_ingressos !== 'NAO_DEFINIDO') ? (cfg.politica_ingressos as string)
+      : list.length > 0 ? 'INTERNO'
+      : cfg?.url_ingressos ? 'EXTERNO'
+      : 'NAO_DEFINIDO';
     setIngressos(list);
-    setPoliticaIngressos((ev.politica_ingressos as string) || 'NAO_DEFINIDO');
+    setPoliticaIngressos(politicaResolvida);
     setEventSeatMap(Boolean(ev.seat_map_enabled));
     setSeatZones(Array.isArray(ev.seat_zones) ? (ev.seat_zones as SeatZone[]) : []);
     setAudienceSalesEnabled(Boolean(ev.audience_sales_enabled));
@@ -560,6 +566,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
                   </div>
       </div>
 
+      {eventSeatMap && (
               <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 md:p-8 rounded-3xl space-y-5">
                 <div>
                   <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Preço por zona do mapa</h3>
@@ -567,6 +574,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
                 </div>
                 <SeatZonesEditor eventId={eventId} zones={seatZones} onZonesSaved={(next) => {
                   setSeatZones(next);
+                  onSaved?.();
                   // Zona removida: apaga os preços dela (tipo e lotes) pra não travar o próximo 'Salvar'.
                   const keep = new Set(next.map(z => z.key));
                   const clean = (m: any) => {
@@ -588,6 +596,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
                   </div>
                 )}
               </div>
+      )}
 
       <div className="flex items-center gap-3 flex-wrap">
         <button
