@@ -12,7 +12,7 @@ import { extractRegulationFromPdfOrThrow, isExtractEmpty, RegulationExtract } fr
 import { eventTemplates, getTemplate, TemplateId } from '../services/eventTemplates';
 import { generateEventSlug } from '../services/eventSlug';
 import { EventFormat } from '../types';
-import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
+import { TERMO_PRODUTOR_VERSION, termoAceitePendente } from '../utils/termoVersion';
 
 type Step = 1 | 2 | 3;
 
@@ -125,7 +125,7 @@ const OnboardingWizard: React.FC = () => {
     })();
     return () => { cancelled = true; };
   }, []);
-  const needsTermsAccept = selectedPlan !== null && selectedPlan !== 'comeco' && termsVersion !== TERMO_PRODUTOR_VERSION;
+  const needsTermsAccept = selectedPlan !== null && selectedPlan !== 'comeco' && termoAceitePendente(termsVersion);
 
   const [data, setData] = useState({
     name: '',

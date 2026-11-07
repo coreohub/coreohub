@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
-import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
+import { termoAceitePendente } from '../utils/termoVersion';
 
 export interface PendingPlanFeeEvent {
   id: string;
@@ -75,7 +75,7 @@ export function usePlanFeePending(producerId: string | undefined, pollMs = 6000)
         const { data: prof, error: profErr } = await supabase
           .from('profiles').select('producer_terms_version').eq('id', producerId).maybeSingle();
         if (profErr) console.error('[usePlanFeePending] erro ao consultar versão do Termo:', profErr);
-        else if (!cancelled) setTermsPending((prof?.producer_terms_version ?? null) !== TERMO_PRODUTOR_VERSION);
+        else if (!cancelled) setTermsPending(termoAceitePendente(prof?.producer_terms_version ?? null));
       }
       setLoaded(true);
     };

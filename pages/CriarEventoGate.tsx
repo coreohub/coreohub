@@ -7,8 +7,7 @@ import {
 import AsaasBadge from '../components/AsaasBadge';
 import NewEventBlockedNotice from '../components/NewEventBlockedNotice';
 import NewEventTermsNotice from '../components/NewEventTermsNotice';
-import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
-import { termsVersionAtLeast } from '../supabase/functions/_shared/terms-version';
+import { termoAceitePendente } from '../utils/termoVersion';
 import { usePlanFeePending } from '../hooks/usePlanFeePending';
 
 const OnboardingWizard = lazy(() => import('../components/OnboardingWizard'));
@@ -264,7 +263,7 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
     }
     const overdue = planFeePending.filter(ev => ev.locked);
     if (overdue.length > 0) return <NewEventBlockedNotice overdue={overdue} />;
-    if (!termsVersionAtLeast(termsVersion, TERMO_PRODUTOR_VERSION)) {
+    if (termoAceitePendente(termsVersion)) {
       return <NewEventTermsNotice onAccepted={v => setTermsVersion(v)} />;
     }
     return (

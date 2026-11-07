@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { termoBullets } from '../utils/termoResumo';
 import { termsVersionAtLeast } from '../supabase/functions/_shared/terms-version';
-import { termoGateStatus, termoVigenciaTexto, TERMO_PRODUTOR_VERSION, TERMO_PRODUTOR_VIGENCIA_ISO } from '../utils/termoVersion';
+import { termoGateStatus, termoAceitePendente, termoVigenciaTexto, TERMO_PRODUTOR_VERSION, TERMO_PRODUTOR_VIGENCIA_ISO } from '../utils/termoVersion';
 
 const V = TERMO_PRODUTOR_VERSION;
 // Datas derivadas da própria vigência: o teste não quebra quando a data é antecipada ou adiada.
@@ -51,5 +51,20 @@ describe('resumo do aceite por versão aceita', () => {
     expect(termsVersionAtLeast('1.10', '1.9')).toBe(true);
     expect(termsVersionAtLeast('1.9', '1.10')).toBe(false);
     expect(TERMO_PRODUTOR_VERSION).toBe('1.11');
+  });
+});
+
+describe('termoAceitePendente', () => {
+  const antes = new Date('2026-11-10T12:00:00-03:00');
+  const depois = new Date('2026-11-15T12:00:00-03:00');
+  it('nunca aceitou: pendente', () => {
+    expect(termoAceitePendente(null, antes)).toBe(true);
+  });
+  it('versão atual: ok', () => {
+    expect(termoAceitePendente(TERMO_PRODUTOR_VERSION, antes)).toBe(false);
+  });
+  it('versão antiga: só pendente depois da vigência', () => {
+    expect(termoAceitePendente('1.10', antes)).toBe(false);
+    expect(termoAceitePendente('1.10', depois)).toBe(true);
   });
 });

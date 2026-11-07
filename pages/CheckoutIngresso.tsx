@@ -795,7 +795,7 @@ export default function CheckoutIngresso() {
       {(event as any)?.payment_sandbox && <SandboxBanner />}
       {event?.cover_url && (
         <div className="w-full max-w-3xl mx-auto md:pt-4 md:px-4">
-          <img src={event.cover_url} alt={event.name ?? ''} className="w-full h-auto block md:rounded-3xl" />
+          <img src={event.cover_url} alt="" className="w-full h-auto max-h-[70vh] object-contain block md:rounded-3xl" />
         </div>
       )}
 

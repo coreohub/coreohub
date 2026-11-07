@@ -25,15 +25,22 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPA
 // Lista de eventos futuros para o HTML do bot em /festivais (quem não roda JavaScript não vê a lista React).
 // Mesmos filtros da vitrine: público, não sandbox, com capa e descrição. Sessões extras viram ?sessao=<chave>.
 type EvRow = { id: string; slug: string | null; name: string; start_date: string | null; event_time: string | null; city: string | null; state: string | null; session_group_id: string | null; sessao_status: string | null };
-const fetchUpcomingEventLinks = async (): Promise<Array<{ href: string; label: string }>> => {
-  if (!SUPABASE_ANON_KEY) return [];
+const fetchUpcomingEventLinks = async (): Promise<Array<{ href: string; label: string }> | null> => {
+  if (!SUPABASE_ANON_KEY) return null;
   try {
     const today = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
     const q = `${SUPABASE_URL}/rest/v1/events?select=id,slug,name,start_date,event_time,city,state,session_group_id,sessao_status&is_public=eq.true&payment_sandbox=eq.false&cover_url=not.is.null&description=not.is.null&start_date=gte.${today}&order=start_date.asc&limit=100`;
-    const r = await fetch(q, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
-    if (!r.ok) return [];
+    const hdrs = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+    const r = await fetch(q, { headers: hdrs, signal: AbortSignal.timeout(3000) });
+    if (!r.ok) return null;
     const rows = ((await r.json()) as EvRow[]).filter((e) => e.slug && e.sessao_status !== 'cancelada');
     const principalSlugById = new Map(rows.filter((e) => e.session_group_id === e.id).map((e) => [e.id, e.slug as string]));
+    // Sessão futura cujo principal já passou (ou não veio): busca o slug do principal à parte.
+    const faltando = [...new Set(rows.map((e) => e.session_group_id).filter((g): g is string => !!g && !principalSlugById.has(g)))];
+    if (faltando.length > 0) {
+      const pr = await fetch(`${SUPABASE_URL}/rest/v1/events?select=id,slug&id=in.(${faltando.join(',')})`, { headers: hdrs, signal: AbortSignal.timeout(3000) });
+      if (pr.ok) for (const p of (await pr.json()) as Array<{ id: string; slug: string | null }>) if (p.slug) principalSlugById.set(p.id, p.slug);
+    }
     return rows.map((e) => {
       const principal = e.session_group_id && e.session_group_id !== e.id ? principalSlugById.get(e.session_group_id) : undefined;
       const slug = e.slug as string;
@@ -47,7 +54,7 @@ const fetchUpcomingEventLinks = async (): Promise<Array<{ href: string; label: s
     });
   } catch (err) {
     console.error('[api/og-marketing] eventos futuros falhou:', err);
-    return [];
+    return null;
   }
 };
 const DEFAULT_IMAGE = `${SITE_URL}/og-image.jpg`;
@@ -600,7 +607,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
-  const eventLinks = page === 'festivais' ? await fetchUpcomingEventLinks() : [];
-  res.status(200).send(html(meta, eventLinks));
+  const fetched = page === 'festivais' ? await fetchUpcomingEventLinks() : [];
+  // Falha ao buscar a lista: cache curto, pra não congelar uma página sem eventos por 1 hora.
+  res.setHeader('Cache-Control', fetched === null ? 'public, max-age=0, s-maxage=60' : 'public, max-age=3600, s-maxage=3600');
+  res.status(200).send(html(meta, fetched ?? []));
 }

@@ -35,3 +35,16 @@ export function termoGateStatus(
 export function termoVigenciaTexto(vigenciaIso: string = TERMO_PRODUTOR_VIGENCIA_ISO): string {
   return new Date(vigenciaIso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
 }
+
+/**
+ * Pendência de aceite para os pontos que travam uma ação (criar evento, vender, plano pago).
+ * Nunca aceitou => pendente. Aceitou uma versão antiga => só pendente depois da vigência da nova
+ * (até lá vale o aviso de 7 dias, igual ao TermsUpdateGate). Versão atual => ok.
+ */
+export function termoAceitePendente(
+  acceptedVersion: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!acceptedVersion) return true;
+  return termoGateStatus(acceptedVersion, now) === 'obrigatorio';
+}

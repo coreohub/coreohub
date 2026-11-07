@@ -191,6 +191,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   useEffect(() => {
     if (!idOrSlug) return;
 
+    let cancelled = false;
     const fetchData = async () => {
       if (loadedForRef.current === idOrSlug) setSwitchingSession(true);
       else setLoading(true);
@@ -347,6 +348,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           .maybeSingle()
           .then(r => r.data);
 
+        if (cancelled) return;
         setEvent(eventData);
         setConfig(cfg);
         // Best-effort: página pública do produtor é opt-in, maioria dos
@@ -378,6 +380,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         const { data: judgesData } = await supabase.rpc('get_public_judges_for_event', {
           p_event_id: eventData.id,
         });
+        if (cancelled) return;
         if (Array.isArray(judgesData)) {
           setPublicJudges(judgesData as JudgePublic[]);
         }
@@ -410,6 +413,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           .eq('event_id', eventData.id)
           .eq('is_published', true)
           .order('data_inicio', { ascending: true });
+        if (cancelled) return;
         if (Array.isArray(wsData)) {
           // Destaque primeiro, depois ordem manual (display_order, nulls por
           // último), com data_inicio como desempate final — produtor com
@@ -441,6 +445,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 .eq('is_active', true),
               Promise.all(wsData.map((w: any) => supabase.rpc('get_workshop_stock', { p_workshop_id: w.id }))),
             ]);
+            if (cancelled) return;
             const today = todayISO();
             const byWorkshop: Record<string, {
               nome: string; preco: number;
@@ -472,6 +477,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             .eq('event_id', eventData.id)
             .eq('is_published', true);
           // Coluna ausente no schema (migration não aplicada) volta como erro, não como lista vazia.
+          if (cancelled) return;
           if (passesErr) console.error('[PublicEventPage] workshop_passes:', passesErr.message);
           if (Array.isArray(passesData) && passesData.length > 0) {
             const { data: itemsData } = await supabase
@@ -508,6 +514,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               p_event_id: eventData.id,
               p_types: types,
             });
+            if (cancelled) return;
             if (Array.isArray(stockRows)) {
               const map: Record<string, { sold: number; remaining: number | null; sold_out: boolean }> = {};
               for (const r of stockRows as Array<{ ticket_type_id: string; sold: number; remaining: number | null; sold_out: boolean }>) {
@@ -520,13 +527,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       } catch (err) {
         console.error('Erro ao carregar evento:', err);
       } finally {
-        loadedForRef.current = idOrSlug;
-        setLoading(false);
-        setSwitchingSession(false);
+        if (!cancelled) {
+          loadedForRef.current = idOrSlug;
+          setLoading(false);
+          setSwitchingSession(false);
+        }
       }
     };
 
     fetchData();
+    return () => { cancelled = true; };
     // searchParams fica de fora de propósito: só a troca de ?sessao= recarrega a vitrine.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idOrSlug, sessaoParam]);
@@ -797,7 +807,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Funciona pra Googlebot (executa JS no indexing). Bots de preview do WhatsApp/
   // Telegram/Insta NÃO executam JS — preview neles continua genérico até Subfase 3.2
   // (prerender server-side via Vercel Edge Middleware).
-  const seoStatusLabel = isEspetaculo
+  const seoStatusLabel = event.sessao_status === 'cancelada'
+    ? 'Sessão cancelada'
+    : event.sessao_status === 'adiada'
+    ? 'Sessão adiada'
+    : isEspetaculo
     ? (eventOver ? 'Evento encerrado' : (event as any).audience_sales_enabled ? 'Ingressos à venda' : 'Evento confirmado')
     : isRegistrationOpen
     ? 'Inscrições abertas'
@@ -1543,7 +1557,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           // Várias sessões e nenhuma escolhida: aviso visível em vez de preços (a sessão muda data, lugares e preço).
           if (needsSessionChoice && politica !== 'GRATUITO') {
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
@@ -1562,7 +1576,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           if (politica === 'GRATUITO') {
             const notaCustom = config?.entrada_gratuita_nota?.trim();
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-emerald-400" /> Ingressos
                 </h2>
@@ -1588,7 +1602,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
           if (politica === 'EXTERNO' && config?.url_ingressos) {
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
@@ -1629,7 +1643,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               .filter((t: any) => !salesEnabled || precoVigenteIngresso(t) > 0);
             if (visibleTypes.length === 0) return null;
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>

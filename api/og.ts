@@ -280,12 +280,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Quem se apresenta: nome público do produtor (página pública é opt-in; sem ela, fica de fora).
     let performerName: string | null = null;
-    if (ev.created_by) {
+    if (ev.created_by && ev.billing_plan === 'espetaculo') {
       try {
         const prodRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_producer`, {
           method: 'POST',
           headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ p_id: ev.created_by }),
+          signal: AbortSignal.timeout(3000),
         });
         const prodRows = prodRes.ok ? ((await prodRes.json()) as Array<{ full_name: string | null }>) : [];
         performerName = prodRows[0]?.full_name?.trim() || null;
@@ -457,7 +458,7 @@ ${workshops.map((w) => {
 <meta name="twitter:image" content="${esc(image)}">
 
 <link rel="canonical" href="${esc(url)}">
-<script type="application/ld+json">${JSON.stringify(eventJsonLd)}</script>
+<script type="application/ld+json">${JSON.stringify(eventJsonLd).replace(/</g, '\\u003c')}</script>
 </head>
 <body>
 <h1>${esc(ev.name)}</h1>

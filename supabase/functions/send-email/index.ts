@@ -30,6 +30,7 @@
  */
 
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { termsVersionAtLeast } from '../_shared/terms-version.ts'
 
 const BRAND_COLOR = '#ff0068'
 const BRAND_DARK = '#0b0b0f'
@@ -2172,13 +2173,13 @@ function sendAdminCopy(subject: string, html: string) {
 interface TermsUpdateProducerPayload {
   produtorEmail: string
   produtorNome?: string
-  /** Ex.: "1.10" */
+  /** Ex.: "1.11" */
   versao: string
-  /** Ex.: "27/10/2026" (data em que a versão passa a valer para todos) */
+  /** Ex.: "14/11/2026" (data em que a versão passa a valer para todos) */
   vigencia: string
   /** Link do botão "Ler e aceitar" (página do Termo no painel) */
   linkAceite: string
-  /** Versão que o Produtor já aceitou (ex.: "1.9"); com "1.9" o e-mail lista só a novidade da 1.10. */
+  /** Versão que o Produtor já aceitou (ex.: "1.9", "1.10"); o e-mail lista só o que mudou depois dela. */
   aceitouAte?: string
 }
 
@@ -2189,14 +2190,16 @@ interface TermsUpdateProducerPayload {
  */
 function buildTermsUpdateProducer(p: TermsUpdateProducerPayload) {
   const alteracaoV110 = ['Transferência do saldo liberado (cláusulas 12.3 e 12.4)', 'O botão "Transferir agora" passa a enviar apenas o saldo que já passou da janela de 7 dias. A antecipação do saldo ainda retido deixa de ser oferecida. O saldo liberado continua sendo transferido automaticamente para o PIX cadastrado, sem custo.']
+  const alteracaoV111 = ['Responsabilidade perante o consumidor e regresso (cláusula 6.4)', 'A meia-entrada e as demais gratuidades legais são de responsabilidade do Produtor. Se a CoreoHub for responsabilizada por falha do evento, ela pode cobrar do Produtor, na medida da culpa dele, com memória de cálculo, compensando com saldo nos termos da cláusula 13.']
   const alteracoesV19 = [
     ['Taxa de pagamento (cláusulas 11.3 a 11.9)', 'Quando ativada no evento, o comprador paga uma taxa discriminada no Pix e no cartão. O valor líquido do Produtor não é alterado.'],
     ['Cartão parcelado (cláusulas 11.10 e 11.11)', 'O comprador pode parcelar até o limite definido para o evento, com taxa de parcelamento paga por ele. O Produtor recebe o valor líquido da venda integralmente quando a antecipação dos recebíveis é aprovada.'],
     ['Estornos e retenção (cláusulas 11.12 e 11.13)', 'Estorno ou contestação de venda parcelada alcança o pedido inteiro e pode ser descontado do saldo do Produtor. A CoreoHub pode reter o repasse de vendas parceladas pelo prazo necessário a cobrir estornos e contestações, inclusive até a realização do evento.'],
   ]
-  // aceitouAte '1.9' (ou posterior): o Produtor só precisa ver o que a 1.10 mudou.
-  const jaNa19 = p.aceitouAte === '1.9'
-  const alteracoes = jaNa19 ? [alteracaoV110] : [...alteracoesV19, alteracaoV110]
+  // Lista só o que mudou depois da versão que o Produtor já aceitou.
+  const jaNa110 = termsVersionAtLeast(p.aceitouAte, '1.10')
+  const jaNa19 = termsVersionAtLeast(p.aceitouAte, '1.9')
+  const alteracoes = jaNa110 ? [alteracaoV111] : jaNa19 ? [alteracaoV110, alteracaoV111] : [...alteracoesV19, alteracaoV110, alteracaoV111]
   const linhas = alteracoes.map(([t, d]) => `
     <tr>
       <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;">

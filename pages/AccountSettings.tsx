@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
 import { validateSlugInput, isSlugAvailable, buildEventSlugBase, generateEventSlug } from '../services/eventSlug';
 import { validateShortCodeInput, isShortCodeAvailable } from '../services/eventShortCode';
-import { TERMO_PRODUTOR_VERSION } from './TermoProdutor';
+import { termoAceitePendente } from '../utils/termoVersion';
 import imageCompression from 'browser-image-compression';
 import {
   getAllGenres, createGenre, updateGenre, deleteGenre,
@@ -966,7 +966,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Versão importada de TermoProdutor.tsx — fonte única da verdade.
   // Bumpar a versão lá invalida aceites antigos aqui automaticamente.
   const [termsAcceptedVersion, setTermsAcceptedVersion] = useState<string | null>(null);
-  const termsAccepted = termsAcceptedVersion === TERMO_PRODUTOR_VERSION;
+  const termsAccepted = !termoAceitePendente(termsAcceptedVersion);
 
   // A15+A14 auditoria Sessão 3: chamada KYC reutilizável. Usada no mount
   // E pelo botão "Verificar novamente" no banner. Rastreia falhas
