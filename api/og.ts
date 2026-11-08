@@ -88,6 +88,58 @@ const ufUtcOffset = (uf?: string | null): string => {
   return '-03:00';
 };
 
+// ── Sessões no preview/SEO (espetáculo com várias sessões) ────────────────────────────────────
+// Puro e sem imports (bundle isolado, mesmo motivo de isEventOver). Testado em tests/og-sessions.test.ts.
+export interface SessionSlot { start_date: string | null; event_time: string | null }
+const brDate = (iso: string, withYear = true): string => `${iso.slice(8, 10)}/${iso.slice(5, 7)}${withYear ? `/${iso.slice(0, 4)}` : ''}`;
+const hhmmOf = (t: string | null): string | null => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t ?? '');
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+};
+const joinPt = (xs: string[]): string => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}` : (xs[0] ?? ''));
+const validSlots = (slots: SessionSlot[]): SessionSlot[] =>
+  slots
+    .filter((x) => x.start_date && /^\d{4}-\d{2}-\d{2}$/.test(x.start_date))
+    .sort((a, b) => `${a.start_date}${hhmmOf(a.event_time) ?? ''}`.localeCompare(`${b.start_date}${hhmmOf(b.event_time) ?? ''}`));
+
+/** Uma sessão por extenso, completa (corpo da página para buscadores e IAs): "20/12/2026 às 15:30". */
+export function sessionFullLabel(slot: SessionSlot): string | null {
+  if (!slot.start_date || !/^\d{4}-\d{2}-\d{2}$/.test(slot.start_date)) return null;
+  const h = hhmmOf(slot.event_time);
+  return `${brDate(slot.start_date)}${h ? ` às ${h}` : ''}`;
+}
+
+/**
+ * Texto CURTO das sessões para o preview (descrição do WhatsApp). Mesmo dia: "20/12/2026 às 15:30 e 19:30".
+ * 2 a 3 dias: "20/12 às 15:30 e 19:30 · 21/12 às 19:30 (2026)". Mais dias, ou se passar de `maxLen`:
+ * "8 sessões de 12/12/2026 a 27/12/2026. Escolha o dia e o horário na página". Menos de 2 sessões: null.
+ * O corpo da página continua listando TODAS as sessões completas (sessionFullLabel).
+ */
+export function sessionsPreview(slots: SessionSlot[], maxLen = 70): string | null {
+  const valid = validSlots(slots);
+  if (valid.length < 2) return null;
+  const byDay = new Map<string, string[]>();
+  for (const x of valid) {
+    const d = x.start_date as string;
+    const h = hhmmOf(x.event_time);
+    const cur = byDay.get(d) ?? [];
+    if (h && !cur.includes(h)) cur.push(h);
+    byDay.set(d, cur);
+  }
+  const days = [...byDay.keys()];
+  const first = brDate(valid[0].start_date as string);
+  const last = brDate(valid[valid.length - 1].start_date as string);
+  const period = `${valid.length} sessões ${first === last ? `em ${first}` : `de ${first} a ${last}`}. Escolha o dia e o horário na página`;
+  if (days.length > 3) return period;
+  const oneYear = new Set(days.map((d) => d.slice(0, 4))).size === 1;
+  const parts = days.map((d) => {
+    const hs = byDay.get(d) ?? [];
+    return `${brDate(d, days.length === 1 || !oneYear)}${hs.length ? ` às ${joinPt(hs)}` : ''}`;
+  });
+  const text = `${parts.join(' · ')}${days.length > 1 && oneYear ? ` (${days[0].slice(0, 4)})` : ''}`;
+  return text.length <= maxLen ? text : period;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const slug = String(req.query.slug ?? '').trim();
   // dest=checkout: rota de compra (/checkout-ingresso/...). O preview do
@@ -199,6 +251,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let pageUrl = `${SITE_URL}/evento/${ev.slug ?? ev.id}`;
     let sessionLabel: string | null = null;
     let multiSessions = false; // link principal que lista todas as sessões
+    let sessionsBody: Array<{ label: string; url: string }> = [];
     if (ev.session_group_id) {
       const rawKey = String(req.query.sessao ?? '').trim();
       const wantedKey = /^[a-zA-Z0-9-]{1,120}$/.test(rawKey) ? rawKey : '';
@@ -228,24 +281,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sessionLabel = `${ev.start_date.slice(8, 10)}/${ev.start_date.slice(5, 7)}/${ev.start_date.slice(0, 4)} às ${hhmm[1].padStart(2, '0')}:${hhmm[2]}`;
       }
       // Link do evento principal SEM sessão escolhida (o que se cola no WhatsApp): o preview não pode
-      // mostrar só o horário da primeira sessão. Lista todas (ex.: 20/12/2026 às 15:30 e 19:30).
+      // mostrar só o horário da primeira sessão. Descrição curta com as sessões; o corpo da página lista
+      // TODAS, completas e com link próprio (um Event por URL, regra do Google).
       if (ev.id === ev.session_group_id && !pageUrl.includes('?sessao=')) {
-        const all = await restGet<{ start_date: string | null; event_time: string | null }>(
-          `events?select=start_date,event_time&session_group_id=eq.${ev.session_group_id}&is_public=eq.true&order=start_date.asc,event_time.asc&limit=50`,
+        const all = await restGet<{ id: string; slug: string | null; start_date: string | null; event_time: string | null; sessao_status: string | null }>(
+          `events?select=id,slug,start_date,event_time,sessao_status&session_group_id=eq.${ev.session_group_id}&is_public=eq.true&order=start_date.asc,event_time.asc&limit=50`,
         );
-        const byDay = new Map<string, string[]>();
-        for (const x of all) {
-          const t = /^(\d{1,2}):(\d{2})/.exec(x.event_time ?? '');
-          if (!x.start_date || !t) continue;
-          const day = `${x.start_date.slice(8, 10)}/${x.start_date.slice(5, 7)}/${x.start_date.slice(0, 4)}`;
-          byDay.set(day, [...(byDay.get(day) ?? []), `${t[1].padStart(2, '0')}:${t[2]}`]);
-        }
-        const total = all.length;
-        if (total > 1 && byDay.size > 0) {
-          const parts = [...byDay.entries()].slice(0, 4).map(([day, hs]) => `${day} às ${hs.length > 1 ? `${hs.slice(0, -1).join(', ')} e ${hs[hs.length - 1]}` : hs[0]}`);
-          const rest = byDay.size > 4 ? ` e mais ${byDay.size - 4} dia(s)` : '';
-          sessionLabel = `${parts.join('; ')}${rest}`;
+        const preview = sessionsPreview(all);
+        if (preview) {
+          sessionLabel = preview;
           multiSessions = true;
+          const principalSlug = ev.slug ?? ev.id;
+          sessionsBody = all
+            .map((x) => {
+              const label = sessionFullLabel(x);
+              if (!label) return null;
+              const isMain = x.id === ev.id;
+              const link = isMain ? pageUrl : `${SITE_URL}/evento/${principalSlug}?sessao=${encodeURIComponent(sessionKeyOf(x, principalSlug))}`;
+              return { label: x.sessao_status === 'cancelada' ? `${label} (cancelada)` : x.sessao_status === 'adiada' ? `${label} (adiada)` : label, url: link };
+            })
+            .filter(Boolean) as Array<{ label: string; url: string }>;
         }
       }
     }
@@ -318,9 +373,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const fullDescription = (ev.description ?? '').replace(/\s+/g, ' ').trim();
-    const title = `${ev.name}${sessionLabel ? ` — ${sessionLabel}` : ''} — ${statusLabel} | CoreoHub`;
+    const title = `${ev.name}${sessionLabel && !multiSessions ? ` — ${sessionLabel}` : ''} — ${statusLabel} | CoreoHub`;
     // Preview do WhatsApp e snippet: a sessão (dia e horário) aparece no título e na descrição.
-    const ogTitle = sessionLabel ? `${ev.name} — ${sessionLabel}` : ev.name;
+    const ogTitle = sessionLabel && !multiSessions ? `${ev.name} — ${sessionLabel}` : ev.name;
     // Meta description convencionalmente curta (~160 char, o que os buscadores
     // de fato exibem no snippet); o <body> abaixo carrega o texto INTEIRO —
     // é o que os crawlers de IA/Google realmente indexam como conteúdo.
@@ -329,7 +384,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? fullDescription
         : `${fullDescription.slice(0, 157).replace(/s+S*$/, '')}…`) ||
       `${statusLabel} — ${ev.name}, festival de dança na CoreoHub.`;
-    const metaDescription = sessionLabel ? `${multiSessions ? 'Sessões' : 'Sessão de'} ${sessionLabel}. ${shortDescription}` : shortDescription;
+    const metaDescription = sessionLabel ? `${multiSessions ? '' : 'Sessão de '}${sessionLabel}. ${shortDescription}` : shortDescription;
     const image = ev.cover_url || DEFAULT_IMAGE;
     const canonicalSlug = ev.slug ?? ev.id;
     // Canonical/og:url: o link do evento principal (com ?sessao= nas sessões que não são a principal).
@@ -436,7 +491,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Fatos-chave em texto puro — corpo visível/indexável, não só meta tag.
     const factsLines = [
       dateRange ? `Data: ${dateRange}` : null,
-      sessionLabel ? `${multiSessions ? 'Sessões' : 'Sessão'}: ${sessionLabel}` : null,
+      sessionLabel && !multiSessions ? `Sessão: ${sessionLabel}` : null,
       locationParts.length > 0 ? `Local: ${locationParts.join(' — ')}` : null,
       prazoInscricao ? `Inscrições até: ${prazoInscricao}` : null,
       formacoesAtivas.length > 0 ? `Formações: ${formacoesAtivas.join(', ')}` : null,
@@ -444,6 +499,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessaoAdiada && ev.sessao_data_original ? `Data anterior: ${ev.sessao_data_original}` : null,
       (sessaoAdiada || sessaoCancelada) && ev.sessao_motivo ? `Motivo informado pelo organizador: ${ev.sessao_motivo}` : null,
     ].filter(Boolean) as string[];
+
+    const sessionsBodyHtml = sessionsBody.length > 1
+      ? `<h2>Sessões e ingressos</h2>
+<ul>
+${sessionsBody.map((x) => `  <li><a href="${esc(x.url)}">${esc(x.label)}</a></li>`).join('\n')}
+</ul>`
+      : '';
 
     const workshopsListHtml = workshops.length > 0
       ? `<h2>Workshops e passes</h2>
@@ -487,6 +549,7 @@ ${workshops.map((w) => {
 <ul>
 ${factsLines.map((f) => `  <li>${esc(f)}</li>`).join('\n')}
 </ul>
+${sessionsBodyHtml}
 ${fullDescription ? `<p>${esc(fullDescription)}</p>` : ''}
 ${workshopsListHtml}
 <p><a href="${esc(url)}">Acesse a página completa do festival</a></p>
