@@ -198,6 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     let pageUrl = `${SITE_URL}/evento/${ev.slug ?? ev.id}`;
     let sessionLabel: string | null = null;
+    let multiSessions = false; // link principal que lista todas as sessões
     if (ev.session_group_id) {
       const rawKey = String(req.query.sessao ?? '').trim();
       const wantedKey = /^[a-zA-Z0-9-]{1,120}$/.test(rawKey) ? rawKey : '';
@@ -225,6 +226,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const hhmm = /^(\d{1,2}):(\d{2})/.exec(ev.event_time ?? '');
       if (ev.start_date && hhmm) {
         sessionLabel = `${ev.start_date.slice(8, 10)}/${ev.start_date.slice(5, 7)}/${ev.start_date.slice(0, 4)} às ${hhmm[1].padStart(2, '0')}:${hhmm[2]}`;
+      }
+      // Link do evento principal SEM sessão escolhida (o que se cola no WhatsApp): o preview não pode
+      // mostrar só o horário da primeira sessão. Lista todas (ex.: 20/12/2026 às 15:30 e 19:30).
+      if (ev.id === ev.session_group_id && !pageUrl.includes('?sessao=')) {
+        const all = await restGet<{ start_date: string | null; event_time: string | null }>(
+          `events?select=start_date,event_time&session_group_id=eq.${ev.session_group_id}&is_public=eq.true&order=start_date.asc,event_time.asc&limit=50`,
+        );
+        const byDay = new Map<string, string[]>();
+        for (const x of all) {
+          const t = /^(\d{1,2}):(\d{2})/.exec(x.event_time ?? '');
+          if (!x.start_date || !t) continue;
+          const day = `${x.start_date.slice(8, 10)}/${x.start_date.slice(5, 7)}/${x.start_date.slice(0, 4)}`;
+          byDay.set(day, [...(byDay.get(day) ?? []), `${t[1].padStart(2, '0')}:${t[2]}`]);
+        }
+        const total = all.length;
+        if (total > 1 && byDay.size > 0) {
+          const parts = [...byDay.entries()].slice(0, 4).map(([day, hs]) => `${day} às ${hs.length > 1 ? `${hs.slice(0, -1).join(', ')} e ${hs[hs.length - 1]}` : hs[0]}`);
+          const rest = byDay.size > 4 ? ` e mais ${byDay.size - 4} dia(s)` : '';
+          sessionLabel = `${parts.join('; ')}${rest}`;
+          multiSessions = true;
+        }
       }
     }
 
@@ -307,7 +329,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? fullDescription
         : `${fullDescription.slice(0, 157).replace(/s+S*$/, '')}…`) ||
       `${statusLabel} — ${ev.name}, festival de dança na CoreoHub.`;
-    const metaDescription = sessionLabel ? `Sessão de ${sessionLabel}. ${shortDescription}` : shortDescription;
+    const metaDescription = sessionLabel ? `${multiSessions ? 'Sessões' : 'Sessão de'} ${sessionLabel}. ${shortDescription}` : shortDescription;
     const image = ev.cover_url || DEFAULT_IMAGE;
     const canonicalSlug = ev.slug ?? ev.id;
     // Canonical/og:url: o link do evento principal (com ?sessao= nas sessões que não são a principal).
@@ -414,7 +436,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Fatos-chave em texto puro — corpo visível/indexável, não só meta tag.
     const factsLines = [
       dateRange ? `Data: ${dateRange}` : null,
-      sessionLabel ? `Sessão: ${sessionLabel}` : null,
+      sessionLabel ? `${multiSessions ? 'Sessões' : 'Sessão'}: ${sessionLabel}` : null,
       locationParts.length > 0 ? `Local: ${locationParts.join(' — ')}` : null,
       prazoInscricao ? `Inscrições até: ${prazoInscricao}` : null,
       formacoesAtivas.length > 0 ? `Formações: ${formacoesAtivas.join(', ')}` : null,
