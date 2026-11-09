@@ -583,6 +583,7 @@ const App: React.FC = () => {
             if (userProfile) {
               setProfile(userProfile);
               setActiveRole(userProfile.role);
+              void import('./utils/leadEntry').then(m => m.claimEntryEvent(session.user.id, session.user.created_at));
             }
           }
           await fetchConfig();
@@ -610,6 +611,7 @@ const App: React.FC = () => {
               const userProfile = await getOrCreateProfile(session.user);
               if (userProfile) {
                 setProfile(userProfile);
+                void import('./utils/leadEntry').then(m => m.claimEntryEvent(session.user.id, session.user.created_at));
                 // TOKEN_REFRESHED dispara sozinho quando a aba volta a ficar em
                 // foco (ex: usuário abriu um PDF em outra guia e voltou) — sem
                 // esse guard, resetava o dropdown "VISÃO" do super admin de

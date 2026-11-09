@@ -20,6 +20,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase, registrationStatusAction } from '../services/supabase';
+import { rememberEntryEvent, claimEntryEvent } from '../utils/leadEntry';
 import {
   ChevronLeft, ChevronRight, Loader2, Music2, User, Users, Upload,
   AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video, ShieldCheck,
@@ -582,6 +583,8 @@ const InscricaoWizard: React.FC = () => {
 
       setConfig(finalCfg);
       setEvent(ev);
+      rememberEntryEvent(ev.id);
+      void claimEntryEvent(user.id, user.created_at);
 
       // Tipos de apresentação habilitados pelo produtor (default Competitiva).
       // Se houver só 1 tipo, força automaticamente no state (sem perguntar).
