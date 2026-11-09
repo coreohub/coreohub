@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Loader2, Accessibility, Minus, Plus, Maximize2, ArrowLeftRight, Users, Ban } from 'lucide-react';
+import { Loader2, Accessibility, Minus, Plus, Maximize2, X, RotateCcw, ArrowLeftRight, Users, Ban } from 'lucide-react';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
 import { displayOrder, seatSide } from '../utils/venueRows';
 import { companionBySpecial, isSpecialTipo, seatBlockReason, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
@@ -36,6 +37,12 @@ interface SeatGridProps {
   onToggleRow?: (rowCode: string) => void;
   /** Motivo de cada lugar bloqueado (só o dono tem; aparece ao passar o mouse). */
   blockReasons?: Record<string, string>;
+  /** Teto do ajuste automático à largura (1 = nunca amplia além do tamanho natural). Painel do produtor no desktop usa >1. */
+  maxFit?: number;
+  /** O botão de expandir abre o mapa em tela cheia (em vez de só ajustar à largura). */
+  fullscreenable?: boolean;
+  /** Dentro da tela cheia: a área do mapa ocupa a altura toda. */
+  tall?: boolean;
 }
 
 const SIZES = {
@@ -61,7 +68,17 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * dedo (< 30px), o 1º toque amplia até ele e o 2º seleciona (mesmo padrão de
  * 2 passos do Seats.io no mobile).
  */
-export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors }: SeatGridProps) {
+export default function SeatGrid(props: SeatGridProps) {
+  const { rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors, maxFit = 1, fullscreenable = false, tall = false } = props;
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [full]);
   const s = SIZES[size];
   const canZoom = zoomable ?? size === 'md';
 
@@ -79,8 +96,8 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
   const fitScale = useCallback(() => {
     const wrap = wrapRef.current;
     if (!wrap || natural.w === 0) return 1;
-    return clamp(wrap.clientWidth / natural.w, MIN_SCALE, 1);
-  }, [natural.w]);
+    return clamp(wrap.clientWidth / natural.w, MIN_SCALE, Math.max(1, maxFit));
+  }, [natural.w, maxFit]);
 
   // Mede o tamanho natural (sem escala) da grade e reajusta quando a janela muda.
   useLayoutEffect(() => {
@@ -313,6 +330,18 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
   const sizerH = natural.h * scale;
   return (
     <div>
+      {full && createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Mapa de assentos em tela cheia" className="fixed inset-0 z-[80] bg-white dark:bg-[#0a0a0a] p-4 overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">Mapa de assentos</p>
+            <button type="button" onClick={() => setFull(false)} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 cursor-pointer">
+              <X size={12} /> Fechar
+            </button>
+          </div>
+          <SeatGrid {...props} fullscreenable={false} maxFit={2} tall />
+        </div>,
+        document.body,
+      )}
       <div className="flex items-center justify-end gap-2 mb-2">
         <span className="mr-auto text-[10px] text-slate-500 sm:hidden">Toque num lugar para ampliar. Use dois dedos para dar zoom.</span>
         <button type="button" aria-label="Diminuir zoom do mapa" onClick={() => zoomTo(scale / 1.25)} disabled={scale <= MIN_SCALE + 0.01} className={`${ctrlClass} flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed`}>
@@ -321,16 +350,21 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
         <button type="button" aria-label="Aumentar zoom do mapa" onClick={() => zoomTo(scale * 1.25)} disabled={scale >= MAX_SCALE - 0.01} className={`${ctrlClass} flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed`}>
           <Plus size={14} />
         </button>
-        <button type="button" aria-label="Ajustar mapa à tela" onClick={resetFit} className={`${ctrlClass} flex items-center justify-center cursor-pointer`}>
-          <Maximize2 size={14} />
+        <button type="button" aria-label="Ajustar mapa à largura" title="Ajustar à largura" onClick={resetFit} className={`${ctrlClass} flex items-center justify-center cursor-pointer`}>
+          {fullscreenable ? <RotateCcw size={14} /> : <Maximize2 size={14} />}
         </button>
+        {fullscreenable && (
+          <button type="button" aria-label="Abrir mapa em tela cheia" title="Tela cheia" onClick={() => setFull(true)} className={`${ctrlClass} flex items-center justify-center cursor-pointer`}>
+            <Maximize2 size={14} />
+          </button>
+        )}
       </div>
       <div
         ref={wrapRef}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        className="overflow-auto max-h-[70vh] pb-1"
+        className={`overflow-auto pb-1 ${tall ? 'max-h-[calc(100vh-9rem)]' : 'max-h-[70vh]'}`}
         style={{ touchAction: 'pan-x pan-y' }}
       >
         {/* Sizer com o tamanho JÁ escalado: transform não afeta o layout, então a área de rolagem vem daqui. */}

@@ -3,7 +3,7 @@ import {
   normalizeSeatIds, sanitizeReason, summarizeOutcomes, countOutcomes, SEAT_BLOCK_REASON_MAX,
 } from '../supabase/functions/_shared/seat-block';
 import {
-  expandRow, expandRange, parseSeatId, selectableForBlock, partitionSelection, toggleMany, seatCapacity,
+  expandRow, expandRange, parseSeatId, parseSeatInput, selectableForBlock, partitionSelection, toggleMany, seatCapacity,
   BLOCK_REASON_SUGGESTIONS, reasonsBySeat,
 } from '../utils/seatBlock';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
@@ -84,12 +84,27 @@ describe('expandRow / expandRange', () => {
   it('aceita so o numero final e caixa baixa', () => {
     expect(expandRange(rows, 'a-3', '5').ids).toEqual(['A-3', 'A-4', 'A-5']);
   });
+  it('aceita digitacao livre e lugar unico (G 13)', () => {
+    expect(expandRange(rows, 'G 13', '').error).toMatch(/não existe/);
+    expect(expandRange(rows, 'a 3', '').ids).toEqual(['A-3']);
+    expect(expandRange(rows, 'A3', '').ids).toEqual(['A-3']);
+    expect(expandRange(rows, 'a - 3', '  ').ids).toEqual(['A-3']);
+    expect(expandRange(rows, 'A 3', 'A 5').ids).toEqual(['A-3', 'A-4', 'A-5']);
+  });
+  it('parseSeatInput', () => {
+    expect(parseSeatInput('G 13')).toEqual({ row: 'G', n: 13 });
+    expect(parseSeatInput('g13')).toEqual({ row: 'G', n: 13 });
+    expect(parseSeatInput('AA-2')).toEqual({ row: 'AA', n: 2 });
+    expect(parseSeatInput('13')).toBeNull();
+    expect(parseSeatInput('G')).toBeNull();
+    expect(parseSeatInput('G 0')).toBeNull();
+  });
   it('erros: fileiras diferentes, fora da fileira, formato', () => {
     expect(expandRange(rows, 'A-1', 'M-3').error).toMatch(/mesma fileira/);
-    expect(expandRange(rows, 'A-1', 'A-11').error).toMatch(/vai ate o lugar 10/);
-    expect(expandRange(rows, 'A1', 'A-3').error).toMatch(/primeiro lugar/);
-    expect(expandRange(rows, 'A-1', 'xx').error).toMatch(/ultimo lugar/);
-    expect(expandRange(rows, 'Z-1', 'Z-3').error).toMatch(/nao existe/);
+    expect(expandRange(rows, 'A-1', 'A-11').error).toMatch(/vai até o lugar 10/);
+    expect(expandRange(rows, 'AA', 'A-3').error).toMatch(/G 13/);
+    expect(expandRange(rows, 'A-1', 'xx').error).toMatch(/último lugar/);
+    expect(expandRange(rows, 'Z-1', 'Z-3').error).toMatch(/não existe/);
   });
 });
 

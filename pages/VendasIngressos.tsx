@@ -202,7 +202,7 @@ const VendasIngressos: React.FC = () => {
   // Outras sessões do mesmo espetáculo que usam o mesmo local: o bloqueio pode ser repetido nelas
   // (mesmo código de lugar, ex. A-1). Só do mesmo dono, com mapa ligado e o mesmo local.
   const [siblingSessions, setSiblingSessions] = useState<Array<{ id: string; label: string }>>([]);
-  const [applyToSiblings, setApplyToSiblings] = useState(true);
+  const [applyToSiblings, setApplyToSiblings] = useState(false); // padrão: só a sessão aberta (escolha no painel)
   // Motivos dos lugares bloqueados (leitura direta, so o dono passa na RLS). A LISTA vem do status ao vivo.
   const [blockedRows, setBlockedRows] = useState<Array<{ seat_id: string; block_reason: string | null }>>([]);
 
@@ -1180,14 +1180,31 @@ const VendasIngressos: React.FC = () => {
               onToggleRow={toggleBlockRow}
               onBlocked={reason => setBlockMsg({ kind: 'err', text: reason })}
               mode="block"
-              size="sm"
+              size="md"
               variant="auto"
               zoomable
               blockReasons={blockReasons}
-            />
+            maxFit={1.5}
+              fullscreenable
+              />
             <SeatLegend rowsConfig={rowsConfig} variant="auto" showBlocked />
           </div>
 
+          {siblingSessions.length > 0 && (
+            <fieldset className="space-y-1.5">
+              <legend className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Bloquear em</legend>
+              <div className="flex flex-wrap gap-2">
+                <label className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer border ${!applyToSiblings ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-200' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'}`}>
+                  <input type="radio" name="block-scope" className="sr-only" checked={!applyToSiblings} onChange={() => setApplyToSiblings(false)} />
+                  Só esta sessão ({sessionLabel(sessionInfo.start_date, sessionInfo.event_time)})
+                </label>
+                <label className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer border ${applyToSiblings ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-200' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'}`}>
+                  <input type="radio" name="block-scope" className="sr-only" checked={applyToSiblings} onChange={() => setApplyToSiblings(true)} />
+                  Todas as sessões ({siblingSessions.map(x => x.label).join(', ')})
+                </label>
+              </div>
+            </fieldset>
+          )}
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label htmlFor="block-range-from" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Faixa de lugares</label>
@@ -1196,7 +1213,7 @@ const VendasIngressos: React.FC = () => {
                   id="block-range-from"
                   value={rangeFrom}
                   onChange={e => setRangeFrom(e.target.value)}
-                  placeholder="A-5"
+                  placeholder="G 13"
                   maxLength={8}
                   className="w-24 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                 />
@@ -1205,7 +1222,7 @@ const VendasIngressos: React.FC = () => {
                   aria-label="Último lugar da faixa"
                   value={rangeTo}
                   onChange={e => setRangeTo(e.target.value)}
-                  placeholder="A-12 ou 12"
+                  placeholder="até (opcional)"
                   maxLength={8}
                   className="w-28 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                 />
@@ -1306,13 +1323,9 @@ const VendasIngressos: React.FC = () => {
               {blockPartition.ignored.length > 0 && ` ${blockPartition.ignored.length} lugar(es) selecionado(s) não podem ser alterados e serão ignorados.`}
             </p>
             {siblingSessions.length > 0 && (
-              <label className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={applyToSiblings} onChange={e => setApplyToSiblings(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#ff0068]" />
-                <span>
-                  Aplicar também às outras sessões ({siblingSessions.map(x => x.label).join(', ')}). Vale o mesmo lugar (ex. A-1) em cada
-                  sessão; lugares vendidos, em compra ou PCD são ignorados lá também.
-                </span>
-              </label>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                {applyToSiblings ? `Vale também para: ${siblingSessions.map(x => x.label).join(', ')} (mesmo código de lugar). Lugares vendidos, em compra ou PCD são ignorados lá também.` : 'Vale só para esta sessão.'}
+              </p>
             )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setBlockConfirm(null)} disabled={blockBusy} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer">

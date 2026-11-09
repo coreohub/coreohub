@@ -26,21 +26,34 @@ export function expandRow(rows: SeatRow[] | null, codigo: string): string[] {
 }
 
 /**
+ * Digitacao livre de um lugar: "G-13", "G 13", "G13" e "g - 13" viram { row: "G", n: 13 }.
+ * O numero e o que vem depois da ultima letra/separador; a fileira e o resto.
+ */
+export function parseSeatInput(raw: string): { row: string; n: number } | null {
+  const m = /^(.*?)[\s-]*(\d+)$/.exec(raw.trim().toUpperCase());
+  if (!m) return null;
+  const row = m[1].replace(/[\s-]+$/, '').trim();
+  const n = Number(m[2]);
+  if (!row || !Number.isInteger(n) || n < 1) return null;
+  return { row, n };
+}
+
+/**
  * Faixa dentro de UMA fileira: "A-5" ate "A-12" (aceita invertida, "A-12" a "A-5").
- * Aceita tambem so o numero final: ("A-5", "12") => A-5..A-12.
+ * Aceita "A 5", "A5", so o numero final ("A-5", "12" => A-5..A-12) e o final vazio (um lugar so: "G 13").
  */
 export function expandRange(rows: SeatRow[] | null, fromRaw: string, toRaw: string): RangeResult {
-  const from = parseSeatId(fromRaw.trim().toUpperCase());
-  if (!from) return { ids: [], error: 'Informe o primeiro lugar no formato A-5.' };
+  const from = parseSeatInput(fromRaw);
+  if (!from) return { ids: [], error: 'Digite o lugar assim: G 13 ou G-13 (letra da fileira e número).' };
   const toTrim = toRaw.trim().toUpperCase();
-  const to = /^\d+$/.test(toTrim) ? { row: from.row, n: Number(toTrim) } : parseSeatId(toTrim);
-  if (!to || !Number.isInteger(to.n) || to.n < 1) return { ids: [], error: 'Informe o ultimo lugar no formato A-12 (ou so o numero 12).' };
+  const to = toTrim === '' ? from : /^\d+$/.test(toTrim) ? { row: from.row, n: Number(toTrim) } : parseSeatInput(toTrim);
+  if (!to || !Number.isInteger(to.n) || to.n < 1) return { ids: [], error: 'No campo "até", digite o último lugar (G 20 ou só 20), ou deixe vazio para um lugar só.' };
   if (from.row !== to.row) return { ids: [], error: 'A faixa precisa estar numa mesma fileira.' };
   const row = rows?.find(r => r.codigo === from.row);
-  if (!row) return { ids: [], error: `A fileira ${from.row} nao existe neste mapa.` };
+  if (!row) return { ids: [], error: `A fileira ${from.row} não existe neste mapa.` };
   const lo = Math.min(from.n, to.n);
   const hi = Math.max(from.n, to.n);
-  if (hi > row.assentos) return { ids: [], error: `A fileira ${row.codigo} vai ate o lugar ${row.assentos}.` };
+  if (hi > row.assentos) return { ids: [], error: `A fileira ${row.codigo} vai até o lugar ${row.assentos}.` };
   return { ids: Array.from({ length: hi - lo + 1 }, (_, i) => `${row.codigo}-${lo + i}`), error: null };
 }
 
