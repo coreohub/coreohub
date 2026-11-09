@@ -464,7 +464,7 @@ const DEFAULT_FORMATS: FormatItem[] = [
  *  ao valor anterior e o 5º dígito do ano simplesmente não entra. */
 const DATE_MIN = '2000-01-01';
 const DATE_MAX = '2100-12-31';
-const dateOk = (v: string) => v === '' || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= DATE_MIN && v <= DATE_MAX);
+const dateOk = (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
 /** "2027-01-26" → "26/01/2027" (vazio se inválido). */
 const fmtISOtoBR = (iso?: string | null) => {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
