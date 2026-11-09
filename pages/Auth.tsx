@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Sparkles, Loader2, Mail, Lock, ArrowRight, ShieldCheck, Zap, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
+import { rememberEntryEvent, claimEntryEvent } from '../utils/leadEntry';
 import { OtpBoxes } from '../components/OtpBoxes';
 import AsaasBadge from '../components/AsaasBadge';
 import HelpWhatsappButton from '../components/HelpWhatsappButton';
@@ -170,10 +171,7 @@ const Auth = () => {
         // callback SIGNED_IN pra gravar em profiles.entry_event_id. Plano em
         // [[plano-leads-reengajamento]] — habilita email de reengajamento
         // contextualizado quando o lead não converte em N dias.
-        try {
-          localStorage.setItem('coreohub_lead_entry_event_id', data.id);
-          localStorage.setItem('coreohub_lead_entry_at', String(Date.now()));
-        } catch { /* localStorage off — ignora silenciosamente */ }
+        rememberEntryEvent(data.id);
       }
     })();
   }, [redirectTo]);
@@ -216,35 +214,7 @@ const Auth = () => {
   //   2) localStorage tem o evento de origem (salvo quando eventContext resolveu)
   //   3) profile.entry_event_id ainda está NULL (não sobrescreve em re-logins)
   // Não falha o flow de auth se algo der errado — best-effort silencioso.
-  const persistLeadEntryEventId = async (userId: string, createdAtIso?: string) => {
-    try {
-      const entryEventId = localStorage.getItem('coreohub_lead_entry_event_id');
-      if (!entryEventId) return;
-
-      // Só associa em "primeira sessão" — evita sobrescrever lead antigo se
-      // user já logado revisita a vitrine de outro evento e re-loga.
-      if (createdAtIso) {
-        const ageMs = Date.now() - new Date(createdAtIso).getTime();
-        if (ageMs > 10 * 60 * 1000) {
-          localStorage.removeItem('coreohub_lead_entry_event_id');
-          localStorage.removeItem('coreohub_lead_entry_at');
-          return;
-        }
-      }
-
-      // UPDATE com filtro entry_event_id IS NULL → idempotente e não sobrescreve.
-      await supabase
-        .from('profiles')
-        .update({ entry_event_id: entryEventId })
-        .eq('id', userId)
-        .is('entry_event_id', null);
-
-      localStorage.removeItem('coreohub_lead_entry_event_id');
-      localStorage.removeItem('coreohub_lead_entry_at');
-    } catch {
-      /* best-effort — não bloqueia signup se UPDATE falhar */
-    }
-  };
+  const persistLeadEntryEventId = (userId: string, createdAtIso?: string) => claimEntryEvent(userId, createdAtIso);
 
   // Convite de equipe: se o signup em /equipe-convite/:token precisou de
   // confirmação de e-mail (sem sessão ainda), o token fica guardado aqui e
