@@ -459,6 +459,19 @@ const DEFAULT_FORMATS: FormatItem[] = [
 ];
 
 /** Migra formato legado (price_lote1/lote2/data_virada) pro modelo de N lotes */
+/** Campo <input type="date"> aceita ano com até 6 dígitos no Chrome (ex: 336666-01-26).
+ *  Só deixa passar vazio ou AAAA-MM-DD com ano de 4 dígitos; senão o input volta
+ *  ao valor anterior e o 5º dígito do ano simplesmente não entra. */
+const DATE_MIN = '2000-01-01';
+const DATE_MAX = '2100-12-31';
+const dateOk = (v: string) => v === '' || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= DATE_MIN && v <= DATE_MAX);
+/** "2027-01-26" → "26/01/2027" (vazio se inválido). */
+const fmtISOtoBR = (iso?: string | null) => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+
 const migrateFormat = (f: any): FormatItem => {
   if (Array.isArray(f.lotes) && f.lotes.length > 0) {
     return { ...f, lotes: f.lotes };
@@ -3085,7 +3098,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <input
                     type="date"
                     value={general.eventDate}
-                    onChange={e => setGeneral(g => ({
+                    min={DATE_MIN} max={DATE_MAX}
+                    onChange={e => dateOk(e.target.value) && setGeneral(g => ({
                       ...g,
                       eventDate: e.target.value,
                       // Evento de 1 dia é o caso comum — se a Data Final
@@ -3103,8 +3117,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <input
                     type="date"
                     value={general.endDate}
-                    min={general.eventDate || undefined}
-                    onChange={e => setGeneral({ ...general, endDate: e.target.value })}
+                    min={general.eventDate || DATE_MIN} max={DATE_MAX}
+                    onChange={e => dateOk(e.target.value) && setGeneral({ ...general, endDate: e.target.value })}
                     className={input}
                   />
                   <p className="text-[9px] text-slate-400 mt-1">Igual à Data de Início pra evento de 1 dia só. Camps/festivais multi-dia (ex: 18 a 23 de janeiro) preenchem uma data posterior aqui.</p>
@@ -3183,11 +3197,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
                 <div>
                   <label className={label}>Prazo Final de Inscrição</label>
-                  <input type="date" value={general.regDeadline} onChange={e => setGeneral({ ...general, regDeadline: e.target.value })} className={input} />
+                  <input type="date" min={DATE_MIN} max={DATE_MAX} value={general.regDeadline} onChange={e => dateOk(e.target.value) && setGeneral({ ...general, regDeadline: e.target.value })} className={input} />
                 </div>
                 <div>
                   <label className={label}>Prazo Final de Envio de Trilhas</label>
-                  <input type="date" value={general.trackDeadline} onChange={e => setGeneral({ ...general, trackDeadline: e.target.value })} className={input} />
+                  <input type="date" min={DATE_MIN} max={DATE_MAX} value={general.trackDeadline} onChange={e => dateOk(e.target.value) && setGeneral({ ...general, trackDeadline: e.target.value })} className={input} />
                 </div>
               </div>
               )}
@@ -4550,7 +4564,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
                           <p className={`font-black text-sm ${i === 0 ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>R$ {formatPrecoBR(Number(lote.preco) || 0)}</p>
                           <p className="text-[9px] text-slate-400 mt-0.5">
-                            {lote.data_virada ? `até ${lote.data_virada}` : 'até prazo final'}
+                            {lote.data_virada ? `até ${fmtISOtoBR(lote.data_virada) || lote.data_virada}` : 'até prazo final'}
                           </p>
                         </div>
                       </React.Fragment>
@@ -4639,7 +4653,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <input
                     type="date"
                     value={ageRefDate}
-                    onChange={e => setAgeRefDate(e.target.value)}
+                    min={DATE_MIN} max={DATE_MAX}
+                    onChange={e => { if (dateOk(e.target.value)) setAgeRefDate(e.target.value); }}
                     className={input}
                   />
                   <p className="text-[11px] text-slate-400">
@@ -6944,7 +6959,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   const prev = i > 0 ? lotes[i - 1].data_virada : null;
                   let inicioTxt: string;
                   if (i === 0) inicioTxt = 'Abertura das inscrições';
-                  else if (prev) {
+                  else if (prev && dateOk(prev)) {
                     const d = new Date(prev + 'T12:00:00');
                     d.setDate(d.getDate() + 1);
                     inicioTxt = d.toLocaleDateString('pt-BR');
@@ -6981,7 +6996,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           {isLast ? (
                             <input type="text" disabled value={fmtBR(general.regDeadline) ?? 'Defina o prazo em Geral'} className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-slate-500 dark:text-slate-400 text-sm font-bold cursor-not-allowed" />
                           ) : (
-                            <input type="date" value={lote.data_virada || ''} onChange={e => updateLote(i, { data_virada: e.target.value })} className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm dark:[color-scheme:dark]" />
+                            <input type="date" min={DATE_MIN} max={DATE_MAX} value={lote.data_virada || ''} onChange={e => { if (dateOk(e.target.value)) updateLote(i, { data_virada: e.target.value }); }} className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm dark:[color-scheme:dark]" />
                           )}
                           {isLast && !general.regDeadline && (
                             <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1">Sem prazo de inscrição definido em Geral.</p>
