@@ -7469,29 +7469,25 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   };
                   const prev = i > 0 ? lotes[i - 1].data_virada : null;
                   let inicioTxt: string;
-                  if (i === 0) inicioTxt = 'abertura das inscrições';
+                  if (i === 0) inicioTxt = 'Abertura das inscrições';
                   else if (prev) {
                     const d = new Date(prev + 'T12:00:00');
                     d.setDate(d.getDate() + 1);
                     inicioTxt = d.toLocaleDateString('pt-BR');
-                  } else inicioTxt = 'definir lote anterior';
-                  const fimTxt = isLast ? fmtBR(general.regDeadline) : fmtBR(lote.data_virada);
+                  } else inicioTxt = 'Defina o lote anterior';
                   const foraDoPrazo = !isLast && !!lote.data_virada && !!general.regDeadline && lote.data_virada > general.regDeadline;
                   const fechaAntes = i > 0 && !!prev && !!lote.data_virada && lote.data_virada <= prev;
                   return (
                     <div key={i} className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-2xl p-3">
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
-                        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 flex-1 text-right mr-2">
-                          De {inicioTxt} até {fimTxt ?? 'definir'}
-                        </p>
                         {lotes.length > 1 && (
                           <button onClick={() => removeLote(i)} className="p-1 -mr-1 text-slate-400 hover:text-red-500 transition-colors" title="Remover lote">
                             <Trash2 size={14} />
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div>
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Preço</label>
                           <PrecoInput
@@ -7501,8 +7497,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           />
                         </div>
                         <div>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Início</label>
+                          <input type="text" disabled value={inicioTxt} title="Calculado automaticamente: começa no dia seguinte ao fim do lote anterior" className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-slate-500 dark:text-slate-400 text-sm font-bold cursor-not-allowed truncate" />
+                        </div>
+                        <div>
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">
-                            {isLast ? 'Até prazo final' : 'Vira em'}
+                            {isLast ? 'Fim (prazo final)' : 'Fim'}
                           </label>
                           {isLast ? (
                             <input type="text" disabled value={fmtBR(general.regDeadline) ?? 'Defina o prazo em Geral'} className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-slate-500 dark:text-slate-400 text-sm font-bold cursor-not-allowed" />
@@ -7776,7 +7776,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 w-full max-w-lg shadow-2xl max-h-[90dvh] flex flex-col"
+              className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 w-full ${activeTab === 'Formações' ? 'max-w-xl' : 'max-w-lg'} shadow-2xl max-h-[90dvh] flex flex-col`}
             >
               <div className="flex items-center justify-between mb-6 shrink-0">
                 <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
