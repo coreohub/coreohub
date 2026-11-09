@@ -18,6 +18,7 @@ import AsaasBadge from '../components/AsaasBadge';
 import SessionStatusBanner, { type SessionStatusInfo } from '../components/SessionStatusBanner';
 import SessionChoicePanel from '../components/SessionChoicePanel';
 import TransferTicketPanel from '../components/TransferTicketPanel';
+import { renderTicketImage } from '../utils/ticketImage';
 import WithdrawalPanel from '../components/WithdrawalPanel';
 
 interface Sibling {
@@ -140,16 +141,6 @@ const MeuIngresso: React.FC = () => {
     const t = setTimeout(() => window.print(), 400);
     return () => clearTimeout(t);
   }, [searchParams, ticket]);
-
-  // ─── Salvar imagem do QR (canvas → png download) ──────────────────────────
-  const handleSaveImage = () => {
-    const canvas = document.getElementById('ticket-qr') as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const link = document.createElement('a');
-    link.download = `ingresso-${ticket?.event_name?.replace(/\s+/g, '-') ?? 'coreohub'}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  };
 
   // ─── Compartilhar (Web Share API → fallback WhatsApp) ─────────────────────
   const handleShare = async () => {
@@ -275,6 +266,26 @@ const MeuIngresso: React.FC = () => {
     if (i < 0) return ticket.seat_id;
     return `Fileira ${ticket.seat_id.slice(0, i)} · Nº ${ticket.seat_id.slice(i + 1)}`;
   })();
+  // ─── Salvar o ingresso inteiro como imagem (evento, sessão, local, assento, QR e código) ────
+  const handleSaveImage = () => {
+    const qr = document.getElementById('ticket-qr') as HTMLCanvasElement | null;
+    if (!qr) return;
+    const img = renderTicketImage({
+      qr,
+      eventName: ticket.event_name,
+      ticketType: ticket.ticket_type_nome,
+      dateLine: eventDate ? `${eventDate}${eventTime ? ` · ${eventTime}h` : ''}` : null,
+      address: fullAddress || null,
+      seat: seatLabel,
+      buyer: ticket.buyer_name,
+      code: fallbackCode,
+    });
+    const link = document.createElement('a');
+    link.download = `ingresso-${(ticket.event_slug ?? ticket.event_name).toString().replace(/\s+/g, '-')}-${fallbackCode}.png`;
+    link.href = img.toDataURL('image/png');
+    link.click();
+  };
+
   // "Adicionar ao calendário": .ics gerado no cliente (sem lat/lng nem fuso próprio;
   // horário local flutuante, o que é o correto pra evento presencial).
   const handleAddToCalendar = () => {
@@ -323,7 +334,9 @@ const MeuIngresso: React.FC = () => {
       </div>
 
       <div className="flex-1 flex items-center justify-center px-4 pb-6 print:block print:p-0">
-        <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden print:max-w-full print:rounded-none print:shadow-none print:mx-auto">
+        <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden print:max-w-full print:rounded-none print:shadow-none print:mx-auto print:overflow-visible print:flex print:flex-col print:text-black">
+          {/* Só impressão: margem da folha A4. Não afeta a tela. */}
+          <style>{'@media print { @page { size: A4 portrait; margin: 12mm; } }'}</style>
           {sessionInfo && (sessionInfo.sessao_status === 'adiada' || sessionInfo.sessao_status === 'cancelada') && (
             <div className="p-3 print:hidden">
               <SessionStatusBanner {...sessionInfo} dataAtual={ticket.event_start_date} horaAtual={ticket.event_time} context="ingresso" theme="light" />
@@ -377,12 +390,12 @@ const MeuIngresso: React.FC = () => {
           })()}
 
           {/* Faixa colorida — vermelho se inválido, rosa default */}
-          <div className={`px-6 py-4 flex items-center justify-between text-white ${
+          <div className={`px-6 py-4 flex items-center justify-between text-white print:order-1 print:bg-white print:text-black print:px-0 print:py-2 print:border-b-2 print:border-black ${
             isInvalid ? 'bg-slate-700' : 'bg-[#ff0068]'
           }`}>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-80">Ingresso</p>
-              <p className="text-sm font-black uppercase tracking-tight italic">CoreoHub</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-80 print:opacity-100 print:text-xs">Ingresso</p>
+              <p className="text-sm font-black uppercase tracking-tight italic print:text-lg">CoreoHub</p>
             </div>
             <div className="flex flex-col items-end gap-0.5">
               {isInvalid ? (
@@ -394,7 +407,7 @@ const MeuIngresso: React.FC = () => {
                   ✓ Check-in OK
                 </span>
               ) : isPago ? (
-                <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full">
+                <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full print:bg-white print:text-black print:border print:border-black print:text-xs">
                   ✓ Confirmado
                 </span>
               ) : (
@@ -450,12 +463,17 @@ const MeuIngresso: React.FC = () => {
           ) : (
             <>
               {/* QR */}
-              <div className="px-6 pt-6 pb-4 flex flex-col items-center">
-                <div className="bg-white p-3 rounded-2xl border-2 border-slate-100">
+              <div className="px-6 pt-6 pb-4 flex flex-col items-center print:order-3 print:px-0 print:pt-3 print:pb-1 print:border-t print:border-dashed print:border-black print:mt-2">
+                <p className="hidden print:block text-base font-black uppercase tracking-wide text-center mb-3">
+                  Apresente este ingresso (a página inteira) na entrada
+                </p>
+                <div className="bg-white p-3 rounded-2xl border-2 border-slate-100 print:rounded-none print:border-0 print:p-[3mm]">
                   <QRCodeCanvas
                     id="ticket-qr"
                     value={qrValue}
-                    size={256}
+                    size={768}
+                    style={{ width: 256, height: 256 }}
+                    className="print:w-[6.5cm]! print:h-[6.5cm]!"
                     level="H"
                     fgColor={isCheckedIn ? '#94a3b8' : '#000000'}
                     bgColor="#ffffff"
@@ -463,13 +481,13 @@ const MeuIngresso: React.FC = () => {
                   />
                 </div>
                 <div className="mt-4 w-full text-center">
-                  <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">
+                  <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1 print:text-sm print:text-black">
                     Código manual
                   </p>
-                  <p className="text-2xl font-black tracking-[0.4em] text-slate-900 tabular-nums">
+                  <p className="text-2xl font-black tracking-[0.4em] text-slate-900 tabular-nums print:text-4xl print:text-black">
                     {fallbackCode}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1 italic">
+                  <p className="text-xs text-slate-500 mt-1 italic print:text-base print:text-black print:not-italic">
                     Use se o leitor não reconhecer o QR
                   </p>
                 </div>
@@ -481,7 +499,7 @@ const MeuIngresso: React.FC = () => {
                       type="button"
                       onClick={handleSaveImage}
                       className="flex-1 min-w-0 flex items-center justify-center gap-1 py-2 px-2 whitespace-nowrap bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-tight transition-colors"
-                      aria-label="Salvar imagem do QR"
+                      aria-label="Salvar ingresso como imagem"
                     >
                       <Download size={12} /> Salvar
                     </button>
@@ -521,24 +539,24 @@ const MeuIngresso: React.FC = () => {
           )}
 
           {/* Info do evento + comprador */}
-          <div className="px-6 py-4 border-t border-slate-100 space-y-2">
-            <p className="text-base font-black uppercase tracking-tight text-slate-900 leading-tight">
+          <div className="px-6 py-4 border-t border-slate-100 space-y-2 print:order-2 print:px-0 print:py-2 print:border-0 print:space-y-2">
+            <p className="text-base font-black uppercase tracking-tight text-slate-900 leading-tight print:text-3xl print:text-black">
               {ticket.event_name}
             </p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 print:text-lg print:text-black">
               {ticket.ticket_type_nome}
             </p>
 
-            <div className="space-y-1.5 pt-2">
+            <div className="space-y-1.5 pt-2 print:space-y-2">
               {eventDate && (
-                <div className="flex items-start gap-2 text-[11px] text-slate-600">
-                  <Calendar size={12} className="text-[#ff0068] mt-0.5 shrink-0" />
+                <div className="flex items-start gap-2 text-[11px] text-slate-600 print:text-lg print:text-black">
+                  <Calendar size={12} className="text-[#ff0068] mt-0.5 shrink-0 print:hidden" />
                   <span>{eventDate}{eventTime ? ` · ${eventTime}h` : ''}</span>
                 </div>
               )}
               {fullAddress && (
-                <div className="flex items-start gap-2 text-[11px] text-slate-600">
-                  <MapPin size={12} className="text-[#ff0068] mt-0.5 shrink-0" />
+                <div className="flex items-start gap-2 text-[11px] text-slate-600 print:text-lg print:text-black">
+                  <MapPin size={12} className="text-[#ff0068] mt-0.5 shrink-0 print:hidden" />
                   <span>
                     {fullAddress}
                     {mapsUrl && (
@@ -553,11 +571,11 @@ const MeuIngresso: React.FC = () => {
                 </div>
               )}
               {seatLabel && (
-                <div className="mt-1 rounded-xl bg-slate-900 text-white px-3 py-2">
-                  <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400">Seu lugar</p>
-                  <p className="text-sm font-black uppercase tracking-tight">{seatLabel}</p>
+                <div className="mt-1 rounded-xl bg-slate-900 text-white px-3 py-2 print:bg-white print:text-black print:border-2 print:border-black print:rounded-none print:px-4 print:py-3">
+                  <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 print:text-sm print:text-black">Seu lugar</p>
+                  <p className="text-sm font-black uppercase tracking-tight print:text-3xl">{seatLabel}</p>
                   {seatTipoLabel && (
-                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-sky-300">
+                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-sky-300 print:text-black print:text-sm">
                       {seatTipoLabel} · comprovação na portaria
                     </p>
                   )}
@@ -574,10 +592,15 @@ const MeuIngresso: React.FC = () => {
               )}
             </div>
 
-            <div className="border-t border-slate-100 pt-2 mt-2">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Comprador</p>
-              <p className="text-[11px] font-bold text-slate-700 mt-0.5">{ticket.buyer_name}</p>
-              <p className="text-[10px] text-slate-500">{ticket.buyer_email_masked}</p>
+            <div className="border-t border-slate-100 pt-2 mt-2 print:border-black print:pt-3">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 print:text-sm print:text-black">Comprador</p>
+              <p className="text-[11px] font-bold text-slate-700 mt-0.5 print:text-xl print:text-black">{ticket.buyer_name}</p>
+              <p className="text-[10px] text-slate-500 print:hidden">{ticket.buyer_email_masked}</p>
+              <p className="hidden print:block text-base text-black mt-2">
+                Ingresso nº {ticket.id.slice(0, 8).toUpperCase()}
+                {siblings.length > 1 ? ` (${(siblings.find(x => x.access_token === token)?.position ?? 1)} de ${siblings.length})` : ''}
+                {' · '}Compra em {new Date(ticket.paid_at ?? ticket.created_at).toLocaleDateString('pt-BR')}
+              </p>
             </div>
 
             {ticket.ticket_type_kind === 'meia' && (
@@ -612,26 +635,26 @@ const MeuIngresso: React.FC = () => {
           )}
 
           {isPago && !isCheckedIn && ticket.paid_at && ticket.transfer_count === 0 && (
-            <WithdrawalPanel
+            <div className="print:hidden"><WithdrawalPanel
               token={token!}
               paidAt={ticket.paid_at}
               eventStartDate={ticket.event_start_date}
               eventTime={ticket.event_time}
               onDone={() => { void supabase.rpc('get_audience_ticket_by_token_v3', { p_token: token }).then(({ data }) => { const row = Array.isArray(data) ? data[0] : data; if (row) setTicket(row as Ticket); }); }}
-            />
+            /></div>
           )}
 
           {(isPago || ticket.status_pagamento === 'CORTESIA') && !isCheckedIn && sessionInfo?.sessao_status !== 'cancelada' && (
-            <TransferTicketPanel
+            <div className="print:hidden"><TransferTicketPanel
               token={token!}
               isMeia={ticket.ticket_type_kind === 'meia'}
               hasSeat={!!ticket.seat_id}
               onTransferred={setTransferredTo}
-            />
+            /></div>
           )}
 
-          <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
-            <p className="text-[9px] text-slate-400 text-center leading-relaxed">
+          <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 print:order-4 print:bg-white print:px-0 print:border-t-2 print:border-dashed print:border-black print:mt-2 print:pt-3">
+            <p className="text-[9px] text-slate-400 text-center leading-relaxed print:text-sm print:text-black print:text-left">
               Este ingresso é nominativo. Apresente o QR na entrada. Em caso de dúvidas, entre em contato com o organizador.
             </p>
           </div>

@@ -363,6 +363,25 @@ const CheckIn = () => {
       return;
     }
 
+    // 1.5) Código manual do ingresso (últimos 6 caracteres, o que /meu-ingresso mostra quando o QR não lê).
+    if (canScan('INGRESSO') && /^[0-9a-fA-F]{6}$/.test(id)) {
+      const { data: byCode, error: codeErr } = await supabase.rpc('find_audience_tickets_by_code', { p_code: id });
+      if (codeErr) console.error('[CheckIn] código manual:', codeErr.message);
+      const found = (byCode ?? []) as TicketRow[];
+      if (found.length === 1) {
+        await handleTicket(found[0]);
+        return;
+      }
+      if (found.length > 1) {
+        const labels: Record<string, string> = {};
+        for (const eid of new Set(found.map(h => h.event_id))) labels[eid] = sessionText((await loadSession(eid)).info);
+        setSessionLabels(prev => ({ ...prev, ...labels }));
+        setTicketHits(found);
+        setScanResult({ type: 'duplicate', message: `${found.length} ingressos têm o código ${id.toUpperCase()}. Escolha o certo na lista "Ingressos da plateia" abaixo.`, kind: 'INGRESSO' });
+        return;
+      }
+    }
+
     // 2) Ingresso plateia (audience_tickets.id)
     // O QR do ingresso é o id — ou, depois de uma transferência de titularidade, o qr_code novo.
     // O id de um ingresso transferido deixa de valer (o titular anterior ainda tem esse QR salvo).
