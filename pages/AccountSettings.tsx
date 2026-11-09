@@ -6933,10 +6933,32 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               <div className="space-y-2">
                 {lotes.map((lote, i) => {
                   const isLast = i === lotes.length - 1;
+                  // Período do lote: começa no dia seguinte à virada do anterior
+                  // (lote vale ATÉ data_virada, inclusive — ver utils/lotes.ts) e
+                  // termina na própria virada; o último termina no prazo de inscrição.
+                  const fmtBR = (iso?: string | null) => {
+                    if (!iso) return null;
+                    const d = new Date(iso + 'T12:00:00');
+                    return isNaN(d.getTime()) ? null : d.toLocaleDateString('pt-BR');
+                  };
+                  const prev = i > 0 ? lotes[i - 1].data_virada : null;
+                  let inicioTxt: string;
+                  if (i === 0) inicioTxt = 'abertura das inscrições';
+                  else if (prev) {
+                    const d = new Date(prev + 'T12:00:00');
+                    d.setDate(d.getDate() + 1);
+                    inicioTxt = d.toLocaleDateString('pt-BR');
+                  } else inicioTxt = 'definir lote anterior';
+                  const fimTxt = isLast ? fmtBR(general.regDeadline) : fmtBR(lote.data_virada);
+                  const foraDoPrazo = !isLast && !!lote.data_virada && !!general.regDeadline && lote.data_virada > general.regDeadline;
+                  const fechaAntes = i > 0 && !!prev && !!lote.data_virada && lote.data_virada <= prev;
                   return (
                     <div key={i} className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-2xl p-3">
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
+                        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 flex-1 text-right mr-2">
+                          De {inicioTxt} até {fimTxt ?? 'definir'}
+                        </p>
                         {lotes.length > 1 && (
                           <button onClick={() => removeLote(i)} className="p-1 -mr-1 text-slate-400 hover:text-red-500 transition-colors" title="Remover lote">
                             <Trash2 size={14} />
@@ -6957,9 +6979,18 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             {isLast ? 'Até prazo final' : 'Vira em'}
                           </label>
                           {isLast ? (
-                            <input type="text" disabled value="Prazo de inscrição" className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-slate-400 text-xs italic cursor-not-allowed" />
+                            <input type="text" disabled value={fmtBR(general.regDeadline) ?? 'Defina o prazo em Geral'} className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-slate-500 dark:text-slate-400 text-sm font-bold cursor-not-allowed" />
                           ) : (
                             <input type="date" value={lote.data_virada || ''} onChange={e => updateLote(i, { data_virada: e.target.value })} className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm dark:[color-scheme:dark]" />
+                          )}
+                          {isLast && !general.regDeadline && (
+                            <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1">Sem prazo de inscrição definido em Geral.</p>
+                          )}
+                          {fechaAntes && (
+                            <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1">A data precisa ser depois do fim do lote anterior.</p>
+                          )}
+                          {foraDoPrazo && (
+                            <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1">Passa do prazo final de inscrição ({fmtBR(general.regDeadline)}).</p>
                           )}
                         </div>
                       </div>
@@ -7219,9 +7250,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-8 w-full max-w-lg shadow-2xl"
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 w-full max-w-lg shadow-2xl max-h-[90dvh] flex flex-col"
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 shrink-0">
                 <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
                   {modalMode === 'add' ? 'Adicionar' : 'Editar'} <span className="text-[#ff0068]">{activeTab}</span>
                 </h3>
@@ -7230,9 +7261,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </button>
               </div>
 
-              {renderModalContent()}
+              {/* Corpo rolável: título e botões ficam sempre visíveis, mesmo com muitos lotes */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-2 px-2">
+                {renderModalContent()}
+              </div>
 
-              <div className="flex gap-3 mt-8">
+              <div className="flex gap-3 mt-6 shrink-0">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
                   Cancelar
                 </button>
