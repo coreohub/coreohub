@@ -19,6 +19,8 @@ interface AlertItem {
   ctaLabel?: string;
   onCta?: () => void;
   dismissable?: boolean;
+  /** Mostra o botão também no celular (abaixo do texto). O padrão esconde em tela pequena. */
+  ctaOnMobile?: boolean;
 }
 
 interface Props {
@@ -134,6 +136,7 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
             else navigate('/account-settings?tab=Pagamentos');
           },
           dismissable: false,
+          ctaOnMobile: true,
         });
       }
 
@@ -266,6 +269,14 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
                 <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 font-medium mt-0.5 leading-relaxed">
                   {alert.description}
                 </p>
+                {alert.ctaOnMobile && alert.onCta && alert.ctaLabel && (
+                  <button
+                    onClick={alert.onCta}
+                    className={`sm:hidden mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${s.cta}`}
+                  >
+                    {alert.ctaLabel} <ArrowRight size={11} />
+                  </button>
+                )}
               </div>
 
               {alert.onCta && alert.ctaLabel && (
