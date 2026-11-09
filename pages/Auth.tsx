@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Sparkles, Loader2, Mail, Lock, ArrowRight, ShieldCheck, Zap, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
-import { rememberEntryEvent, claimEntryEvent } from '../utils/leadEntry';
+import { rememberEntryEvent, claimEntryEvent, rememberEntryEventFromPath } from '../utils/leadEntry';
 import { OtpBoxes } from '../components/OtpBoxes';
 import AsaasBadge from '../components/AsaasBadge';
 import HelpWhatsappButton from '../components/HelpWhatsappButton';
@@ -214,7 +214,12 @@ const Auth = () => {
   //   2) localStorage tem o evento de origem (salvo quando eventContext resolveu)
   //   3) profile.entry_event_id ainda está NULL (não sobrescreve em re-logins)
   // Não falha o flow de auth se algo der errado — best-effort silencioso.
-  const persistLeadEntryEventId = (userId: string, createdAtIso?: string) => claimEntryEvent(userId, createdAtIso);
+  const persistLeadEntryEventId = async (userId: string, createdAtIso?: string) => {
+    // Link do e-mail aberto em outro navegador (Instagram → Chrome): não há nada
+    // guardado, só o redirectTo da URL. Resolve o evento dali antes de gravar.
+    await rememberEntryEventFromPath(redirectTo);
+    await claimEntryEvent(userId, createdAtIso);
+  };
 
   // Convite de equipe: se o signup em /equipe-convite/:token precisou de
   // confirmação de e-mail (sem sessão ainda), o token fica guardado aqui e

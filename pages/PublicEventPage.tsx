@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { parseSessionCode, sessionKey, sessionSlugCandidates } from '../utils/sessionCode';
 import { supabase } from '../services/supabase';
-import { rememberEntryEvent } from '../utils/leadEntry';
+import { rememberEntryEvent, claimForCurrentSession } from '../utils/leadEntry';
 import { trackViewEvent, trackBeginCheckout } from '../services/producerAnalytics';
 import ProducerPixels from '../components/ProducerPixels';
 import {
@@ -352,6 +352,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         if (cancelled) return;
         setEvent(eventData);
         rememberEntryEvent(eventData?.id);
+        void claimForCurrentSession();
         setConfig(cfg);
         // Best-effort: página pública do produtor é opt-in, maioria dos
         // eventos não tem (RPC devolve vazio) — não bloqueia nem falha o

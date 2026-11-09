@@ -51,3 +51,32 @@ export const claimEntryEvent = async (userId: string, userCreatedAtIso?: string 
     console.error('[leadEntry]', e?.message ?? e);
   }
 };
+
+/**
+ * Resolve o evento a partir de um caminho interno (`/festival/<slug|uuid>/...` ou
+ * `/evento/<slug|uuid>`) e o lembra. É o que faz o cadastro vindo do Instagram
+ * funcionar: o link do e-mail abre OUTRO navegador (sem nada guardado) em
+ * `/login?redirectTo=/festival/<slug>/...`, e o caminho é a única pista do evento.
+ */
+export const rememberEntryEventFromPath = async (path?: string | null): Promise<void> => {
+  try {
+    if (!path || localStorage.getItem(KEY)) return;
+    const m = path.match(/^\/(?:festival|evento)\/([^/?#]+)/);
+    if (!m) return;
+    const idOrSlug = decodeURIComponent(m[1]);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+    const { data, error } = await supabase.from('events').select('id').eq(isUuid ? 'id' : 'slug', idOrSlug).maybeSingle();
+    if (error) { console.error('[leadEntry] evento do caminho:', error.message); return; }
+    rememberEntryEvent(data?.id);
+  } catch (e: any) {
+    console.error('[leadEntry]', e?.message ?? e);
+  }
+};
+
+/** Grava o evento lembrado pra quem JÁ está logado (vitrine aberta com sessão). */
+export const claimForCurrentSession = async (): Promise<void> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await claimEntryEvent(session.user.id, session.user.created_at);
+  } catch { /* best-effort */ }
+};
