@@ -5,8 +5,7 @@
 //   node --env-file=.env.local scripts/eval-regulation.mjs [--dir=D:/tmp/regulamentos] [--models=claude-sonnet-5-5,claude-opus-5-5]
 //        [--only=reg1,reg2]
 //
-// Requer ANTHROPIC_API_KEY no ambiente (nunca impressa) e SDK em D:\tmp\eval-sdk. O baseline do Gemini usa o login de
-// produtor salvo em scripts/.playwright-auth (consome 1 das 15 análises do dia). Cada leitura gasta crédito real.
+// Requer ANTHROPIC_API_KEY no ambiente (nunca impressa) e SDK em D:\tmp\eval-sdk. Cada leitura gasta crédito real.
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
