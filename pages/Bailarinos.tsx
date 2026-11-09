@@ -7,6 +7,7 @@ import {
   CheckCircle, AlertCircle, Loader2, ShieldCheck,
   Calendar, CreditCard, UserPlus, AlertTriangle, Info,
 } from 'lucide-react';
+import { DateInput } from '@/components/DateInput';
 
 /* ── CPF validation (Receita Federal algorithm) ── */
 const validateCPF = (cpf: string): boolean => {
@@ -469,8 +470,7 @@ const MeuElenco = () => {
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5 block">
                   Data de Nascimento *
                 </label>
-                <input
-                  type="date"
+                <DateInput
                   value={form.data_nascimento}
                   onChange={e => setForm(f => ({ ...f, data_nascimento: e.target.value }))}
                   max={new Date().toISOString().split('T')[0]}

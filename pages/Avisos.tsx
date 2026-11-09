@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import EventPickerSheet from '../components/EventPickerSheet';
 import PageHeader from '../components/PageHeader';
+import { DateInput } from '@/components/DateInput';
 
 interface EventOption { id: string; name: string; }
 
@@ -357,8 +358,7 @@ const Avisos: React.FC = () => {
 
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Expira em (opcional)</label>
-                <input
-                  type="date"
+                <DateInput
                   value={form.expires_at}
                   onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"

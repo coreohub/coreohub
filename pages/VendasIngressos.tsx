@@ -32,6 +32,7 @@ import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '.
 import { BLOCK_REASON_SUGGESTIONS, expandRange, expandRow, partitionSelection, reasonsBySeat, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
 import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
+import { DateInput } from '@/components/DateInput';
 
 const sessionLabel = (d?: string | null, t?: string | null) => {
   const dia = d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '';
@@ -1936,7 +1937,7 @@ const VendasIngressos: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="session-date" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nova data</label>
-                      <input id="session-date" type="date" value={sessionForm.nova_data} onChange={e => setSessionForm(f => ({ ...f, nova_data: e.target.value }))}
+                      <DateInput id="session-date" value={sessionForm.nova_data} onChange={e => setSessionForm(f => ({ ...f, nova_data: e.target.value }))}
                         className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50" />
                     </div>
                     <div>

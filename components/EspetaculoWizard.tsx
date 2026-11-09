@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { createEvent, supabase, uploadEventCover } from '../services/supabase';
 import { generateEventSlug } from '../services/eventSlug';
+import { DateInput } from '@/components/DateInput';
 
 /**
  * Wizard de criação do Plano Espetáculo (docs/mostra-pricing-spec.md).
@@ -207,7 +208,7 @@ const EspetaculoWizard: React.FC = () => {
 
             <div className="space-y-2">
               <label className={labelCls}>Data</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={inputCls} />
+              <DateInput value={startDate} onChange={e => setStartDate(e.target.value)} className={inputCls} />
             </div>
 
             <div className="grid grid-cols-3 gap-3">

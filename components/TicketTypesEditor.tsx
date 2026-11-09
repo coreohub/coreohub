@@ -5,6 +5,7 @@ import PrecoInput from './PrecoInput';
 import SeatZonesEditor from './SeatZonesEditor';
 import ZonePriceMatrix from './ZonePriceMatrix';
 import { validateZonePricing, pruneZonePrices, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
+import { DateInput } from '@/components/DateInput';
 
 interface TicketLote { data_virada: string | null; preco: number; precos_por_zona?: Record<string, number> }
 interface TicketType {
@@ -344,8 +345,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
                                     ) : (
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">até</span>
-                                        <input
-                                          type="date"
+                                        <DateInput
                                           value={lote.data_virada || ''}
                                           onChange={e => updateLote(loteIdx, { data_virada: e.target.value || null })}
                                           className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-2 text-slate-900 dark:text-white font-bold text-xs focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"

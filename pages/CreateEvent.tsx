@@ -12,6 +12,7 @@ import { generateEventSlug } from '../services/eventSlug';
 import { formatEventWhatsApp } from '../utils/formatters';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
 import { EventFormat } from '../types';
+import { DateInput } from '@/components/DateInput';
 
 type TabType = 'general' | 'regulation';
 
@@ -347,8 +348,7 @@ const CreateEvent = () => {
                 {/* Data início */}
                 <div className="space-y-2">
                   <label className={labelCls}>Data de Início</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={formData.start_date}
                     onChange={e => setFormData({ ...formData, start_date: e.target.value })}
                     className={inputCls}
@@ -358,8 +358,7 @@ const CreateEvent = () => {
                 {/* Prazo de inscrição */}
                 <div className="space-y-2">
                   <label className={labelCls}>Prazo de Inscrição</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={formData.registration_deadline}
                     onChange={e => setFormData({ ...formData, registration_deadline: e.target.value })}
                     className={inputCls}

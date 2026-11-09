@@ -13,6 +13,7 @@ import FocalPointPicker from '../components/FocalPointPicker';
 import SlugField from '../components/SlugField';
 import { slugify, suggestWorkshopSlug, slugValidity, slugAlternatives, yearOf } from '../utils/slug';
 import { QUANTITY_TIERS_MAX, validateQuantityTiers } from '../supabase/functions/_shared/workshop-checkout';
+import { DateInput } from '@/components/DateInput';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
 type FeeMode = 'repassar' | 'absorver';
@@ -1438,7 +1439,7 @@ const LodgingNightsModal: React.FC<{ eventId: string; onClose: () => void }> = (
           <div className="flex items-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
             <label className="block flex-1">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Data (noite)</span>
-              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+              <DateInput value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
             </label>
             <label className="block w-28">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Vagas</span>
@@ -1636,7 +1637,7 @@ const DayCapacityModal: React.FC<{ eventId: string; onClose: () => void }> = ({ 
           <div className="flex items-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
             <label className="block flex-1">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Data</span>
-              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+              <DateInput value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
             </label>
             <label className="block w-28">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Teto</span>
@@ -1781,7 +1782,7 @@ const DayOptionsModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> 
           <div className="flex flex-wrap items-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
             <label className="block">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Data</span>
-              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+              <DateInput value={newDate} onChange={e => setNewDate(e.target.value)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
             </label>
             <label className="block flex-1 min-w-[140px]">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Rótulo (opcional)</span>
@@ -2211,7 +2212,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <input type="date" value={newHospedagemNoite} onChange={e => setNewHospedagemNoite(e.target.value)} className={inputCls} />
+                  <DateInput value={newHospedagemNoite} onChange={e => setNewHospedagemNoite(e.target.value)} className={inputCls} />
                   <button type="button" onClick={() => addDateToField('hospedagem_noites', newHospedagemNoite, setNewHospedagemNoite)} className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-[#ff0068] px-3 py-2 text-xs font-bold text-white hover:bg-[#ff1a78] transition">
                     <Plus size={14} /> Adicionar
                   </button>
@@ -2249,7 +2250,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                 </div>
               )}
               <div className="flex gap-2">
-                <input type="date" value={newCampDia} onChange={e => setNewCampDia(e.target.value)} className={inputCls} />
+                <DateInput value={newCampDia} onChange={e => setNewCampDia(e.target.value)} className={inputCls} />
                 <button type="button" onClick={() => addDateToField('camp_dias', newCampDia, setNewCampDia)} className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-[#ff0068] px-3 py-2 text-xs font-bold text-white hover:bg-[#ff1a78] transition">
                   <Plus size={14} /> Adicionar
                 </button>

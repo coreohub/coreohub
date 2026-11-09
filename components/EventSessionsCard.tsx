@@ -4,6 +4,7 @@ import { CalendarPlus, Copy, ExternalLink, Loader2, X } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { humanizeSupabaseError } from '../utils/supabaseErrors';
 import { sessionPath } from '../utils/sessionCode';
+import { DateInput } from '@/components/DateInput';
 
 interface SessionRow {
   id: string;
@@ -156,7 +157,7 @@ export const EventSessionsCard: React.FC<{ eventId: string }> = ({ eventId }) =>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="dup-data" className={labelCls}>Data</label>
-                <input id="dup-data" type="date" min={todayISO()} value={date} onChange={e => setDate(e.target.value)} className={inputCls} autoFocus />
+                <DateInput id="dup-data" min={todayISO()} value={date} onChange={e => setDate(e.target.value)} className={inputCls} autoFocus />
               </div>
               <div>
                 <label htmlFor="dup-hora" className={labelCls}>Horário</label>

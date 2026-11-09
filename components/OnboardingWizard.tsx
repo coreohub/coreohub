@@ -13,6 +13,7 @@ import { eventTemplates, getTemplate, TemplateId } from '../services/eventTempla
 import { generateEventSlug } from '../services/eventSlug';
 import { EventFormat } from '../types';
 import { TERMO_PRODUTOR_VERSION, termoAceitePendente } from '../utils/termoVersion';
+import { DateInput } from '@/components/DateInput';
 
 type Step = 1 | 2 | 3;
 
@@ -485,8 +486,7 @@ const OnboardingWizard: React.FC = () => {
                 </div>
 
                 <Field label="Data de início">
-                  <input
-                    type="date"
+                  <DateInput
                     value={data.start_date}
                     onChange={e => setData({ ...data, start_date: e.target.value })}
                     className={inputCls}

@@ -13,6 +13,7 @@ import PageHeader from '../components/PageHeader';
 import { uploadRegulationPdf, supabase } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
+import { DateInput } from '@/components/DateInput';
 
 type Step = 'upload' | 'processing' | 'review' | 'done';
 
@@ -933,16 +934,16 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
                 <input className={inputCls} value={edited.address ?? ''} onChange={e => setField('address', e.target.value || null)} placeholder="Cidade, estado..." />
               </Field>
               <Field label="Data do Evento" value={edited.start_date} icon={Calendar}>
-                <input type="date" className={inputCls} value={edited.start_date ?? ''} onChange={e => setField('start_date', e.target.value || null)} />
+                <DateInput className={inputCls} value={edited.start_date ?? ''} onChange={e => setField('start_date', e.target.value || null)} />
               </Field>
               <Field label="Prazo de Inscrição" value={edited.registration_deadline} icon={Calendar}>
-                <input type="date" className={inputCls} value={edited.registration_deadline ?? ''} onChange={e => setField('registration_deadline', e.target.value || null)} />
+                <DateInput className={inputCls} value={edited.registration_deadline ?? ''} onChange={e => setField('registration_deadline', e.target.value || null)} />
               </Field>
               <Field label="Data Limite Trilha Sonora" value={edited.track_submission_deadline} icon={Calendar}>
-                <input type="date" className={inputCls} value={edited.track_submission_deadline ?? ''} onChange={e => setField('track_submission_deadline', e.target.value || null)} />
+                <DateInput className={inputCls} value={edited.track_submission_deadline ?? ''} onChange={e => setField('track_submission_deadline', e.target.value || null)} />
               </Field>
               <Field label="Data Limite Seletiva de Vídeo" value={edited.video_submission_deadline} icon={Calendar}>
-                <input type="date" className={inputCls} value={edited.video_submission_deadline ?? ''} onChange={e => setField('video_submission_deadline', e.target.value || null)} />
+                <DateInput className={inputCls} value={edited.video_submission_deadline ?? ''} onChange={e => setField('video_submission_deadline', e.target.value || null)} />
               </Field>
             </div>
           </section>
@@ -1065,7 +1066,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
                 {edited.registration_lots.map((lot, i) => (
                   <div key={i} className="grid grid-cols-3 gap-3 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
                     <input className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none px-2" value={lot.label} onChange={e => { const lots = [...edited.registration_lots]; lots[i] = { ...lots[i], label: e.target.value }; setField('registration_lots', lots); }} placeholder="Ex: 1º Lote" />
-                    <input type="date" className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none px-2" value={lot.deadline} onChange={e => { const lots = [...edited.registration_lots]; lots[i] = { ...lots[i], deadline: e.target.value }; setField('registration_lots', lots); }} />
+                    <DateInput className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none px-2" value={lot.deadline} onChange={e => { const lots = [...edited.registration_lots]; lots[i] = { ...lots[i], deadline: e.target.value }; setField('registration_lots', lots); }} />
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-slate-400">R$</span>
                       <input type="number" className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none flex-1 px-2" value={lot.price} onChange={e => { const lots = [...edited.registration_lots]; lots[i] = { ...lots[i], price: parseFloat(e.target.value) || 0 }; setField('registration_lots', lots); }} />

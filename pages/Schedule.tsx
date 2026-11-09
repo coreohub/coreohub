@@ -28,6 +28,7 @@ import { resolveEstudio, toTitleCase, resolveTrilhaUrl, stripEstiloVertentes } f
 import { formatDataBRComDia } from '../utils/lotes';
 import { isStyleInList } from '../utils/styleMatch';
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
+import { DateInput } from '@/components/DateInput';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
 type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
@@ -3336,9 +3337,8 @@ const Schedule = () => {
                     <label htmlFor="bloco-form-data" className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40">
                       Dia do festival (opcional)
                     </label>
-                    <input
+                    <DateInput
                       id="bloco-form-data"
-                      type="date"
                       value={blocoForm.data}
                       onChange={e => setBlocoForm(prev => prev ? { ...prev, data: e.target.value } : prev)}
                       className="mt-1 w-full px-3 py-2 bg-white dark:bg-white/5 dark:[color-scheme:dark] border border-slate-200 dark:border-white/10 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40"

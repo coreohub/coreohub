@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import EventPickerSheet from '../components/EventPickerSheet';
 import VendasTabs from '../components/VendasTabs';
+import { DateInput } from '@/components/DateInput';
 
 type DiscountType = 'percent' | 'fixed';
 
@@ -696,8 +697,7 @@ const Coupons: React.FC = () => {
               </div>
 
               <Field label="Expira em (opcional)">
-                <input
-                  type="date"
+                <DateInput
                   value={form.expires_at}
                   onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
