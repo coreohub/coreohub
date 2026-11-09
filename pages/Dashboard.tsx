@@ -104,8 +104,47 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   // a busca de avisos/ordem com o fallback legacy (config.event_id, não
   // confiável) enquanto o fetch real ainda está em andamento, e depois
   // re-disparar de novo com o evento certo (race visível em QA 2026-07-07).
-  const inscritoEventId = loading ? null : (coreografias[0]?.event_id ?? config?.event_id ?? null);
+  //
+  // 2026-11-09: a row legacy id='1' vira o ÚLTIMO evento salvo por qualquer
+  // produtor (updateActiveEventConfig grava nela a cada save). Inscrito novo,
+  // sem inscrição, via o nome/capa/avisos de OUTRO festival (caso real: gente
+  // do Compete'art vendo "Festival Level Up" no Início). Por isso, quem é só
+  // inscrito NUNCA herda a config legacy: usa a inscrição, depois o evento de
+  // entrada do cadastro (profiles.entry_event_id), e sem nenhum dos dois não
+  // mostra evento nenhum. Equipe/produtor seguem na `config` deles (já certa).
+  const entryEventId = ((profile as any).entry_event_id as string | null | undefined) ?? null;
+  const inscritoTargetEventId = loading ? null : (coreografias[0]?.event_id ?? entryEventId ?? null);
+  const usaConfigGlobal = !isInscrito; // equipe/produtor: config global é a deles
+  const inscritoEventId = loading
+    ? null
+    : (inscritoTargetEventId ?? (usaConfigGlobal ? (config?.event_id ?? null) : null));
   const { announcements, ordemItems, eventTime } = useInicioAvisos(inscritoEventId, profile.id);
+
+  // Config do evento REAL do inscrito (não a global). `.neq('id','1')` exclui a
+  // row legacy, que pode duplicar o event_id (sessão 2 do Level Up tem as duas).
+  const [eventoConfig, setEventoConfig] = useState<any | null>(null);
+  useEffect(() => {
+    if (!inscritoTargetEventId) { setEventoConfig(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data, error: cfgErr } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('event_id', inscritoTargetEventId)
+        .neq('id', '1')
+        .limit(1)
+        .maybeSingle();
+      if (cfgErr) console.error('[Dashboard] config do evento do inscrito:', cfgErr.message);
+      if (!cancelled) setEventoConfig(data ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [inscritoTargetEventId]);
+
+  // `evCfg`: o que o bloco de inscrito exibe. Enquanto a config do evento real
+  // não chega, fica vazio (sem piscar o nome de outro festival).
+  const evCfg: any = inscritoTargetEventId
+    ? (eventoConfig ?? {})
+    : (usaConfigGlobal ? config : {});
 
   // ── Métricas reais ────────────────────────────────────────────────────────
   const total      = coreografias.length;
@@ -132,7 +171,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         : { label: 'Em andamento', color: 'text-[#ff0068]' };
 
   // ── Prazo de inscrição ────────────────────────────────────────────────────
-  const deadlineDays = daysUntil(config?.registration_deadline);
+  const deadlineDays = daysUntil(evCfg?.registration_deadline);
 
   // ── Home adaptativa (equipe ↔ inscrito) ─────────────────────────────────────
   // "Ser equipe" e "ser inscrito" não são exclusivos (mesmo princípio já usado
@@ -164,7 +203,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
       <div className="flex justify-between items-center">
         <div>
           <span className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.3em]">
-            {config?.nome_evento || 'Festival Ativo'}
+            {evCfg?.nome_evento || 'Festival Ativo'}
           </span>
           <h1 className="text-2xl font-black tracking-tighter uppercase">
             Olá, {profile.full_name?.split(' ')[0] || profile.email?.split('@')[0] || 'pessoa'}
@@ -306,7 +345,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
 
       {/* ── Guia de Inscrição (apenas inscritos) ── */}
       {isInscrito && (
-        <GuiaDeInscricao profile={profile} config={config} />
+        <GuiaDeInscricao profile={profile} config={evCfg} />
       )}
 
       {/* ── Ordem de apresentação (apenas inscritos) — baixa urgência, fica
@@ -314,7 +353,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
       {isInscrito && <OrdemApresentacao items={ordemItems} eventTime={eventTime} />}
 
       {/* ── Card do Evento ── */}
-      {(config?.nome_evento || config?.data_evento || config?.endereco) && (
+      {(evCfg?.nome_evento || evCfg?.data_evento || evCfg?.endereco) && (
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -322,11 +361,11 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         >
           <div className="flex flex-col md:flex-row">
             {/* Capa do evento */}
-            {config?.cover_url && (
+            {evCfg?.cover_url && (
               <div className="w-full md:w-48 h-28 md:h-auto shrink-0 overflow-hidden">
                 <img
-                  src={config.cover_url}
-                  alt={config.nome_evento}
+                  src={evCfg.cover_url}
+                  alt={evCfg.nome_evento}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -335,20 +374,20 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
               <div>
                 <span className="text-[8px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Evento Ativo</span>
                 <h2 className="text-base font-black uppercase tracking-tighter text-slate-900 dark:text-white leading-tight">
-                  {config.nome_evento}
+                  {evCfg.nome_evento}
                 </h2>
               </div>
               <div className="flex flex-wrap gap-4">
-                {config?.data_evento && (
+                {evCfg?.data_evento && (
                   <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
                     <Calendar size={12} className="text-[#ff0068]" />
-                    {fmtDate(config.data_evento)}
+                    {fmtDate(evCfg.data_evento)}
                   </span>
                 )}
-                {config?.endereco && (
+                {evCfg?.endereco && (
                   <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
                     <MapPin size={12} className="text-[#ff0068]" />
-                    {config.endereco}
+                    {evCfg.endereco}
                   </span>
                 )}
                 {deadlineDays !== null && (

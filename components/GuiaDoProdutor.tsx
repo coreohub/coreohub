@@ -39,6 +39,8 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [asaasConnected, setAsaasConnected] = useState(false);
+  // Subconta criada mas KYC (verificação do Asaas) ainda não aprovado.
+  const [kycPending, setKycPending] = useState(false);
   const [eventsCount, setEventsCount] = useState(0);
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
@@ -47,10 +49,12 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
   useEffect(() => {
     const fetchData = async () => {
       const [asaasRes, eventsRes] = await Promise.all([
-        supabase.from('profiles').select('asaas_subconta_id, onboarding_dismissed_at').eq('id', profile.id).maybeSingle(),
+        supabase.from('profiles').select('asaas_subconta_id, asaas_kyc_status, onboarding_dismissed_at').eq('id', profile.id).maybeSingle(),
         supabase.from('events').select('id').eq('created_by', profile.id).limit(1),
       ]);
       setAsaasConnected(!!asaasRes.data?.asaas_subconta_id);
+      const kyc = (asaasRes.data as any)?.asaas_kyc_status ?? null;
+      setKycPending(!!asaasRes.data?.asaas_subconta_id && !!kyc && kyc !== 'APPROVED');
       setDismissedAt((asaasRes.data as any)?.onboarding_dismissed_at ?? null);
       setEventsCount((eventsRes.data ?? []).length);
       setLoading(false);
@@ -76,11 +80,11 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
   // "Tudo pronto" com botão Fechar.
   const profileComplete = !!(profile.full_name && (profile as any).whatsapp);
   const hasEvent = eventsCount > 0;
-  const allDone = profileComplete && asaasConnected && hasEvent;
+  const allDone = profileComplete && asaasConnected && !kycPending && hasEvent;
 
   const activeStep =
     !profileComplete ? 1 :
-    !asaasConnected  ? 2 :
+    (!asaasConnected || kycPending) ? 2 :
     !hasEvent        ? 3 : 4;
 
   type StepStatus = 'done' | 'active' | 'locked';
@@ -111,10 +115,12 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
       title: 'Conecte sua conta CoreoHub',
       subtitle: 'Subconta para receber pagamentos',
       description: 'Configure a subconta Asaas para receber os pagamentos das inscrições do seu festival. O split é automático: a comissão da plataforma é descontada antes do repasse pra você.',
-      ctaLabel: asaasConnected ? 'Ver conta CoreoHub' : 'Conectar agora',
+      ctaLabel: asaasConnected ? (kycPending ? 'Completar verificação' : 'Ver conta CoreoHub') : 'Conectar agora',
       ctaAction: () => navigate('/account-settings?tab=Pagamentos'),
       detail: asaasConnected
-        ? <span className="text-[10px] font-bold text-emerald-500 uppercase">Subconta Asaas ativa</span>
+        ? (kycPending
+            ? <span className="text-[10px] font-bold text-amber-500 uppercase">Aguardando verificação do Asaas</span>
+            : <span className="text-[10px] font-bold text-emerald-500 uppercase">Subconta Asaas ativa</span>)
         : <span className="text-[10px] font-bold text-amber-500 uppercase">Subconta ainda não criada</span>,
     },
     {

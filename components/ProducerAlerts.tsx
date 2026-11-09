@@ -64,13 +64,15 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
           .order('created_at', { ascending: false }),
         supabase
           .from('profiles')
-          .select('asaas_subconta_id')
+          .select('asaas_subconta_id, asaas_kyc_status, asaas_onboarding_url')
           .eq('id', profile.id)
           .maybeSingle(),
       ]);
 
       const events = eventsRes.data ?? [];
       const asaasOk = !!profileRes.data?.asaas_subconta_id;
+      const kycStatus: string | null = (profileRes.data as any)?.asaas_kyc_status ?? null;
+      const kycUrl: string | null = (profileRes.data as any)?.asaas_onboarding_url ?? null;
 
       // 2) Configuracoes do EVENTO ATIVO (não do row legacy id=1).
       //    Multi-tenant: cada evento tem sua própria configuracoes com id=event_id.
@@ -108,6 +110,29 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
           description: 'Você tem evento com inscrição paga, mas a conta de recebimento não está configurada. Sem ela, ninguém consegue pagar.',
           ctaLabel: 'Conectar agora',
           onCta: () => navigate('/account-settings?tab=Pagamentos'),
+          dismissable: false,
+        });
+      }
+
+      // ── AVISO: subconta criada mas verificação (KYC) do Asaas não aprovada ──
+      // Sem a aprovação o Asaas não libera Pix nativo/cartão: o produtor só
+      // descobria na hora da primeira venda, porque o aviso morava só em
+      // Configurações → Pagamentos (caso real 2026-11-09, Compete'art: painel
+      // dizia "tudo pronto" com KYC PENDING). Não dispensável.
+      if (asaasOk && kycStatus && kycStatus !== 'APPROVED') {
+        newAlerts.push({
+          id: 'asaas-kyc-pending',
+          severity: kycStatus === 'REJECTED' ? 'critical' : 'warning',
+          icon: AlertCircle,
+          title: kycStatus === 'REJECTED' ? 'Verificação da conta recusada' : 'Complete a verificação da sua conta',
+          description: kycStatus === 'REJECTED'
+            ? 'O Asaas recusou os documentos enviados. Reenvie pelo link para liberar Pix, cartão e repasses.'
+            : 'O Asaas precisa verificar sua identidade (documento com foto, selfie e comprovante de residência) antes de liberar Pix, cartão e repasses. Se você já enviou, é só aguardar a análise (2 a 7 dias úteis).',
+          ctaLabel: kycUrl ? 'Completar verificação' : 'Ver pagamentos',
+          onCta: () => {
+            if (kycUrl) window.open(kycUrl, '_blank', 'noopener,noreferrer');
+            else navigate('/account-settings?tab=Pagamentos');
+          },
           dismissable: false,
         });
       }
