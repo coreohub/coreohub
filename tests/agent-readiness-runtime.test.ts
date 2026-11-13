@@ -9,14 +9,14 @@ const mw = (path: string, headers: Record<string, string> = {}, host = 'coreohub
   middleware(new Request(`https://${host}${path}`, { headers }));
 const rewriteOf = (r: Response | undefined) => r?.headers.get('x-middleware-rewrite') ?? null;
 
-const run = (handler: any, query: Record<string, string>) => {
+const run = (handler: any, query: Record<string, string>, headers: Record<string, string> = {}) => {
   const out: { status?: number; body?: string; headers: Record<string, string> } = { headers: {} };
   const res = {
     setHeader: (k: string, v: string) => { out.headers[k.toLowerCase()] = v; },
     status(c: number) { out.status = c; return res; },
     send(b: string) { out.body = b; return res; },
   };
-  handler({ query }, res);
+  handler({ query, headers, url: '/nada-aqui' }, res);
   return out;
 };
 
@@ -68,5 +68,15 @@ describe('api/md e api/not-found', () => {
     const r = run(notFoundHandler, {});
     expect(r.status).toBe(404);
     expect(r.headers['content-type']).toMatch(/^text\/html/);
+  });
+
+  it('404 em JSON quando o cliente pede application/json', () => {
+    const r = run(notFoundHandler, {}, { accept: 'application/json' });
+    expect(r.status).toBe(404);
+    expect(r.headers['content-type']).toMatch(/^application\/json/);
+    const j = JSON.parse(r.body!);
+    expect(j.error).toBe('not_found');
+    expect(j.status).toBe(404);
+    expect(j.links.openapi).toContain('/openapi.json');
   });
 });

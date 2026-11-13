@@ -1,0 +1,180 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CoreoHub — superfície pública legível por máquina",
+    "version": "1.0.0",
+    "description": "A CoreoHub é uma plataforma de gestão de festivais e mostras de dança. Esta especificação descreve APENAS o que é público e somente leitura em coreohub.com: as páginas de marketing (em HTML ou Markdown, por negociação de conteúdo), o llms.txt e o sitemap. Não há API pública autenticada de terceiros: dados de eventos, inscrições, pagamentos e júri ficam atrás do login do painel (app.coreohub.com) e não são acessíveis por chave de API ou OAuth de terceiros. Para integração, fale com contato@coreohub.com ou pelo WhatsApp (17) 99793-6169.",
+    "contact": {
+      "name": "CoreoHub",
+      "email": "contato@coreohub.com",
+      "url": "https://coreohub.com/contato"
+    },
+    "termsOfService": "https://coreohub.com/termos"
+  },
+  "servers": [
+    {
+      "url": "https://coreohub.com"
+    }
+  ],
+  "security": [],
+  "paths": {
+    "/{pagina}": {
+      "get": {
+        "operationId": "getPagina",
+        "summary": "Lê uma página pública (HTML ou Markdown)",
+        "description": "Envie `Accept: text/markdown` para receber a página em Markdown na mesma URL (resposta com `Vary: Accept`). Sem esse cabeçalho, devolve HTML.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "pagina",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "planos",
+                "sobre",
+                "contato",
+                "privacidade",
+                "termos",
+                "festivais",
+                "espetaculo",
+                "curso-de-ferias",
+                "governo"
+              ]
+            }
+          },
+          {
+            "name": "Accept",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "text/markdown",
+                "text/html"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conteúdo da página",
+            "content": {
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/llms.txt": {
+      "get": {
+        "operationId": "getLlmsTxt",
+        "summary": "Guia da CoreoHub para agentes de IA",
+        "description": "Quando usar, quando não usar e como acionar a CoreoHub, mais a lista de páginas.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Texto em Markdown",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sitemap.xml": {
+      "get": {
+        "operationId": "getSitemap",
+        "summary": "Sitemap das páginas públicas e dos eventos ativos",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Sitemap XML",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "NotFound": {
+        "description": "Caminho inexistente. Devolve HTTP 404 real: em Markdown se o pedido aceita `text/markdown`, em JSON se aceita `application/json`, senão em HTML.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          },
+          "text/markdown": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "text/html": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error",
+          "status",
+          "hint",
+          "links"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "not_found"
+          },
+          "status": {
+            "type": "integer",
+            "example": 404
+          },
+          "path": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "links": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -148,3 +148,22 @@ describe('atalhos de preço', () => {
     }
   });
 });
+
+describe('superfície para desenvolvedores', () => {
+  it('wantsJson: JSON só quando pedido antes de HTML', async () => {
+    const { wantsJson, notFoundJson } = await import('../api/_agent-content');
+    expect(wantsJson('application/json')).toBe(true);
+    expect(wantsJson('application/json, text/plain, */*')).toBe(true);
+    expect(wantsJson('text/html,application/xhtml+xml,application/json;q=0.9')).toBe(false);
+    expect(wantsJson('*/*')).toBe(false);
+    expect(wantsJson(undefined)).toBe(false);
+    expect(notFoundJson('/x').status).toBe(404);
+  });
+  it('openapi.json é válido, sem segurança inventada e só lista páginas que existem', () => {
+    const spec = JSON.parse(readFileSync('public/openapi.json', 'utf-8'));
+    expect(spec.openapi).toMatch(/^3\.1/);
+    expect(spec.security).toEqual([]);
+    expect(spec.components.securitySchemes).toBeUndefined();
+    for (const p of spec.paths['/{pagina}'].get.parameters[0].schema.enum) expect(MARKDOWN_PATHS['/' + p], p).toBeTruthy();
+  });
+});

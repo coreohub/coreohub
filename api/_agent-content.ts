@@ -79,6 +79,33 @@ export function wantsMarkdown(accept: string | null | undefined): boolean {
   return /(^|[\s,;])text\/markdown(\s*[;,]|$)/i.test(accept ?? '');
 }
 
+/** O cliente pede JSON (e não HTML)? Usado no 404 pra devolver erro legível por máquina. */
+export function wantsJson(accept: string | null | undefined): boolean {
+  const a = (accept ?? '').toLowerCase();
+  const j = a.indexOf('application/json');
+  if (j < 0) return false;
+  const h = a.indexOf('text/html');
+  return h < 0 || j < h;
+}
+
+/** Corpo JSON do 404 (mesmos links úteis do 404 em HTML e Markdown). */
+export function notFoundJson(path: string) {
+  return {
+    error: 'not_found',
+    status: 404,
+    path,
+    hint: 'Esse endereço não existe na CoreoHub. Use os links abaixo.',
+    links: {
+      llms: 'https://coreohub.com/llms.txt',
+      openapi: 'https://coreohub.com/openapi.json',
+      sitemap: 'https://coreohub.com/sitemap.xml',
+      planos: 'https://coreohub.com/planos',
+      festivais: 'https://coreohub.com/festivais',
+      contato: 'https://coreohub.com/contato',
+    },
+  };
+}
+
 /** Páginas de confiança em inglês → página canônica em português (redirect 308 no vercel.json). */
 export const TRUST_REDIRECTS: Record<string, string> = {
   '/about': '/sobre',
