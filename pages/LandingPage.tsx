@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 
-const WHATSAPP_URL = 'https://wa.me/5517981264290?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub';
+const WHATSAPP_URL = 'https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub';
 
 // FAQ da home. O JSON-LD de index.html e de api/og-marketing.ts espelha este array
 // (tests/marketing-faq-parity.test.ts quebra se divergir).
@@ -958,7 +958,7 @@ const LandingPage = () => {
               <p className="text-slate-400 text-sm mt-1">Secretarias de cultura e editais públicos têm modelo de proposta próprio.</p>
             </div>
             <a
-              href="https://wa.me/5517981264290?text=Ol%C3%A1%2C%20Sou%20de%20uma%20institui%C3%A7%C3%A3o%20p%C3%BAblica%20e%20gostaria%20de%20falar%20sobre%20a%20CoreoHub"
+              href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Sou%20de%20uma%20institui%C3%A7%C3%A3o%20p%C3%BAblica%20e%20gostaria%20de%20falar%20sobre%20a%20CoreoHub"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-colors shrink-0"
@@ -1154,8 +1154,8 @@ const LandingPage = () => {
               <ul className="space-y-2 text-[11px] text-slate-400">
                 <li><a href="mailto:contato@coreohub.com" className="hover:text-[#ff0068]">contato@coreohub.com</a></li>
                 <li>
-                  <a href="https://wa.me/5517981264290" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
-                    +55 17 98126-4290
+                  <a href="https://wa.me/5517997936169" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
+                    +55 17 99793-6169
                   </a>
                 </li>
               </ul>

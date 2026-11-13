@@ -167,3 +167,12 @@ describe('superfície para desenvolvedores', () => {
     for (const p of spec.paths['/{pagina}'].get.parameters[0].schema.enum) expect(MARKDOWN_PATHS['/' + p], p).toBeTruthy();
   });
 });
+
+describe('telefone único da CoreoHub', () => {
+  it('nenhuma página nem e-mail usa o número antigo (o oficial é (17) 99793-6169)', () => {
+    const { readdirSync } = require('node:fs');
+    const files = [...readdirSync('pages').filter((n: string) => n.endsWith('.tsx')).map((n: string) => `pages/${n}`), 'supabase/functions/send-email/index.ts'];
+    const bad = files.filter((f) => /98126-?4290|5517981264290/.test(readFileSync(f, 'utf-8')));
+    expect(bad).toEqual([]);
+  });
+});

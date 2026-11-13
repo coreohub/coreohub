@@ -1619,7 +1619,7 @@ function buildCalculatorProposal(p: CalculatorProposalPayload) {
   const waText = encodeURIComponent(
     `Olá! Simulei meu festival na CoreoHub: ${p.numeroCoreografias} coreografias, ~${p.participantesEstimados} participantes, faturamento estimado ${money(p.faturamentoEstimado)}. Plano recomendado: ${p.planoNome}. Nome do festival: ${p.leadNome}.`
   )
-  const ctaUrl = `https://wa.me/5517981264290?text=${waText}`
+  const ctaUrl = `https://wa.me/5517997936169?text=${waText}`
 
   const contentHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">

@@ -484,8 +484,8 @@ export default function LandingEspetaculo() {
               <ul className="space-y-2 text-[11px] text-slate-400">
                 <li><a href="mailto:contato@coreohub.com" className="hover:text-[#ff0068]">contato@coreohub.com</a></li>
                 <li>
-                  <a href="https://wa.me/5517981264290" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
-                    +55 17 98126-4290
+                  <a href="https://wa.me/5517997936169" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
+                    +55 17 99793-6169
                   </a>
                 </li>
               </ul>
@@ -510,7 +510,7 @@ export default function LandingEspetaculo() {
 
       {/* ─── BOTÃO FLUTUANTE WHATSAPP ──────────────────────────────────────────────── */}
       <a
-        href="https://wa.me/5517981264290?text=Ol%C3%A1%2C%20quero%20vender%20ingresso%20do%20espet%C3%A1culo%20de%20fim%20de%20ano%20do%20meu%20est%C3%BAdio"
+        href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20quero%20vender%20ingresso%20do%20espet%C3%A1culo%20de%20fim%20de%20ano%20do%20meu%20est%C3%BAdio"
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Falar no WhatsApp"

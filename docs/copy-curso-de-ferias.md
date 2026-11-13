@@ -125,7 +125,7 @@ Você faz pelo painel. O valor é devolvido ao comprador, inclusive a taxa de pa
 ## Decisões fechadas em 2026-10-31 (implementado na dev)
 
 1. Faixa "a gente configura o primeiro curso com você": entrou, na seção Como funciona, com botão de WhatsApp.
-2. WhatsApp: o mesmo do site (+55 17 98126-4290).
+2. WhatsApp: o mesmo do site (+55 17 99793-6169).
 3. Eyebrow: mantido "cursos de férias e cursos de verão".
 4. CNPJ: confirmado no código (create-asaas-subconta aceita CPF de 11 dígitos ou CNPJ de 14). FAQ "Preciso ter CNPJ?" entrou.
 5. Escala: só como "Eventos grandes" com link para /planos, sem valor (a métrica R$2 por participante nunca foi validada em workshop).

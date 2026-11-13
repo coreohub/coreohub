@@ -5,8 +5,8 @@ import { motion } from 'motion/react';
 import { supabaseUrl } from '@/services/supabase';
 import { maskTelefoneBR, unmaskTelefoneBR } from '@/utils/masks';
 
-const WHATSAPP_NUMBER = '5517981264290';
-const WHATSAPP_DISPLAY = '+55 17 98126-4290';
+const WHATSAPP_NUMBER = '5517997936169';
+const WHATSAPP_DISPLAY = '+55 17 99793-6169';
 
 const waLink = (text: string) => `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
 
@@ -493,7 +493,7 @@ const Planos: React.FC = () => {
                       inputMode="numeric"
                       value={leadWhatsapp}
                       onChange={(e) => setLeadWhatsapp(maskTelefoneBR(e.target.value))}
-                      placeholder="(17) 98126-4290"
+                      placeholder="(17) 99999-9999"
                       className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
                     />
                   </div>
@@ -528,7 +528,7 @@ const Planos: React.FC = () => {
                 Mandamos o resumo em detalhes pro seu e-mail. Nosso time também entra em contato no WhatsApp pra fechar os detalhes da sua proposta.
               </p>
               <a
-                href={`https://wa.me/5517981264290?text=${leadWhatsappMessage}`}
+                href={`https://wa.me/5517997936169?text=${leadWhatsappMessage}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-4 inline-flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"

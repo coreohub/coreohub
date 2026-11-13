@@ -28,7 +28,7 @@ import {
 const SITE_URL = 'https://coreohub.com';
 const CANONICAL_URL = `${SITE_URL}/curso-de-ferias`;
 const CREATE_URL = 'https://app.coreohub.com/criar-evento';
-const WHATSAPP_URL = 'https://wa.me/5517981264290?text=Ol%C3%A1%2C%20quero%20vender%20meu%20curso%20de%20f%C3%A9rias%20de%20dan%C3%A7a%20pela%20CoreoHub';
+const WHATSAPP_URL = 'https://wa.me/5517997936169?text=Ol%C3%A1%2C%20quero%20vender%20meu%20curso%20de%20f%C3%A9rias%20de%20dan%C3%A7a%20pela%20CoreoHub';
 
 const PAGE_TITLE = 'Curso de Férias e de Verão de Dança | CoreoHub';
 const PAGE_DESCRIPTION = 'Venda passes, aulas, hospedagem e lotes do seu curso de férias de dança com Pix e cartão, vagas controladas e painel do produtor. Sem mensalidade.';
@@ -522,8 +522,8 @@ export default function LandingCursoFerias() {
               <ul className="space-y-2 text-[11px] text-slate-400">
                 <li><a href="mailto:contato@coreohub.com" className="hover:text-[#ff0068]">contato@coreohub.com</a></li>
                 <li>
-                  <a href="https://wa.me/5517981264290" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
-                    +55 17 98126-4290
+                  <a href="https://wa.me/5517997936169" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
+                    +55 17 99793-6169
                   </a>
                 </li>
               </ul>
