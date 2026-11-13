@@ -35,8 +35,9 @@ Todas as páginas públicas de coreohub.com respondem em Markdown na mesma URL q
 
 ## Para desenvolvedores e agentes
 
-- [OpenAPI](https://coreohub.com/openapi.json): descreve tudo o que é público e somente leitura em coreohub.com (páginas em HTML ou Markdown, llms.txt, sitemap e o formato do erro 404 em JSON).
-- Não existe API pública autenticada de terceiros (sem chave de API nem OAuth de terceiros): dados de evento, inscrição, pagamento e júri ficam atrás do login do painel. Para integrar, escreva para contato@coreohub.com ou chame no WhatsApp (17) 99793-6169.
+- [CoreoHub API](https://coreohub.com/desenvolvedores): documentação da API pública v1 (somente leitura, sem chave): `GET https://coreohub.com/api/v1/eventos` e `GET https://coreohub.com/api/v1/eventos/{slug}`. Erros sempre em JSON. Versão no caminho (/api/v1) e no cabeçalho X-API-Version; versão antiga fica no ar por pelo menos 90 dias após o aviso de depreciação (cabeçalhos Deprecation e Sunset).
+- [OpenAPI](https://coreohub.com/openapi.json): especificação OpenAPI 3.1 da API v1 e das páginas públicas (HTML ou Markdown, llms.txt, sitemap).
+- Não existe API com chave ou OAuth de terceiros: inscrição, pagamento e júri ficam atrás do login do painel e não são expostos. Para integrar, escreva para contato@coreohub.com ou chame no WhatsApp (17) 99793-6169.
 - Teste sem falar com ninguém: o cadastro em https://coreohub.com/criar-evento é gratuito e o plano Começo não tem taxa fixa.
 
 ## Páginas principais

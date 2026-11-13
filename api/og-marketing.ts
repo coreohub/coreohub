@@ -521,6 +521,37 @@ export const PAGES: Record<string, PageMeta> = {
       mainEntity: { '@id': 'https://coreohub.com/#organization' },
     },
   },
+  desenvolvedores: {
+    path: '/desenvolvedores',
+    title: 'CoreoHub API — documentação para desenvolvedores',
+    description:
+      'CoreoHub API v1: leitura pública e gratuita dos eventos de dança da vitrine da CoreoHub, em JSON, sem chave e sem cadastro. Especificação OpenAPI em coreohub.com/openapi.json, erros em JSON, versionamento no caminho (/api/v1) e política de depreciação com aviso de pelo menos 90 dias.',
+    metaDescription:
+      'CoreoHub API v1: leitura pública e gratuita dos eventos de dança da vitrine, em JSON, com OpenAPI, versionamento e política de depreciação.',
+    bullets: [
+      'Base: https://coreohub.com/api/v1, somente GET, sem autenticação',
+      'GET /api/v1/eventos: lista os eventos públicos (limit de 1 a 100, offset para paginar)',
+      'GET /api/v1/eventos/{slug}: um evento público pelo slug',
+      'Especificação OpenAPI 3.1 em https://coreohub.com/openapi.json',
+      'Erros sempre em JSON: error, message, hint e status (400, 404, 405, 502, 503)',
+      'Versão no caminho (/api/v1) e no cabeçalho X-API-Version; mudança que quebra vira /api/v2',
+      'Versão antiga fica no ar por pelo menos 90 dias após o aviso, com cabeçalhos Deprecation e Sunset',
+      'Não há API com chave ou OAuth de terceiros: inscrições, pagamentos e notas do júri não são expostos',
+    ],
+    faq: [
+      { q: 'A CoreoHub tem API pública?', a: 'Sim, a CoreoHub API v1: leitura somente de eventos públicos, em JSON, sem chave. Base https://coreohub.com/api/v1, com os endpoints /eventos e /eventos/{slug}.' },
+      { q: 'Preciso de chave ou cadastro para usar a API?', a: 'Não. A API devolve só o que já é público na vitrine (nome, descrição, capa, datas, local e link do evento). Não existe API com chave ou OAuth de terceiros por enquanto; para integrar algo além da leitura pública, escreva para contato@coreohub.com.' },
+      { q: 'Como a API é versionada e descontinuada?', a: 'A versão vai no caminho (/api/v1) e no cabeçalho X-API-Version. Mudança que não quebra entra na mesma versão; mudança que quebra vira /api/v2. Uma versão antiga continua no ar por pelo menos 90 dias após o aviso, e suas respostas passam a trazer os cabeçalhos Deprecation e Sunset.' },
+      { q: 'Como são os erros?', a: 'Sempre JSON com error, message, hint e status, junto do status HTTP correspondente: 400 parâmetro inválido, 404 recurso inexistente, 405 método não aceito, 502 falha ao ler os eventos e 503 serviço indisponível.' },
+    ],
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'TechArticle',
+      name: 'CoreoHub API — documentação para desenvolvedores',
+      url: `${SITE_URL}/desenvolvedores`,
+      about: { '@id': 'https://coreohub.com/#organization' },
+    },
+  },
   cursoferias: {
     path: '/curso-de-ferias',
     title: 'Curso de Férias e de Verão de Dança | CoreoHub',

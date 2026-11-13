@@ -1145,6 +1145,7 @@ const LandingPage = () => {
                 <li><Link to="/governo" className="hover:text-[#ff0068]">Para o setor público</Link></li>
                 <li><Link to="/curso-de-ferias" className="hover:text-[#ff0068]">Para cursos de férias</Link></li>
                 <li><Link to="/espetaculo" className="hover:text-[#ff0068]">Para espetáculos e bilheteria</Link></li>
+                <li><Link to="/desenvolvedores" className="hover:text-[#ff0068]">API para desenvolvedores</Link></li>
               </ul>
             </div>
 

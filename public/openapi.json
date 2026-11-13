@@ -3,7 +3,7 @@
   "info": {
     "title": "CoreoHub — superfície pública legível por máquina",
     "version": "1.0.0",
-    "description": "A CoreoHub é uma plataforma de gestão de festivais e mostras de dança. Esta especificação descreve APENAS o que é público e somente leitura em coreohub.com: as páginas de marketing (em HTML ou Markdown, por negociação de conteúdo), o llms.txt e o sitemap. Não há API pública autenticada de terceiros: dados de eventos, inscrições, pagamentos e júri ficam atrás do login do painel (app.coreohub.com) e não são acessíveis por chave de API ou OAuth de terceiros. Para integração, fale com contato@coreohub.com ou pelo WhatsApp (17) 99793-6169.",
+    "description": "A CoreoHub é uma plataforma de gestão de festivais e mostras de dança. Esta especificação descreve a superfície pública e somente leitura de coreohub.com: a CoreoHub API v1 (eventos públicos da vitrine, em JSON), as páginas de marketing (HTML ou Markdown por negociação de conteúdo), o llms.txt e o sitemap. Não há autenticação nem API de terceiros com chave ou OAuth: inscrições, pagamentos e notas do júri ficam atrás do login do painel (app.coreohub.com) e não são expostos. Versionamento: a versão vai no caminho (/api/v1) e no cabeçalho X-API-Version; mudança que não quebra entra na mesma versão, mudança que quebra vira /api/v2. Depreciação: uma versão antiga permanece disponível por pelo menos 90 dias após o aviso, e suas respostas passam a trazer os cabeçalhos Deprecation e Sunset. Documentação: https://coreohub.com/desenvolvedores. Contato: contato@coreohub.com.",
     "contact": {
       "name": "CoreoHub",
       "email": "contato@coreohub.com",
@@ -40,7 +40,8 @@
                 "festivais",
                 "espetaculo",
                 "curso-de-ferias",
-                "governo"
+                "governo",
+                "desenvolvedores"
               ]
             }
           },
@@ -76,7 +77,10 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "tags": [
+          "site"
+        ]
       }
     },
     "/llms.txt": {
@@ -96,7 +100,10 @@
               }
             }
           }
-        }
+        },
+        "tags": [
+          "site"
+        ]
       }
     },
     "/sitemap.xml": {
@@ -111,6 +118,258 @@
               "application/xml": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "site"
+        ]
+      }
+    },
+    "/api/v1/eventos": {
+      "get": {
+        "operationId": "listEventos",
+        "tags": [
+          "eventos"
+        ],
+        "summary": "Lista os eventos públicos",
+        "description": "Eventos da vitrine (públicos, com capa e descrição). Espetáculo com várias sessões aparece como um item, com as sessões em `sessions`.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de eventos",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parâmetro inválido (invalid_parameter)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Método não aceito (method_not_allowed)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Falha ao ler os eventos (upstream_error)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível (service_unavailable)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/eventos/{slug}": {
+      "get": {
+        "operationId": "getEvento",
+        "tags": [
+          "eventos"
+        ],
+        "summary": "Um evento público pelo slug",
+        "security": [],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9-]{0,119}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "O evento",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Evento inexistente ou não público (not_found)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Método não aceito (method_not_allowed)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Falha ao ler os eventos (upstream_error)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível (service_unavailable)",
+            "headers": {
+              "X-API-Version": {
+                "description": "Versão da API que respondeu.",
+                "schema": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -147,23 +406,26 @@
         "type": "object",
         "required": [
           "error",
-          "status",
+          "message",
           "hint",
-          "links"
+          "status"
         ],
         "properties": {
           "error": {
             "type": "string",
             "example": "not_found"
           },
+          "message": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
           "status": {
             "type": "integer",
             "example": 404
           },
           "path": {
-            "type": "string"
-          },
-          "hint": {
             "type": "string"
           },
           "links": {
@@ -174,7 +436,171 @@
             }
           }
         }
+      },
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "error",
+          "message",
+          "hint",
+          "status"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "invalid_parameter",
+              "not_found",
+              "method_not_allowed",
+              "upstream_error",
+              "service_unavailable"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "description",
+          "cover_url",
+          "url"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "cover_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_time": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "event_time": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "EventList": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "api_version": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     }
-  }
+  },
+  "externalDocs": {
+    "description": "CoreoHub API — documentação para desenvolvedores",
+    "url": "https://coreohub.com/desenvolvedores"
+  },
+  "tags": [
+    {
+      "name": "eventos",
+      "description": "Eventos públicos da vitrine (CoreoHub API v1)"
+    },
+    {
+      "name": "site",
+      "description": "Páginas e arquivos públicos de coreohub.com"
+    }
+  ]
 }

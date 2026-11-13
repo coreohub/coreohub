@@ -39,6 +39,7 @@ export const MARKDOWN_PATHS: Record<string, string> = {
   '/governo': 'governo',
   '/sobre': 'sobre',
   '/contato': 'contato',
+  '/desenvolvedores': 'desenvolvedores',
   '/termos': 'termos',
   '/privacidade': 'privacidade',
 };
@@ -54,7 +55,7 @@ export const KNOWN_TOP_SEGMENTS: readonly string[] = [
   'central-de-midia', 'certificados', 'check-in', 'checkout-ingresso', 'checkout-workshop',
   'checkout-workshop-pass', 'conferencia', 'contato', 'convite', 'cotacoes-terminal-juri', 'credenciais',
   'credencial', 'credenciamento', 'criar-espetaculo', 'criar-evento', 'cronograma', 'cupons',
-  'curso-de-ferias', 'curso-de-verao', 'dashboard', 'debitos-produtores', 'deliberacao', 'deliberacoes',
+  'curso-de-ferias', 'curso-de-verao', 'dashboard', 'debitos-produtores', 'deliberacao', 'deliberacoes', 'desenvolvedores',
   'entrar-juri', 'equipe-convite', 'equipe-jurados', 'equipe-jurados-config', 'espetaculo', 'event-config',
   'evento', 'festivais', 'festival', 'governo', 'importar-regulamento', 'ingressos', 'inicio', 'inscricoes',
   'judge-login', 'judge-practice', 'judge-terminal', 'jurado-seletiva', 'live', 'locais', 'login', 'lp',
@@ -94,7 +95,8 @@ export function notFoundJson(path: string) {
     error: 'not_found',
     status: 404,
     path,
-    hint: 'Esse endereço não existe na CoreoHub. Use os links abaixo.',
+    message: 'Esse endereço não existe na CoreoHub.',
+    hint: 'Use os links abaixo para encontrar o que procura.',
     links: {
       llms: 'https://coreohub.com/llms.txt',
       openapi: 'https://coreohub.com/openapi.json',
@@ -102,6 +104,7 @@ export function notFoundJson(path: string) {
       planos: 'https://coreohub.com/planos',
       festivais: 'https://coreohub.com/festivais',
       contato: 'https://coreohub.com/contato',
+      desenvolvedores: 'https://coreohub.com/desenvolvedores',
     },
   };
 }
@@ -134,6 +137,7 @@ export const NAV_LINKS: { path: string; label: string }[] = [
   { path: '/governo', label: 'Gestão para o setor público' },
   { path: '/sobre', label: 'Sobre a CoreoHub' },
   { path: '/contato', label: 'Contato' },
+  { path: '/desenvolvedores', label: 'CoreoHub API (documentação para desenvolvedores)' },
   { path: '/termos', label: 'Termos de Uso' },
   { path: '/privacidade', label: 'Política de Privacidade' },
 ];

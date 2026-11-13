@@ -21,6 +21,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/v1/:path*", "destination": "/api/v1?path=:path*" },
     {
       "source": "/sitemap.xml",
       "has": [
@@ -216,6 +217,17 @@
         }
       ],
       "destination": "/api/og-marketing?page=contato"
+    },
+    {
+      "source": "/desenvolvedores",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot|Google-InspectionTool|GoogleOther).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=desenvolvedores"
     },
     {
       "source": "/(.*)",
