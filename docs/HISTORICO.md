@@ -4,6 +4,10 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-11-13 — `send-email` v90 em produção com o WhatsApp oficial (17) 99793-6169 ✅
+
+- Deploy a partir da `main` (`45290b5`, worktree temporário), porque a correção `43a9304` não estava na `dev`. A única mudança desde a v89 era o link `wa.me` do e-mail da proposta da calculadora (`buildCalculatorProposal`), antes `5517981264290`. Nenhum e-mail real disparado. Nota: o CLI 2.90.0 recusa o `[local_smtp]` do `supabase/config.toml` da `main` (chave inválida); o deploy usou `[inbucket]` só no worktree temporário, sem mudar o repositório.
+
 ### 2026-10-25 — E-mail da fatura da taxa de plano + lembretes antes/depois do vencimento ✅ (edges em produção)
 
 - **Por quê:** a fatura da taxa de plano (Essencial R$ 250 / Escala R$ 1.490) é criada com `notificationDisabled: true`, então a Asaas não avisa o produtor. O link só aparecia num modal na criação e no banner do painel (caso Lorrayne: só percebeu depois de vencida).
