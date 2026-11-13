@@ -62,5 +62,3 @@ Disallow: /termo-produtor
 
 Sitemap: https://coreohub.com/sitemap.xml
 Sitemap: https://app.coreohub.com/sitemap.xml
-
-Agentmap: https://coreohub.com/.well-known/ard.json

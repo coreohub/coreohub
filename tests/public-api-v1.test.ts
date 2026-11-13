@@ -263,12 +263,13 @@ describe('ARD (/.well-known/ard.json, o que o Lighthouse sonda primeiro)', () =>
       expect(e.representativeQueries.length).toBeLessThanOrEqual(5);
     }
   });
-  it('é servido como JSON e anunciado no HTML, no header Link e no robots.txt', () => {
+  it('é servido como JSON e anunciado no HTML, e no header Link', () => {
     const cfg = JSON.parse(readFileSync('vercel.json', 'utf-8'));
     const h = cfg.headers.find((x: any) => /well-known\/ard/.test(x.source));
     expect(h.headers.find((x: any) => x.key === 'Content-Type').value).toMatch(/^application\/json/);
     expect(cfg.headers.find((x: any) => x.source === '/').headers[0].value).toContain('rel="ard"');
     expect(readFileSync('index.html', 'utf-8')).toContain('rel="ard"');
-    expect(readFileSync('public/robots.txt', 'utf-8')).toMatch(/^Agentmap:\s*https:\/\/coreohub\.com\/\.well-known\/ard\.json/m);
+    // Agentmap no robots.txt derruba o SEO do Lighthouse (validador não conhece a diretiva): não usar.
+    expect(readFileSync('public/robots.txt', 'utf-8')).not.toMatch(/^Agentmap:/m);
   });
 });
