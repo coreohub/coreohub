@@ -12,8 +12,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
-import { PAGES } from '../api/og-marketing';
-import { MARKDOWN_PATHS, escHtml, pageBodyHtml } from '../api/_agent-content';
+import { PAGES } from '../api/og-marketing.js';
+import { MARKDOWN_PATHS, escHtml, pageBodyHtml } from '../api/_agent-content.js';
 
 const HIDDEN =
   'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0';

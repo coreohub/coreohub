@@ -21,7 +21,7 @@
  * mexer aqui, senão a allowlist diverge do roteamento real).
  */
 import { rewrite, next } from '@vercel/functions';
-import { MARKDOWN_PATHS, isKnownRoute, wantsMarkdown } from './api/_agent-content';
+import { MARKDOWN_PATHS, isKnownRoute, wantsMarkdown } from './api/_agent-content.js';
 
 const BOT_UA_REGEX =
   /WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot/i;

@@ -4,7 +4,7 @@
  * (soft-404). O middleware.ts reescreve para cá quando o 1º segmento não é rota do App.tsx.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { notFoundHtml } from './_agent-content';
+import { notFoundHtml } from './_agent-content.js';
 
 export default function handler(_req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

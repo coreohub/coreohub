@@ -15,7 +15,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { NAV_LINKS, companyBlockHtml } from './_agent-content';
+import { NAV_LINKS, companyBlockHtml } from './_agent-content.js';
 
 export const SITE_URL = 'https://coreohub.com';
 const APP_URL = 'https://app.coreohub.com';

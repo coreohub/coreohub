@@ -122,3 +122,17 @@ describe('páginas de confiança e llms.txt', () => {
     expect(org.sameAs.length).toBeGreaterThan(0);
   });
 });
+
+describe('funções da Vercel (package.json type=module)', () => {
+  it('imports relativos em api/*.ts levam extensão .js (sem ela a função dá 500 em produção)', () => {
+    const { readdirSync } = require('node:fs');
+    const bad: string[] = [];
+    for (const f of readdirSync('api').filter((n: string) => n.endsWith('.ts'))) {
+      const src = readFileSync(`api/${f}`, 'utf-8');
+      for (const m of src.matchAll(/from\s+'(\.{1,2}\/[^']+)'/g)) {
+        if (!/\.(js|json)$/.test(m[1])) bad.push(`${f}: ${m[1]}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+});

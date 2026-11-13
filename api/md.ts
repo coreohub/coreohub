@@ -7,8 +7,8 @@
  * A URL que o agente pediu não muda (é um rewrite), então `/` e `/planos` respondem Markdown na MESMA URL.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PAGES } from './og-marketing';
-import { notFoundMarkdown, pageMarkdown } from './_agent-content';
+import { PAGES } from './og-marketing.js';
+import { notFoundMarkdown, pageMarkdown } from './_agent-content.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   const page = String(req.query.page ?? '').trim();
