@@ -21,6 +21,7 @@
  * mexer aqui, senão a allowlist diverge do roteamento real).
  */
 import { rewrite, next } from '@vercel/functions';
+import { MARKDOWN_PATHS, isKnownRoute, wantsMarkdown } from './api/_agent-content';
 
 const BOT_UA_REGEX =
   /WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot/i;
@@ -74,6 +75,21 @@ export default function middleware(request: Request) {
   if (url.pathname === '/' && url.hostname === 'coreohub.com' && BOT_UA_REGEX.test(userAgent)) {
     return rewrite(new URL('/api/og-marketing?page=home', request.url));
   }
+
+  // Agent readiness (is-agentic.com): Markdown por Accept na MESMA URL + 404 de verdade em coreohub.com.
+  // app.coreohub.com (painel) fica de fora do 404: lá o SPA decide.
+  const normalizedPath = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
+  const pageKey = MARKDOWN_PATHS[normalizedPath];
+  const isAppHost = url.hostname === 'app.coreohub.com';
+  const isCustomHost = url.hostname in CUSTOM_DOMAIN_SLUGS;
+  const unknownRoute = !isAppHost && !isCustomHost && !isKnownRoute(normalizedPath);
+  if (wantsMarkdown(request.headers.get('accept'))) {
+    if (pageKey) return rewrite(new URL(`/api/md?page=${pageKey}`, request.url));
+    if (unknownRoute) {
+      return rewrite(new URL(`/api/md?page=404&path=${encodeURIComponent(url.pathname.slice(0, 200))}`, request.url));
+    }
+  }
+  if (unknownRoute) return rewrite(new URL('/api/not-found', request.url));
 
   const response = next();
   if (url.hostname === 'app.coreohub.com' && !isPublicAppPath(url.pathname)) {

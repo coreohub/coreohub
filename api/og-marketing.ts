@@ -15,8 +15,9 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { NAV_LINKS, companyBlockHtml } from './_agent-content';
 
-const SITE_URL = 'https://coreohub.com';
+export const SITE_URL = 'https://coreohub.com';
 const APP_URL = 'https://app.coreohub.com';
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://ghpltzzijlvykiytwslu.supabase.co';
@@ -71,17 +72,6 @@ type Faq = { q: string; a: string };
 
 // Links internos no HTML estático pra bots: sem eles, um rastreador que não executa JS (Bing Site Scan,
 // crawlers de IA) não tem por onde navegar além da própria página (achado 2026-10-15: 2 scans, 1 página cada).
-const NAV_LINKS: { path: string; label: string }[] = [
-  { path: '/', label: 'Início' },
-  { path: '/festivais', label: 'Festivais e mostras de dança' },
-  { path: '/planos', label: 'Planos e preços' },
-  { path: '/espetaculo', label: 'Bilheteria para espetáculo de dança' },
-  { path: '/curso-de-ferias', label: 'Venda de curso de férias e de verão de dança' },
-  { path: '/governo', label: 'Gestão para o setor público' },
-  { path: '/sobre', label: 'Sobre a CoreoHub' },
-  { path: '/termos', label: 'Termos de Uso' },
-  { path: '/privacidade', label: 'Política de Privacidade' },
-];
 
 // FAQs espelhadas de pages/LandingEspetaculo.tsx (FAQ_ITEMS) e pages/Planos.tsx (PLANOS_FAQ_ITEMS): bots
 // só leem este HTML. tests/marketing-faq-parity.test.ts quebra se o texto divergir das páginas.
@@ -176,7 +166,7 @@ const faqPage = (faq: Faq[]) => ({
   mainEntity: faq.map((i) => ({ '@type': 'Question', name: i.q, acceptedAnswer: { '@type': 'Answer', text: i.a } })),
 });
 
-type PageMeta = {
+export type PageMeta = {
   path: string;
   title: string;
   description: string;
@@ -231,10 +221,23 @@ const HOME_JSONLD: Record<string, any> = {
         "cronograma de festival",
         "certificados digitais"
       ],
+      "email": "contato@coreohub.com",
+      "telephone": "+55-17-99793-6169",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Votuporanga",
+        "addressRegion": "SP",
+        "addressCountry": "BR"
+      },
       "contactPoint": {
         "@type": "ContactPoint",
         "contactType": "customer support",
-        "availableLanguage": "Portuguese",
+        "telephone": "+55-17-99793-6169",
+        "email": "contato@coreohub.com",
+        "availableLanguage": [
+          "Portuguese"
+        ],
+        "areaServed": "BR",
         "url": "https://wa.me/5517997936169"
       }
     },
@@ -389,7 +392,7 @@ const HOME_FAQ: Faq[] = (HOME_JSONLD['@graph'].find((n: any) => n['@type'] === '
   (x) => ({ q: x.name, a: x.acceptedAnswer.text }),
 );
 
-const PAGES: Record<string, PageMeta> = {
+export const PAGES: Record<string, PageMeta> = {
   // Home: sem esta entrada, bots sem JS (GPTBot, ClaudeBot, PerplexityBot) recebiam o shell do
   // index.html (78 caracteres de texto, nenhum <h1>). Texto espelha index.html (meta + featureList).
   home: {
@@ -469,6 +472,12 @@ const PAGES: Record<string, PageMeta> = {
     title: 'Sobre a CoreoHub — quem está por trás e o que a plataforma faz',
     description:
       'A CoreoHub é a plataforma de gestão para festivais e mostras de dança. Fundada em 2026 por Ticko Bboy, é uma empresa do Cultural Estúdio, de Votuporanga/SP.',
+    bullets: [
+      'Plataforma online para festivais, mostras e competições de dança, e para espetáculos de fim de ano de estúdios e escolas',
+      'Reúne inscrições, pagamentos com repasse automático, júri digital por tablet, cronograma, bilheteria, check-in e certificados',
+      'Sem mensalidade: a CoreoHub ganha uma comissão sobre o que o evento vende',
+      'Fundada em 2026 por Ticko Bboy, empresa do Cultural Estúdio, de Votuporanga/SP',
+    ],
     faq: [
       { q: 'O que é a CoreoHub?', a: 'Plataforma online de gestão de festivais e mostras de dança: inscrições, pagamentos com split automático, júri digital por tablet, cronograma, bilheteria, check-in por QR Code e certificados.' },
       { q: 'Para quem é?', a: 'Para produtores de festivais, mostras e competições de dança, estúdios e escolas com espetáculo de fim de ano, e para os inscritos, jurados e público desses eventos.' },
@@ -480,6 +489,33 @@ const PAGES: Record<string, PageMeta> = {
       '@type': 'AboutPage',
       name: 'Sobre a CoreoHub',
       url: `${SITE_URL}/sobre`,
+      mainEntity: { '@id': 'https://coreohub.com/#organization' },
+    },
+  },
+  contato: {
+    path: '/contato',
+    title: 'Contato — fale com a CoreoHub',
+    description:
+      'Fale com a CoreoHub por WhatsApp ou e-mail. Atendimento em todo o Brasil para produtores de festivais, mostras e espetáculos de dança, estúdios e órgãos públicos. Sem ticket e sem central: a conversa é direta com a equipe.',
+    metaDescription:
+      'Fale com a CoreoHub por WhatsApp ou e-mail: dúvidas sobre planos, cadastro de evento, pagamentos e suporte para produtores de dança.',
+    bullets: [
+      'WhatsApp: (17) 99793-6169, o canal mais rápido, inclusive na semana do seu evento',
+      'E-mail: contato@coreohub.com',
+      'Instagram: @coreohub',
+      'Sede: Votuporanga/SP, atendimento em todo o Brasil',
+      'Para cadastrar um evento sem falar com ninguém: coreohub.com/criar-evento',
+    ],
+    faq: [
+      { q: 'Qual é o melhor jeito de falar com a CoreoHub?', a: 'Pelo WhatsApp (17) 99793-6169. Informe o tipo de evento (festival, mostra, espetáculo de estúdio, curso de férias ou edital público), a data, a cidade e o número aproximado de inscritos ou de público, e a equipe responde com o plano e os próximos passos.' },
+      { q: 'Quando devo escrever?', a: 'Antes de abrir as inscrições ou a venda de ingressos, para escolher o plano certo, e a qualquer momento se algo travar. Na semana do evento o suporte é prioritário.' },
+      { q: 'A CoreoHub tem endereço para visitas?', a: 'A sede fica em Votuporanga/SP e o atendimento é online, em todo o Brasil. Para reuniões, combine antes pelo WhatsApp ou por e-mail.' },
+    ],
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'ContactPage',
+      name: 'Contato — CoreoHub',
+      url: `${SITE_URL}/contato`,
       mainEntity: { '@id': 'https://coreohub.com/#organization' },
     },
   },
@@ -588,6 +624,7 @@ ${eventLinks.length > 0 ? `<h2>Próximos eventos</h2>
 ${eventLinks.map((l) => `<li><a href="${esc(l.href)}">${esc(l.label)}</a></li>`).join('\n')}
 </ul>` : ''}
 <p><a href="${esc(url)}">Acesse a página completa</a></p>
+${companyBlockHtml()}
 <nav aria-label="Páginas da CoreoHub">
 <ul>
 ${NAV_LINKS.map((l) => `<li><a href="${SITE_URL}${l.path}">${esc(l.label)}</a></li>`).join('\n')}

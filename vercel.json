@@ -3,6 +3,9 @@
     { "source": "/politica-de-privacidade", "destination": "/privacidade", "permanent": true },
     { "source": "/termos-de-uso", "destination": "/termos", "permanent": true },
     { "source": "/index.html", "destination": "/", "permanent": true },
+    { "source": "/about", "destination": "/sobre", "permanent": true },
+    { "source": "/contact", "destination": "/contato", "permanent": true },
+    { "source": "/privacy", "destination": "/privacidade", "permanent": true },
     {
       "source": "/:path*",
       "has": [
@@ -200,6 +203,17 @@
         }
       ],
       "destination": "/api/og-marketing?page=sobre"
+    },
+    {
+      "source": "/contato",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot|Google-InspectionTool|GoogleOther).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=contato"
     },
     {
       "source": "/(.*)",
