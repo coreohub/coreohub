@@ -239,11 +239,19 @@
   ],
   "headers": [
     {
+      "source": "/.well-known/ai-catalog.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/ai-catalog+json; charset=utf-8" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Cache-Control", "value": "public, max-age=0, s-maxage=3600" }
+      ]
+    },
+    {
       "source": "/",
       "headers": [
         {
           "key": "Link",
-          "value": "</openapi.json>; rel=\"service-desc\"; type=\"application/json\", </llms.txt>; rel=\"describedby\"; type=\"text/plain\", </sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\""
+          "value": "</openapi.json>; rel=\"service-desc\"; type=\"application/json\", </llms.txt>; rel=\"describedby\"; type=\"text/plain\", </sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\", </.well-known/ai-catalog.json>; rel=\"ai-catalog\"; type=\"application/ai-catalog+json\""
         }
       ]
     },

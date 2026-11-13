@@ -439,8 +439,8 @@ const LandingPage = () => {
                 <img src="/will-nunes.webp" alt="Will Nunes, produtor do Extreme Festival" width={200} height={200} loading="lazy" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Will Nunes</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Monte Aprazível-SP</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Monte Aprazível-SP</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival</p>
                 </div>
               </div>
             </div>
@@ -450,8 +450,8 @@ const LandingPage = () => {
                 <img src="/jonathan-lupe.webp" alt="Jonathan Lupe, jurado do Usualdance Festival" width={200} height={200} loading="lazy" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Jonathan Lupe</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">São José do Rio Preto-SP</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">São José do Rio Preto-SP</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival</p>
                 </div>
               </div>
             </div>
@@ -461,8 +461,8 @@ const LandingPage = () => {
                 <img src="/bheto-bastheli.webp" alt="Bhetto Bastelli, produtor do Festival Ecodança" width={320} height={281} loading="lazy" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Bhetto Bastelli</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Limeira-SP</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Festival Ecodança</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Limeira-SP</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Produtor do Festival Ecodança</p>
                 </div>
               </div>
             </div>
@@ -516,13 +516,13 @@ const LandingPage = () => {
                 <Check size={12} className="text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold text-slate-300">{row.label}</p>
-                  <p className="text-[10px] text-slate-500">{row.value}</p>
+                  <p className="text-[10px] text-slate-400">{row.value}</p>
                 </div>
               </div>
             ))}
             <div className="pt-3 border-t border-white/10 flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Pronto pra publicar</span>
-              <span className="text-[10px] text-slate-500">28s</span>
+              <span className="text-[10px] text-slate-400">28s</span>
             </div>
           </div>
         }
@@ -556,7 +556,7 @@ const LandingPage = () => {
               <div key={i} className="flex items-center justify-between rounded-lg bg-white/5 border border-white/10 p-3">
                 <div>
                   <p className="text-xs font-bold text-white">{r.name}</p>
-                  <p className="text-[10px] text-slate-500">{r.who}</p>
+                  <p className="text-[10px] text-slate-400">{r.who}</p>
                 </div>
                 <span className="text-xs font-black text-slate-200 tabular-nums">{r.val}</span>
               </div>
@@ -564,7 +564,7 @@ const LandingPage = () => {
             <div className="flex items-center justify-between text-[11px] text-emerald-400 font-bold px-1">
               <span>Cupom aplicado</span><span className="tabular-nums">− R$ 30,00</span>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
               <span>Taxa de pagamento</span><span>separada, antes de pagar</span>
             </div>
             <div className="pt-3 border-t border-white/10 flex items-center justify-between">
@@ -670,20 +670,20 @@ const LandingPage = () => {
               <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Código 4821</span>
             </div>
             <div className="p-6 text-center">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Em cena</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Em cena</p>
               <p className="text-2xl font-black uppercase tracking-tighter text-white mt-1">Lago dos Cisnes Moderno</p>
               <p className="text-xs text-slate-400 mt-1">Cia Étoile · Grupo · Adulto</p>
               <div className="flex items-center justify-center gap-4 mt-5">
                 {[{ n: 'Jurado 1', ok: true }, { n: 'Jurado 2', ok: true }, { n: 'Jurado 3', ok: false }].map((j, i) => (
                   <div key={i} className="text-center">
-                    <div className={`w-9 h-9 rounded-full mx-auto flex items-center justify-center border ${j.ok ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
+                    <div className={`w-9 h-9 rounded-full mx-auto flex items-center justify-center border ${j.ok ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-400'}`}>
                       {j.ok ? <Check size={16} /> : <span className="text-[10px] font-black">…</span>}
                     </div>
-                    <p className="text-[9px] text-slate-500 mt-1">{j.n}</p>
+                    <p className="text-[9px] text-slate-400 mt-1">{j.n}</p>
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-5">Aguardando o último jurado</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-5">Aguardando o último jurado</p>
             </div>
           </div>
         }
@@ -752,7 +752,7 @@ const LandingPage = () => {
                   }`}>{p.hour}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-white truncate">{p.name}</p>
-                    <p className="text-[10px] text-slate-500 truncate">{p.who}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{p.who}</p>
                   </div>
                   {p.tone === 'warn' && (
                     <AlertTriangle size={14} className="text-amber-400 shrink-0" />
@@ -799,7 +799,7 @@ const LandingPage = () => {
               <div key={i} className="flex items-center justify-between rounded-lg bg-white/5 border border-white/10 p-3">
                 <div>
                   <p className="text-xs font-bold text-white">{r.name}</p>
-                  <p className="text-[10px] text-slate-500">{r.note}</p>
+                  <p className="text-[10px] text-slate-400">{r.note}</p>
                 </div>
                 <span className="text-xs font-black text-slate-200 tabular-nums">{r.val}</span>
               </div>
@@ -933,7 +933,7 @@ const LandingPage = () => {
               </Link>
             ))}
           </div>
-          <p className="text-xs text-slate-500 mt-4 max-w-2xl mx-auto">
+          <p className="text-xs text-slate-400 mt-4 max-w-2xl mx-auto">
             A taxa de pagamento (Pix ou cartão) aparece separada no checkout. Por padrão quem paga é o comprador, e você pode escolher assumir.
           </p>
 
@@ -982,29 +982,29 @@ const LandingPage = () => {
             <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="py-4 pr-4 text-[10px] font-black uppercase tracking-widest text-slate-500"></th>
+                  <th className="py-4 pr-4 text-[10px] font-black uppercase tracking-widest text-slate-400"></th>
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-sm font-black uppercase tracking-tight text-[#ff0068]">CoreoHub</span>
-                      <span className="text-[9px] text-slate-500">Plano sob medida, só quando vende</span>
+                      <span className="text-[9px] text-slate-400">Plano sob medida, só quando vende</span>
                     </div>
                   </th>
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-xs font-bold text-slate-400">Sistemas dedicados</span>
-                      <span className="text-[9px] text-slate-500">Mensalidade fixa*</span>
+                      <span className="text-[9px] text-slate-400">Mensalidade fixa*</span>
                     </div>
                   </th>
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-xs font-bold text-slate-400">Marketplace genérico</span>
-                      <span className="text-[9px] text-slate-500">7-12% + taxa fixa</span>
+                      <span className="text-[9px] text-slate-400">7-12% + taxa fixa</span>
                     </div>
                   </th>
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-xs font-bold text-slate-400">Planilha + Pix</span>
-                      <span className="text-[9px] text-slate-500">Jeito artesanal</span>
+                      <span className="text-[9px] text-slate-400">Jeito artesanal</span>
                     </div>
                   </th>
                 </tr>
@@ -1041,7 +1041,7 @@ const LandingPage = () => {
               </tbody>
             </table>
           </div>
-          <p className="text-[9px] text-slate-500 text-center mt-6 italic">
+          <p className="text-[9px] text-slate-400 text-center mt-6 italic">
             *Valores de mensalidade variam por fornecedor — consulte os próprios sites para comparação atualizada.<br />
             Sistemas dedicados = especialistas em festivais (mensalidade). Marketplace genérico = plataformas de eventos não-especializadas. Planilha + Pix = o jeito artesanal.
           </p>
@@ -1111,7 +1111,7 @@ const LandingPage = () => {
               <WhatsAppIcon size={18} /> Falar no WhatsApp
             </a>
           </div>
-          <p className="text-xs text-slate-500 mt-5">
+          <p className="text-xs text-slate-400 mt-5">
             Sem cartão de crédito · Você só paga quando vende · Cancela quando quiser
           </p>
         </div>
@@ -1126,7 +1126,7 @@ const LandingPage = () => {
                 <img src="/coreohub-avatar.webp" alt="CoreoHub" width={40} height={40} className="w-10 h-10" />
                 <div>
                   <p className="text-base font-black uppercase tracking-tighter text-white">CoreoHub</p>
-                  <p className="text-[10px] text-slate-500">Gestão Inteligente para Festivais e Mostras de Dança</p>
+                  <p className="text-[10px] text-slate-400">Gestão Inteligente para Festivais e Mostras de Dança</p>
                 </div>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
@@ -1163,7 +1163,7 @@ const LandingPage = () => {
           </div>
 
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="text-[10px] text-slate-500 leading-relaxed">
+            <div className="text-[10px] text-slate-400 leading-relaxed">
               <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub · uma empresa do Cultural Estúdio</p>
               <p>CNPJ 13.484.650/0001-00 · Votuporanga/SP</p>
               <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>

@@ -201,3 +201,36 @@ describe('configuração publicada', () => {
     expect(llms).toContain('/api/v1/eventos');
   });
 });
+
+describe('AI Catalog (/.well-known/ai-catalog.json, especificação ai-catalog.io)', () => {
+  const cat = JSON.parse(readFileSync('public/.well-known/ai-catalog.json', 'utf-8'));
+  it('tem specVersion Major.Minor e entries (campos obrigatórios)', () => {
+    expect(cat.specVersion).toMatch(/^\d+\.\d+$/);
+    expect(Array.isArray(cat.entries)).toBe(true);
+  });
+  it('cada entrada tem identifier, type e exatamente um entre url e data; identifier único', () => {
+    const ids = new Set<string>();
+    for (const e of cat.entries) {
+      expect(typeof e.identifier).toBe('string');
+      expect(typeof e.type).toBe('string');
+      expect(Number('url' in e) + Number('data' in e), e.identifier).toBe(1);
+      expect(ids.has(e.identifier)).toBe(false);
+      ids.add(e.identifier);
+    }
+    expect(cat.host.displayName).toBeTruthy();
+  });
+  it('só lista artefatos que existem (o OpenAPI publicado) e é servido como application/ai-catalog+json', () => {
+    for (const e of cat.entries) expect(e.url).toBe('https://coreohub.com/openapi.json');
+    const cfg = JSON.parse(readFileSync('vercel.json', 'utf-8'));
+    const h = cfg.headers.find((x: any) => x.source === '/.well-known/ai-catalog.json');
+    expect(h.headers.find((x: any) => x.key === 'Content-Type').value).toMatch(/^application\/ai-catalog\+json/);
+    const home = cfg.headers.find((x: any) => x.source === '/');
+    expect(home.headers[0].value).toContain('rel="ai-catalog"');
+  });
+});
+
+describe('contraste da home', () => {
+  it('LandingPage não usa text-slate-500 (contraste 3,7:1 sobre fundo escuro; usar slate-400, 6,9:1)', () => {
+    expect(readFileSync('pages/LandingPage.tsx', 'utf-8')).not.toContain('text-slate-500');
+  });
+});
