@@ -1,0 +1,19 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:air:coreohub.com:api:coreohub-api-v1",
+      "displayName": "CoreoHub API v1",
+      "description": "API pública somente leitura com os eventos de dança da vitrine da CoreoHub (GET /api/v1/eventos e /api/v1/eventos/{slug}), em JSON, sem autenticação. Especificação OpenAPI 3.1.",
+      "version": "1.0.0",
+      "type": "application/vnd.oai.openapi+json",
+      "url": "https://coreohub.com/openapi.json",
+      "tags": ["eventos", "danca", "festivais", "ingressos"],
+      "representativeQueries": [
+        "listar festivais de dança abertos para inscrição",
+        "buscar um evento de dança pelo slug",
+        "quais eventos de dança estão na vitrine da CoreoHub"
+      ]
+    }
+  ]
+}

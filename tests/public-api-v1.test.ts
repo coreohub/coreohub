@@ -248,3 +248,27 @@ describe('contraste da home', () => {
     expect(src).not.toContain('text-slate-600');
   });
 });
+
+describe('ARD (/.well-known/ard.json, o que o Lighthouse sonda primeiro)', () => {
+  const ard = JSON.parse(readFileSync('public/.well-known/ard.json', 'utf-8'));
+  const URN = /^urn:air:([a-zA-Z0-9.-]+)(?::([a-zA-Z0-9._:-]+))?:([a-zA-Z0-9._-]+)$/;
+  it('cada entrada tem identifier URN, displayName, type e exatamente um de url/data, com 2 a 5 consultas', () => {
+    expect(Array.isArray(ard.entries) && ard.entries.length > 0).toBe(true);
+    for (const e of ard.entries) {
+      expect(e.identifier).toMatch(URN);
+      expect(e.displayName).toBeTruthy();
+      expect(e.type).toMatch(/^[a-z]+\/[^\s]+$/);
+      expect(Number(Boolean(e.url)) + Number(Boolean(e.data))).toBe(1);
+      expect(e.representativeQueries.length).toBeGreaterThanOrEqual(2);
+      expect(e.representativeQueries.length).toBeLessThanOrEqual(5);
+    }
+  });
+  it('é servido como JSON e anunciado no HTML, no header Link e no robots.txt', () => {
+    const cfg = JSON.parse(readFileSync('vercel.json', 'utf-8'));
+    const h = cfg.headers.find((x: any) => /well-known\/ard/.test(x.source));
+    expect(h.headers.find((x: any) => x.key === 'Content-Type').value).toMatch(/^application\/json/);
+    expect(cfg.headers.find((x: any) => x.source === '/').headers[0].value).toContain('rel="ard"');
+    expect(readFileSync('index.html', 'utf-8')).toContain('rel="ard"');
+    expect(readFileSync('public/robots.txt', 'utf-8')).toMatch(/^Agentmap:\s*https:\/\/coreohub\.com\/\.well-known\/ard\.json/m);
+  });
+});
