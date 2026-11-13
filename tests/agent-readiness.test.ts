@@ -136,3 +136,15 @@ describe('funções da Vercel (package.json type=module)', () => {
     expect(bad).toEqual([]);
   });
 });
+
+describe('atalhos de preço', () => {
+  it('/precos e /pricing redirecionam (308) para /planos', () => {
+    const cfg = JSON.parse(readFileSync('vercel.json', 'utf-8'));
+    for (const from of ['/precos', '/pricing']) {
+      const r = cfg.redirects.find((x: any) => x.source === from);
+      expect(r, from).toBeTruthy();
+      expect(r.destination).toBe('/planos');
+      expect(r.permanent).toBe(true);
+    }
+  });
+});
