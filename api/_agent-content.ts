@@ -20,6 +20,8 @@ export const COMPANY = {
   legal: 'CoreoHub, uma empresa do Cultural Estúdio',
   cnpj: '13.484.650/0001-00',
   city: 'Votuporanga/SP',
+  street: 'R. Amazonas, 2814, Sala 24, Patrimônio Novo',
+  cep: '15505-208',
   whatsappUrl: 'https://wa.me/5517997936169',
   whatsappLabel: '(17) 99793-6169',
   email: 'contato@coreohub.com',
@@ -120,7 +122,7 @@ export const escHtml = (s: string): string =>
 /** Bloco "Dados da empresa" em HTML (NAP igual ao rodapé e ao schema). */
 export function companyBlockHtml(): string {
   return `<h2>Dados da empresa</h2>
-<p>${escHtml(COMPANY.legal)}. CNPJ ${COMPANY.cnpj}. Sede em ${COMPANY.city}. Atendimento em todo o Brasil.</p>
+<p>${escHtml(COMPANY.legal)}. CNPJ ${COMPANY.cnpj}. Sede: ${COMPANY.street}, ${COMPANY.city}, CEP ${COMPANY.cep}. Atendimento em todo o Brasil.</p>
 <p>Contato: WhatsApp <a href="${COMPANY.whatsappUrl}">${COMPANY.whatsappLabel}</a> e e-mail <a href="mailto:${COMPANY.email}">${COMPANY.email}</a>.</p>`;
 }
 
@@ -163,7 +165,7 @@ function companyMarkdown(): string[] {
   return [
     '## Dados da empresa',
     '',
-    `${COMPANY.legal}. CNPJ ${COMPANY.cnpj}. Sede em ${COMPANY.city}. Atendimento em todo o Brasil.`,
+    `${COMPANY.legal}. CNPJ ${COMPANY.cnpj}. Sede: ${COMPANY.street}, ${COMPANY.city}, CEP ${COMPANY.cep}. Atendimento em todo o Brasil.`,
     '',
     `- WhatsApp: [${COMPANY.whatsappLabel}](${COMPANY.whatsappUrl})`,
     `- E-mail: ${COMPANY.email}`,

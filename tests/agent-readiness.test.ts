@@ -117,6 +117,8 @@ describe('páginas de confiança e llms.txt', () => {
     expect(org.contactPoint.contactType).toBe('customer support');
     expect(org.contactPoint.email).toBe('contato@coreohub.com');
     expect(org.address.addressLocality).toBe('Votuporanga');
+    expect(org.address.streetAddress).toContain('Amazonas, 2814');
+    expect(org.address.postalCode).toBe('15505-208');
     expect(org.sameAs.length).toBeGreaterThan(0);
   });
 });

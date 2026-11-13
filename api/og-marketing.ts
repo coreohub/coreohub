@@ -225,8 +225,10 @@ const HOME_JSONLD: Record<string, any> = {
       "telephone": "+55-17-99793-6169",
       "address": {
         "@type": "PostalAddress",
+        "streetAddress": "R. Amazonas, 2814, Sala 24, Patrimônio Novo",
         "addressLocality": "Votuporanga",
         "addressRegion": "SP",
+        "postalCode": "15505-208",
         "addressCountry": "BR"
       },
       "contactPoint": {
@@ -503,13 +505,13 @@ export const PAGES: Record<string, PageMeta> = {
       'WhatsApp: (17) 99793-6169, o canal mais rápido, inclusive na semana do seu evento',
       'E-mail: contato@coreohub.com',
       'Instagram: @coreohub',
-      'Sede: Votuporanga/SP, atendimento em todo o Brasil',
+      'Sede: R. Amazonas, 2814, Sala 24, Patrimônio Novo, Votuporanga/SP, CEP 15505-208, com atendimento em todo o Brasil',
       'Para cadastrar um evento sem falar com ninguém: coreohub.com/criar-evento',
     ],
     faq: [
       { q: 'Qual é o melhor jeito de falar com a CoreoHub?', a: 'Pelo WhatsApp (17) 99793-6169. Informe o tipo de evento (festival, mostra, espetáculo de estúdio, curso de férias ou edital público), a data, a cidade e o número aproximado de inscritos ou de público, e a equipe responde com o plano e os próximos passos.' },
       { q: 'Quando devo escrever?', a: 'Antes de abrir as inscrições ou a venda de ingressos, para escolher o plano certo, e a qualquer momento se algo travar. Na semana do evento o suporte é prioritário.' },
-      { q: 'A CoreoHub tem endereço para visitas?', a: 'A sede fica em Votuporanga/SP e o atendimento é online, em todo o Brasil. Para reuniões, combine antes pelo WhatsApp ou por e-mail.' },
+      { q: 'Onde fica a CoreoHub?', a: 'A sede fica na R. Amazonas, 2814, Sala 24, Patrimônio Novo, Votuporanga/SP (CEP 15505-208), mesmo endereço do Cultural Estúdio. O atendimento é online, em todo o Brasil. Para visitas e reuniões, combine antes pelo WhatsApp ou por e-mail.' },
     ],
     jsonLd: {
       '@context': 'https://schema.org',

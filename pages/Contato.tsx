@@ -111,7 +111,11 @@ const Contato: React.FC = () => {
                 <p className={body}>
                   CoreoHub, uma empresa do Cultural Estúdio
                   <br />
-                  CNPJ 13.484.650/0001-00 · Votuporanga/SP
+                  CNPJ 13.484.650/0001-00
+                  <br />
+                  R. Amazonas, 2814, Sala 24, Patrimônio Novo
+                  <br />
+                  Votuporanga/SP · CEP 15505-208
                 </p>
               </article>
               <article className={card}>

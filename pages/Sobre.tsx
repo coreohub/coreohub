@@ -148,7 +148,9 @@ const Sobre: React.FC = () => {
                 <p className={body}>
                   CoreoHub, uma empresa do Cultural Estúdio
                   <br />
-                  CNPJ 13.484.650/0001-00 · Votuporanga/SP
+                  CNPJ 13.484.650/0001-00
+                  <br />
+                  R. Amazonas, 2814, Sala 24, Patrimônio Novo, Votuporanga/SP · CEP 15505-208
                   <br />
                   <a href="https://wa.me/5517997936169" target="_blank" rel="noopener noreferrer" className={ext}>Fale pelo WhatsApp</a>
                 </p>
