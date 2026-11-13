@@ -222,15 +222,29 @@ describe('AI Catalog (/.well-known/ai-catalog.json, especificação ai-catalog.i
   it('só lista artefatos que existem (o OpenAPI publicado) e é servido como application/ai-catalog+json', () => {
     for (const e of cat.entries) expect(e.url).toBe('https://coreohub.com/openapi.json');
     const cfg = JSON.parse(readFileSync('vercel.json', 'utf-8'));
-    const h = cfg.headers.find((x: any) => x.source === '/.well-known/ai-catalog.json');
+    const h = cfg.headers.find((x: any) => /ai-catalog/.test(x.source));
     expect(h.headers.find((x: any) => x.key === 'Content-Type').value).toMatch(/^application\/ai-catalog\+json/);
     const home = cfg.headers.find((x: any) => x.source === '/');
     expect(home.headers[0].value).toContain('rel="ai-catalog"');
   });
 });
 
+describe('endereços do catálogo', () => {
+  it('/ai-catalog.json e /.well-known/ai-catalog reescrevem para o arquivo, e o HTML declara o link', () => {
+    const cfg = JSON.parse(readFileSync('vercel.json', 'utf-8'));
+    for (const from of ['/ai-catalog.json', '/.well-known/ai-catalog']) {
+      const r = cfg.rewrites.find((x: any) => x.source === from);
+      expect(r, from).toBeTruthy();
+      expect(r.destination).toBe('/.well-known/ai-catalog.json');
+    }
+    expect(readFileSync('index.html', 'utf-8')).toContain('rel="ai-catalog"');
+  });
+});
+
 describe('contraste da home', () => {
   it('LandingPage não usa text-slate-500 (contraste 3,7:1 sobre fundo escuro; usar slate-400, 6,9:1)', () => {
-    expect(readFileSync('pages/LandingPage.tsx', 'utf-8')).not.toContain('text-slate-500');
+    const src = readFileSync('pages/LandingPage.tsx', 'utf-8');
+    expect(src).not.toContain('text-slate-500');
+    expect(src).not.toContain('text-slate-600');
   });
 });

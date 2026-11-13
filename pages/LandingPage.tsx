@@ -1169,10 +1169,10 @@ const LandingPage = () => {
               <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>
             </div>
             <div className="flex items-center gap-4 flex-wrap">
-              <Link to="/sobre" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Sobre</Link>
-              <Link to="/termos" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Termos de Uso</Link>
-              <Link to="/privacidade" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Privacidade</Link>
-              <p className="text-[10px] text-slate-600">© {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.</p>
+              <Link to="/sobre" className="text-[10px] text-slate-400 hover:text-white transition-colors">Sobre</Link>
+              <Link to="/termos" className="text-[10px] text-slate-400 hover:text-white transition-colors">Termos de Uso</Link>
+              <Link to="/privacidade" className="text-[10px] text-slate-400 hover:text-white transition-colors">Privacidade</Link>
+              <p className="text-[10px] text-slate-400">© {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.</p>
             </div>
           </div>
         </div>

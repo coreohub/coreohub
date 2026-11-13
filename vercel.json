@@ -25,6 +25,8 @@
   ],
   "rewrites": [
     { "source": "/api/v1/:path*", "destination": "/api/v1?path=:path*" },
+    { "source": "/ai-catalog.json", "destination": "/.well-known/ai-catalog.json" },
+    { "source": "/.well-known/ai-catalog", "destination": "/.well-known/ai-catalog.json" },
     {
       "source": "/sitemap.xml",
       "has": [
@@ -239,7 +241,7 @@
   ],
   "headers": [
     {
-      "source": "/.well-known/ai-catalog.json",
+      "source": "/(ai-catalog.json|.well-known/ai-catalog|.well-known/ai-catalog.json)",
       "headers": [
         { "key": "Content-Type", "value": "application/ai-catalog+json; charset=utf-8" },
         { "key": "Access-Control-Allow-Origin", "value": "*" },
