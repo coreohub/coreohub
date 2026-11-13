@@ -165,6 +165,16 @@ describe('configuração publicada', () => {
     expect(cfg.rewrites[0].source).toBe('/api/v1/:path*'); // antes do catch-all
   });
 
+  it('/developers, /docs e /api (exato) redirecionam 308 para /desenvolvedores', () => {
+    const cfg = JSON.parse(readFileSync('vercel.json', 'utf-8'));
+    for (const from of ['/developers', '/docs', '/api']) {
+      const r = cfg.redirects.find((x: any) => x.source === from);
+      expect(r, from).toBeTruthy();
+      expect(r.destination).toBe('/desenvolvedores');
+      expect(r.permanent).toBe(true);
+    }
+  });
+
   it('openapi.json documenta /api/v1, versão, depreciação e não inventa segurança', () => {
     const spec = JSON.parse(readFileSync('public/openapi.json', 'utf-8'));
     expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(['/api/v1/eventos', '/api/v1/eventos/{slug}']));

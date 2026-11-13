@@ -8,6 +8,9 @@
     { "source": "/privacy", "destination": "/privacidade", "permanent": true },
     { "source": "/precos", "destination": "/planos", "permanent": true },
     { "source": "/pricing", "destination": "/planos", "permanent": true },
+    { "source": "/developers", "destination": "/desenvolvedores", "permanent": true },
+    { "source": "/docs", "destination": "/desenvolvedores", "permanent": true },
+    { "source": "/api", "destination": "/desenvolvedores", "permanent": true },
     {
       "source": "/:path*",
       "has": [
