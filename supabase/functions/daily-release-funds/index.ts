@@ -17,7 +17,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getTransferStatus } from '../_shared/asaas-payouts.ts'
 import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
-import { runPlannedPayout, type PlannedPayoutResult } from '../_shared/payout-run.ts'
+import { runPlannedPayout, ID_CHUNK, type PlannedPayoutResult } from '../_shared/payout-run.ts'
 import { parseFeeMode } from '../_shared/subconta-fee.ts'
 
 const corsHeaders = {
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     // na subconta Asaas e ficaria em loop com insufficient_balance.
     const { data: commissions, error: cErr } = await supabase
       .from('platform_commissions')
-      .select('id, producer_id, net_amount, refund_amount, release_at, asaas_payment_id, kind')
+      .select('id, producer_id, net_amount, refund_amount, release_at, asaas_payment_id, kind, card_credit_at')
       .order('release_at', { ascending: true })
       .lte('release_at', new Date().toISOString())
       .is('released_at', null)
@@ -144,6 +144,9 @@ Deno.serve(async (req) => {
       const b = buckets.get(pid)!
       // Subtrai refund parcial (refund total foi filtrado na query). Em refund
       // parcial a comissão segue elegível pela diferença, não pelo bruto.
+      // Cartão que a Asaas ainda não creditou não está no saldo: ficaria na frente da
+      // fila e travaria as linhas seguintes (o botão manual já ignorava, o cron não).
+      if (c.card_credit_at && new Date(c.card_credit_at as string).getTime() > Date.now()) continue
       const net = Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0)
       if (net <= 0) continue
       b.totalAmount += net
@@ -165,23 +168,35 @@ Deno.serve(async (req) => {
 
       // Trava por produtor: o botão "Transferir agora" pode estar sacando as
       // mesmas linhas neste instante. Sem a trava, o produtor recebe em dobro.
-      const lockToken = await acquirePayoutLock(supabase, bucket.producerId)
-      if (!lockToken) {
-        console.warn(`[daily-release-funds] produtor=${bucket.producerId} (${bucket.fullName}) repasse em andamento (trava) — skip`)
+      const lock = await acquirePayoutLock(supabase, bucket.producerId)
+      if (lock.status !== 'ok') {
+        if (lock.status === 'error') {
+          console.error(`[daily-release-funds][ALERT] produtor=${bucket.producerId} (${bucket.fullName}) NÃO consegui a trava de repasse (${lock.error}) — migration payout_locks aplicada? skip`)
+        } else {
+          console.warn(`[daily-release-funds] produtor=${bucket.producerId} (${bucket.fullName}) repasse em andamento (trava) — skip`)
+        }
         producersSkip++
         continue
       }
+      const lockToken = lock.token
 
       let run: PlannedPayoutResult
       try {
         // Relê as linhas DENTRO da trava: entre a query do início do cron e agora
         // o botão manual pode ter liberado algumas.
-        const { data: fresh, error: fErr } = await supabase
-          .from('platform_commissions')
-          .select('id, net_amount, refund_amount')
-          .in('id', bucket.commissionIds)
-          .is('released_at', null)
-          .is('refunded_at', null)
+        // Em lotes: `.in()` com centenas de ids estoura a URL do PostgREST.
+        const fresh: any[] = []
+        let fErr: { message: string } | null = null
+        for (let i = 0; i < bucket.commissionIds.length && !fErr; i += ID_CHUNK) {
+          const { data: part, error: partErr } = await supabase
+            .from('platform_commissions')
+            .select('id, net_amount, refund_amount')
+            .in('id', bucket.commissionIds.slice(i, i + ID_CHUNK))
+            .is('released_at', null)
+            .is('refunded_at', null)
+          if (partErr) fErr = partErr
+          else fresh.push(...(part ?? []))
+        }
         if (fErr) {
           run = { result: { swept: false, value: 0, reason: 'recheck_failed', error: fErr.message }, coveredCount: 0, coveredIds: [], due: 0 }
         } else {

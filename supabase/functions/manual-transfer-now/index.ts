@@ -102,11 +102,16 @@ Deno.serve(async (req) => {
 
     // 1b) Trava por produtor: o cron diário ou um clique duplo podem estar
     //     sacando as mesmas linhas agora. Pegar ANTES de ler as linhas.
-    lockToken = await acquirePayoutLock(admin, producerId)
-    if (!lockToken) {
+    const lock = await acquirePayoutLock(admin, producerId)
+    if (lock.status === 'error') {
+      return jsonResp({ status: 'error', reason: 'lock_unavailable',
+        message: 'Não foi possível iniciar a transferência agora. Tente novamente em alguns minutos.' })
+    }
+    if (lock.status === 'busy') {
       return jsonResp({ status: 'error', reason: 'payout_in_progress',
         message: 'Já existe um repasse em andamento na sua conta. Aguarde um minuto e confira seu saldo.' })
     }
+    lockToken = lock.token
 
     // 2) Pega TODAS as comissões pendentes deste produtor (retidas + disponíveis).
     //    Manual = antecipa tudo. O cron diário só pegaria o "disponível" (release_at <= NOW).
@@ -185,6 +190,12 @@ Deno.serve(async (req) => {
         ? 'Sua conta Asaas ainda não foi aprovada pra fazer transferências PIX. Conclua o KYC em Configurações.'
         : result.reason === 'fee_pending' || result.reason === 'fee_uncertain'
         ? 'Estamos conferindo a taxa de abertura da sua conta digital junto à Asaas. Seu repasse segue assim que isso for confirmado.'
+        : result.reason === 'fee_transfer_failed_reopened'
+        ? 'Houve um problema ao conferir a taxa de abertura da sua conta. Tente novamente em alguns minutos.'
+        : result.reason === 'nothing_due'
+        ? 'Você não tem valor a transferir no momento.'
+        : result.reason === 'balance_fetch_failed'
+        ? 'Não conseguimos consultar o saldo da sua conta na Asaas agora. Tente novamente em alguns minutos.'
         : result.reason === 'fee_credit_waiting'
         ? 'O valor disponível ainda é pequeno demais para transferir. Ele será repassado junto com os próximos recebimentos.'
         : result.reason === 'pix_invalid'

@@ -12,6 +12,9 @@ import {
   resolveSubcontaFee, settleSubcontaFee, SUBCONTA_FEE_MIN_WITHDRAW, type FeeMode,
 } from './subconta-fee.ts'
 
+/** Máximo de ids por `.in()` (URL do PostgREST tem limite de tamanho). */
+export const ID_CHUNK = 100
+
 export interface PlannedPayoutResult {
   result:       SweepResult
   /** Quantas linhas foram marcadas como liberadas (0 se não sacou). */
@@ -90,7 +93,8 @@ export async function runPlannedPayout(opts: {
   // O dinheiro JÁ saiu. Marca só as linhas cobertas (a soma bate com o saque).
   // `.is('released_at', null)` é cinto-e-suspensório: nunca remarca linha já paga.
   const nowIso = new Date().toISOString()
-  const mark = () => supabase
+  // Em lotes: `.in()` vira a URL do PostgREST e centenas de UUIDs estouram o limite.
+  const markChunk = (ids: string[]) => supabase
     .from('platform_commissions')
     .update({
       released_at:         nowIso,
@@ -98,12 +102,17 @@ export async function runPlannedPayout(opts: {
       release_transfer_id: result.transferId ?? null,
       released_manually:   opts.releasedManually,
     })
-    .in('id', plan.coveredIds)
+    .in('id', ids)
     .is('released_at', null)
     .select('id')
 
-  let marked = await mark()
-  if (marked.error) marked = await mark() // 1 retry: falha de rede transitória
+  let marked: { error: { message: string } | null } = { error: null }
+  for (let i = 0; i < plan.coveredIds.length; i += ID_CHUNK) {
+    const ids = plan.coveredIds.slice(i, i + ID_CHUNK)
+    let r = await markChunk(ids)
+    if (r.error) r = await markChunk(ids) // 1 retry: falha de rede transitória
+    if (r.error) marked = r
+  }
   if (marked.error) {
     // Pior caso: transferência feita e linhas sem marca = risco de pagar de novo.
     console.error(

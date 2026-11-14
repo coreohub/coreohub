@@ -104,6 +104,7 @@ export async function fetchSubaccountBalance(opts: {
   try {
     const res = await fetch(`${opts.asaasBaseUrl}/finance/balance`, {
       headers: { 'access_token': opts.apiKey, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15000), // bem abaixo do prazo da trava de repasse
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
@@ -316,6 +317,7 @@ export async function getTransferStatus(opts: {
   try {
     const res = await fetch(`${asaasBaseUrl}/transfers/${transferId}`, {
       headers: { 'access_token': transferApiKey, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15000),
     })
     const data = await res.json().catch(() => null) as any
     if (!res.ok) return { ok: false, error: data?.errors?.[0]?.description ?? `${res.status}` }

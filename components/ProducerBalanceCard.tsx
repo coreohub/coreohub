@@ -126,7 +126,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [sentComm, setSentComm]   = useState<SentCommission[]>([]);
   const [sentLow, setSentLow]     = useState<SentLowValue[]>([]);
   // Taxa de abertura da conta digital (R$ 12,90, 1x): futura / em conferência / já descontada.
-  const [feeNote, setFeeNote]     = useState<'future' | 'checking' | 'done' | null>(null);
+  const [feeNote, setFeeNote]     = useState<'future' | 'checking' | 'credit' | 'done' | null>(null);
   // Quem aceitou o Termo 1.10 não antecipa mais o saldo retido (cláusula 12.3); o servidor também recusa.
   const [anticipationOff, setAnticipationOff] = useState(false);
   const [modalScope, setModalScope] = useState<'available' | 'all' | null>(null);
@@ -195,7 +195,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
     // Taxa de abertura da subconta: marcador do perfil + linha da cobrança (RLS: só a própria).
     const feeProfilePromise = supabase
-      .from('profiles').select('subconta_fee_charged_at').eq('id', targetId).maybeSingle();
+      .from('profiles').select('subconta_fee_charged_at, is_test_account').eq('id', targetId).maybeSingle();
     const feeRowPromise = supabase
       .from('subconta_fee_charges').select('status, settled_transfer_id').eq('producer_id', targetId).maybeSingle();
 
@@ -227,7 +227,9 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     } else {
       const row = feeRowRes.data as { status: string; settled_transfer_id: string | null } | null;
       if (row?.status === 'concluido' && row.settled_transfer_id) setFeeNote('done');
-      else if (row && (row.status === 'pendente' || row.status === 'incerto' || row.status === 'reservado' || row.status === 'concluido')) setFeeNote('checking');
+      else if (row?.status === 'concluido') setFeeNote('credit');
+      else if (row && (row.status === 'pendente' || row.status === 'incerto' || row.status === 'reservado')) setFeeNote('checking');
+      else if ((feeProfRes.data as any)?.is_test_account) setFeeNote(null);
       else if (!(feeProfRes.data as any)?.subconta_fee_charged_at) setFeeNote('future');
       else setFeeNote(null);
     }
@@ -559,6 +561,11 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             {feeNote === 'done' && (
               <p className={`${stepNote} mt-1`}>
                 Abertura de conta digital (Asaas): − {fmtBRL(12.9)}, descontada no seu 1º repasse.
+              </p>
+            )}
+            {feeNote === 'credit' && (
+              <p className={`${stepNote} mt-1`}>
+                A taxa de abertura da conta digital ({fmtBRL(12.9)}) já foi registrada e será descontada no seu próximo repasse.
               </p>
             )}
             {feeNote === 'checking' && (

@@ -160,15 +160,15 @@ describe('runPlannedPayout', () => {
 describe('payout lock', () => {
   it('devolve o token quando a RPC concede e null quando está em uso', async () => {
     const ok = { rpc: vi.fn().mockResolvedValue({ data: 'tok-1', error: null }) }
-    expect(await acquirePayoutLock(ok, 'p1')).toBe('tok-1')
+    expect(await acquirePayoutLock(ok, 'p1')).toEqual({ status: 'ok', token: 'tok-1' })
     const busy = { rpc: vi.fn().mockResolvedValue({ data: null, error: null }) }
-    expect(await acquirePayoutLock(busy, 'p1')).toBeNull()
+    expect(await acquirePayoutLock(busy, 'p1')).toEqual({ status: 'busy' })
   })
 
-  it('erro na RPC conta como não conseguiu (na dúvida, não saca)', async () => {
+  it('erro na RPC é "error", distinto de "busy" (na dúvida, não saca)', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const bad = { rpc: vi.fn().mockResolvedValue({ data: null, error: { message: 'x' } }) }
-    expect(await acquirePayoutLock(bad, 'p1')).toBeNull()
+    expect(await acquirePayoutLock(bad, 'p1')).toEqual({ status: 'error', error: 'x' })
     err.mockRestore()
   })
 

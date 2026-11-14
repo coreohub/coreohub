@@ -89,6 +89,13 @@ export async function resolveSubcontaFee(opts: {
     if (row.status === 'concluido') {
       return row.settled_transfer_id ? none : { credit: SUBCONTA_FEE }
     }
+    // Saída de emergência: com o modo `off`, estados sem desfecho NÃO seguram o repasse
+    // do produtor (senão uma taxa de R$ 12,90 travaria o saque inteiro sem escape).
+    // Pior caso: a taxa pode ter saído e o produtor recebe cheio; conferir no extrato.
+    if (mode === 'off' && (row.status === 'pendente' || row.status === 'reservado' || row.status === 'incerto')) {
+      console.warn(`${tag} modo off: taxa em '${row.status}' não bloqueia o repasse (conferir extrato da Asaas)`)
+      return none
+    }
     if (row.status === 'pendente') {
       const check = await getTransferStatus({ transferApiKey: producerApiKey, asaasBaseUrl, transferId: row.transfer_id })
       if (check.ok && check.status === 'DONE') {
