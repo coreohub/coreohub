@@ -20,6 +20,8 @@ export interface PlannedPayoutResult {
   coveredIds:   string[]
   /** Total devido das linhas recebidas (pra mensagem "ficou X pro próximo"). */
   due:          number
+  /** Taxa de abertura de subconta descontada neste saque (0 se não houve). */
+  feeDeducted?: number
 }
 
 export async function runPlannedPayout(opts: {
@@ -112,5 +114,5 @@ export async function runPlannedPayout(opts: {
 
   if (credit > 0) await settleSubcontaFee(supabase, opts.fee!.producerId, result.transferId)
 
-  return { result, coveredCount: plan.coveredIds.length, coveredIds: plan.coveredIds, due: plan.due }
+  return { result, coveredCount: plan.coveredIds.length, coveredIds: plan.coveredIds, due: plan.due, feeDeducted: credit }
 }

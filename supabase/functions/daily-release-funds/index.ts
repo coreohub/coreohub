@@ -241,6 +241,7 @@ Deno.serve(async (req) => {
                   releasedAmount:   result.value,
                   pixKeyPartial:    maskPixKey(bucket.pixKey),
                   commissionsCount: bucket.commissionIds.length,
+                  feeDeducted:      run.feeDeducted || undefined,
                   appUrl:           'https://app.coreohub.com',
                 },
               }),
