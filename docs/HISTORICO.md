@@ -4,6 +4,17 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-11-14 — Taxa de abertura de subconta (R$ 12,90) cobrada no repasse + repasse consertado ✅ (em produção, modo `dry`)
+
+- **Por quê:** a Asaas debita R$ 12,90 da master ao criar cada subconta (11 e 12/11 a master ficou em R$ -19,00 por New Ritmo e Compete'art). Decisão do dono: cobrar do produtor, uma vez, no repasse (não no split), só se a base das linhas cobertas for >= R$ 17,90; estorno não reabre o marcador; Termo intocado. Plano e achados da auditoria em `docs/plano-taxa-subconta-repasse.md`.
+- **Fase 1 (`8c86f09`, `333f377`) — bug que já existia sem taxa:** o repasse pedia o saque do total e depois marcava só as linhas inteiras cobertas, então o resto era pago de novo; e cron + botão podiam sacar as mesmas linhas. Agora `planPayout` (`_shared/payout-plan.ts`) escolhe as linhas antes e saca a soma exata, `runPlannedPayout` (`_shared/payout-run.ts`) executa, e `payout_locks` + `acquire/release_payout_lock` (migration `20261114d`) travam por produtor. Vale em `daily-release-funds`, `manual-transfer-now` e no passo 3 de `release-low-value-transfers`.
+- **Fase 2 (`533e510`, `15fdb78`):** tabela `subconta_fee_charges` + `claim_subconta_fee`/`fail_subconta_fee` (migration `20261114e`); `resolveSubcontaFee` em `_shared/subconta-fee.ts` transfere R$ 12,90 da subconta para a carteira da master com a chave da própria subconta e o saque PIX sai descontado. Estados reservado/pendente/incerto/concluído/falhou; incerto (timeout/5xx) nunca recobra e pula o repasse do ciclo. Segredo `SUBCONTA_FEE_MODE` = off (padrão) | dry | on; **em produção está `dry`**. Com crédito de taxa o saque mínimo ao produtor é R$ 1,00.
+- **Fase 3 (`cd17642`):** card de saldo mostra a taxa (futura / em conferência / registrada / descontada), e-mail `payout_released` ganhou a linha (`feeDeducted`), textos "primeiro recebimento" viraram "primeiro repasse" (landings, FAQ, `AccountSettings`, e-mail de boas-vindas).
+- **Revisão `/code-review` (`f2bb7eb`):** ids em lotes de 100 (URL do PostgREST), trava distingue ocupada de erro, `off` é a saída de emergência (taxa pendente/incerta não trava o repasse do produtor), cron ignora cartão ainda não creditado, mensagens do botão.
+- **Em produção:** migrations 20261114d e e; functions `daily-release-funds`, `manual-transfer-now`, `release-low-value-transfers`, `send-email`. Testes: 539 verdes.
+- **Pendente (Fase 4):** (1) cherry-pick do card e das landings para a `main` (merge da `dev` inteira dá conflito); (2) primeiro repasse real de New Ritmo ou Compete'art, conferindo no log `[DRY] cobraria R$12.9`; (3) `SUBCONTA_FEE_MODE=on` com OK do dono e conferência no extrato da Asaas; (4) menores: fila FIFO do `planPayout` para na primeira linha que não cabe, sem timeout no POST do saque (de propósito).
+- **Não testado ao vivo:** nenhuma cobrança real foi feita pelo código novo; o card não teve screenshot (fica atrás de login).
+
 ### 2026-11-13 — `send-email` v90 em produção com o WhatsApp oficial (17) 99793-6169 ✅
 
 - Deploy a partir da `main` (`45290b5`, worktree temporário), porque a correção `43a9304` não estava na `dev`. A única mudança desde a v89 era o link `wa.me` do e-mail da proposta da calculadora (`buildCalculatorProposal`), antes `5517981264290`. Nenhum e-mail real disparado. Nota: o CLI 2.90.0 recusa o `[local_smtp]` do `supabase/config.toml` da `main` (chave inválida); o deploy usou `[inbucket]` só no worktree temporário, sem mudar o repositório.
