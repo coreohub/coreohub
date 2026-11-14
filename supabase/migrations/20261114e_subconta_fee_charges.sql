@@ -31,6 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_subconta_fee_charges_open
   WHERE status IN ('reservado','pendente','incerto') OR (status = 'concluido' AND settled_transfer_id IS NULL);
 
 -- Sem anon. authenticated só lê (RLS filtra), nunca escreve.
+REVOKE ALL ON subconta_fee_charges FROM anon;
 GRANT SELECT                         ON subconta_fee_charges TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON subconta_fee_charges TO service_role;
 ALTER TABLE subconta_fee_charges ENABLE ROW LEVEL SECURITY;
