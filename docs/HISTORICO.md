@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-11-14 — `dev` recriada a partir da `main` (fim da divergência de hashes) ✅
+
+- **Diagnóstico:** `git cherry` mostrou que 57 dos 63 commits "só da dev" tinham patch idêntico na main (cherry-pick com outro hash); os outros 5 também (diferença de 0 a 4 linhas) e o 6º (`9dbf688`, doc do send-email v90) já estava na main. Merge de teste `dev` → `main`: 19 conflitos, e em todos a main prevalece (a dev não tinha commit exclusivo nesses arquivos).
+- **Feito:** backup `dev-backup-2026-11-14` (`5c1fd21`, local + GitHub); `dev` local recriada em `origin/main` (`e9cf525`); `origin/dev` sobrescrita (`621feb0` → `e9cf525`) com `--force-with-lease`. Nenhuma edge/migration mexida. Taxa de subconta (`7c6be40..5c1fd21`) intacta: já está na main como `fa4527b`/`e9cf525`.
+- **Para outras sessões:** se ainda houver clone/pasta com a dev antiga, `git fetch && git checkout -B dev origin/dev`. Commits não publicados da dev antiga: `git cherry -v origin/main dev-backup-2026-11-14`.
+
 ### 2026-11-14 — Taxa de abertura de subconta (R$ 12,90) cobrada no repasse + repasse consertado ✅ (em produção, modo `dry`)
 
 - **Por quê:** a Asaas debita R$ 12,90 da master ao criar cada subconta (11 e 12/11 a master ficou em R$ -19,00 por New Ritmo e Compete'art). Decisão do dono: cobrar do produtor, uma vez, no repasse (não no split), só se a base das linhas cobertas for >= R$ 17,90; estorno não reabre o marcador; Termo intocado. Plano e achados da auditoria em `docs/plano-taxa-subconta-repasse.md`.
