@@ -95,6 +95,29 @@ export function isKycPendingError(body: string): boolean {
   }
 }
 
+/** Saldo atual da subconta (GET /finance/balance). Usado pelo planejamento do
+ *  repasse, que precisa do saldo ANTES de escolher as linhas a pagar. */
+export async function fetchSubaccountBalance(opts: {
+  apiKey:       string
+  asaasBaseUrl: string
+}): Promise<{ ok: boolean; balance: number; error?: string }> {
+  try {
+    const res = await fetch(`${opts.asaasBaseUrl}/finance/balance`, {
+      headers: { 'access_token': opts.apiKey, 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      return { ok: false, balance: 0, error: `${res.status}: ${body.slice(0, 200)}` }
+    }
+    const json = await res.json().catch(() => null) as any
+    const balance = Number(json?.balance)
+    if (!Number.isFinite(balance)) return { ok: false, balance: 0, error: 'balance_invalid' }
+    return { ok: true, balance }
+  } catch (e) {
+    return { ok: false, balance: 0, error: (e as Error).message }
+  }
+}
+
 export interface SweepResult {
   swept:        boolean       // true se transferência foi disparada
   value:        number        // valor transferido (0 se skipped)
@@ -124,6 +147,8 @@ export async function sweepProducerBalance(opts: {
   description?:   string
   /** Valor exato a sacar (clamped ao saldo). Sem isso, varre saldo inteiro. */
   amount?:        number
+  /** Com `amount`: saca exatamente esse valor ou não saca (sem clamp ao saldo). */
+  exact?:         boolean
 }): Promise<SweepResult> {
   const { producerApiKey, producerPixKey, asaasBaseUrl } = opts
   if (!producerApiKey)   return { swept: false, value: 0, reason: 'no_api_key' }
@@ -148,8 +173,13 @@ export async function sweepProducerBalance(opts: {
 
     // A1: valor a sacar = min(amount conhecido, balance). Se amount ausente,
     // saca saldo inteiro (compat com modo legado / scripts admin).
+    // exact: não clampa. Quem planejou o valor (planPayout) escolheu as linhas
+    // pra bater com ele; sacar menos desalinharia o que foi marcado como pago.
+    if (opts.exact && opts.amount != null && opts.amount > 0 && opts.amount > balance + 0.001) {
+      return { swept: false, value: 0, reason: 'insufficient_balance', error: `saldo ${balance} < ${opts.amount}` }
+    }
     const desired = opts.amount != null && opts.amount > 0
-      ? Math.min(Number(opts.amount), balance)
+      ? (opts.exact ? Number(opts.amount) : Math.min(Number(opts.amount), balance))
       : balance
     if (desired <= 0) return { swept: false, value: 0, reason: 'no_amount' }
 

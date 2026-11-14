@@ -17,7 +17,8 @@
 // só pra ler profile + atualizar platform_commissions com bypass de RLS.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sweepProducerBalance, pickCoveredCommissionIds } from '../_shared/asaas-payouts.ts'
+import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
+import { runPlannedPayout } from '../_shared/payout-run.ts'
 import { resolveTransferScope } from '../_shared/transfer-scope.ts'
 
 const corsHeaders = {
@@ -63,6 +64,7 @@ Deno.serve(async (req) => {
   } catch { /* sem corpo / não-JSON: cai no padrão seguro */ }
 
   const admin = createClient(supabaseUrl, serviceKey)
+  let lockToken: string | null = null
 
   try {
     // 1) Carrega credenciais Asaas do produtor
@@ -95,6 +97,14 @@ Deno.serve(async (req) => {
     if (!prof.pix_key) {
       return jsonResp({ status: 'error', reason: 'no_pix_key',
         message: 'Cadastre uma chave PIX em Configurações pra receber repasses.' })
+    }
+
+    // 1b) Trava por produtor: o cron diário ou um clique duplo podem estar
+    //     sacando as mesmas linhas agora. Pegar ANTES de ler as linhas.
+    lockToken = await acquirePayoutLock(admin, producerId)
+    if (!lockToken) {
+      return jsonResp({ status: 'error', reason: 'payout_in_progress',
+        message: 'Já existe um repasse em andamento na sua conta. Aguarde um minuto e confira seu saldo.' })
     }
 
     // 2) Pega TODAS as comissões pendentes deste produtor (retidas + disponíveis).
@@ -145,15 +155,20 @@ Deno.serve(async (req) => {
       .filter(c => c.release_at && new Date(c.release_at).getTime() > Date.now())
       .reduce((s, c) => s + netOf(c), 0)
 
-    // 3) Sweep direto — passa amount = totalPending pra não arrastar dinheiro
-    //    fora do CoreoHub. sweepProducerBalance clampa ao saldo real da subconta.
-    const result = await sweepProducerBalance({
-      producerApiKey: prof.asaas_api_key,
-      producerPixKey: prof.pix_key,
+    // 3) Repasse planejado: escolhe as linhas que cabem no saldo real da subconta
+    //    ANTES de sacar e saca exatamente a soma delas (nada de dinheiro pago sem
+    //    linha marcada, nem linha paga duas vezes). Também não arrasta dinheiro
+    //    de fora do CoreoHub.
+    const run = await runPlannedPayout({
+      supabase:         admin,
+      items:            pending.map(c => ({ id: c.id as string, net: parseFloat(netOf(c).toFixed(2)) })).filter(i => i.net > 0),
+      producerApiKey:   prof.asaas_api_key,
+      producerPixKey:   prof.pix_key,
       asaasBaseUrl,
-      description:    `CoreoHub — ${scope === 'available' ? 'transferência manual' : 'antecipação manual'} (${pending.length} comissões)`,
-      amount:         parseFloat(totalPending.toFixed(2)),
+      description:      `CoreoHub — ${scope === 'available' ? 'transferência manual' : 'antecipação manual'} (${pending.length} comissões)`,
+      releasedManually: true,
     })
+    const result = run.result
 
     if (!result.swept) {
       console.warn(
@@ -162,6 +177,8 @@ Deno.serve(async (req) => {
       )
       const userMsg = result.reason === 'no_balance'
         ? 'Sua subconta Asaas está sem saldo no momento. Tente novamente em alguns minutos.'
+        : result.reason === 'insufficient_balance'
+        ? 'O saldo da sua subconta Asaas ainda não cobre o próximo recebimento pendente. Tente novamente em alguns minutos.'
         : result.reason === 'kyc_pending'
         ? 'Sua conta Asaas ainda não foi aprovada pra fazer transferências PIX. Conclua o KYC em Configurações.'
         : result.reason === 'pix_invalid'
@@ -175,35 +192,20 @@ Deno.serve(async (req) => {
       })
     }
 
-    // 4) Marca comissões como released. Mesmo se result.value < totalPending
-    //    (saldo insuficiente), marcamos todas — o produtor recebeu o que tinha
-    //    na subconta e novos splits vão criar novas rows com release_at fresco.
-    const { error: updErr } = await admin
-      .from('platform_commissions')
-      .update({
-        released_at:         nowIso,
-        released_amount:     result.value,
-        release_transfer_id: result.transferId ?? null,
-        released_manually:   true,
-      })
-      .in('id', pickCoveredCommissionIds(pending.map(c => ({ id: c.id as string, net: parseFloat(netOf(c).toFixed(2)) })), result.value))
-
-    if (updErr) {
-      // Sweep já aconteceu — log erro mas devolve sucesso pra UI (próximo
-      // cron vai tentar marcar via consulta defensiva, ou ops detecta no log).
-      console.error(`[manual-transfer-now] sweep OK mas falha update commissions produtor=${producerId}:`, updErr.message)
-    }
-
+    // 4) As linhas cobertas já foram marcadas por runPlannedPayout (só elas, a
+    //    soma bate com o saque). O que não coube no saldo continua pendente e
+    //    entra no próximo repasse, sem ser pago duas vezes.
     console.log(
       `[manual-transfer-now] OK produtor=${producerId} (${prof.full_name})` +
-      ` valor=R$${result.value} antecipado=R$${anticipated.toFixed(2)} commissions=${pending.length} transfer=${result.transferId}`
+      ` valor=R$${result.value} antecipado=R$${anticipated.toFixed(2)} commissions=${run.coveredCount}/${pending.length} transfer=${result.transferId}`
     )
 
     return jsonResp({
       status:          'ok',
       scope,
       released:        result.value,
-      commissions:     pending.length,
+      commissions:     run.coveredCount,
+      pending_left:    pending.length - run.coveredCount,
       anticipated:     parseFloat(anticipated.toFixed(2)),
       held_back:       parseFloat(heldBack.toFixed(2)),
       transfer_id:     result.transferId ?? null,
@@ -211,6 +213,8 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error('[manual-transfer-now] exception:', (e as Error).message)
     return jsonResp({ status: 'error', reason: 'exception', error: (e as Error).message }, 500)
+  } finally {
+    if (lockToken) await releasePayoutLock(admin, producerId, lockToken)
   }
 })
 
