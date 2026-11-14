@@ -8,6 +8,9 @@
 
 import { fetchSubaccountBalance, sweepProducerBalance, type SweepResult } from './asaas-payouts.ts'
 import { planPayout, type PayoutItem } from './payout-plan.ts'
+import {
+  resolveSubcontaFee, settleSubcontaFee, SUBCONTA_FEE_MIN_WITHDRAW, type FeeMode,
+} from './subconta-fee.ts'
 
 export interface PlannedPayoutResult {
   result:       SweepResult
@@ -27,6 +30,8 @@ export async function runPlannedPayout(opts: {
   asaasBaseUrl:   string
   description:    string
   releasedManually: boolean
+  /** Taxa de abertura de subconta no repasse (Fase 2). Sem isso, nunca cobra. */
+  fee?: { producerId: string; mode: FeeMode }
 }): Promise<PlannedPayoutResult> {
   const { supabase, items } = opts
   const skip = (reason: string, error?: string, due = 0): PlannedPayoutResult => ({
@@ -35,10 +40,36 @@ export async function runPlannedPayout(opts: {
 
   if (items.length === 0) return skip('nothing_due')
 
-  const bal = await fetchSubaccountBalance({ apiKey: opts.producerApiKey, asaasBaseUrl: opts.asaasBaseUrl })
+  let bal = await fetchSubaccountBalance({ apiKey: opts.producerApiKey, asaasBaseUrl: opts.asaasBaseUrl })
   if (!bal.ok) return skip('balance_fetch_failed', bal.error)
 
-  const plan = planPayout({ items, balance: bal.balance })
+  let plan = planPayout({ items, balance: bal.balance })
+
+  // Taxa de abertura da subconta: crédito já cobrado ou nova cobrança agora.
+  let credit = 0
+  if (opts.fee) {
+    const fee = await resolveSubcontaFee({
+      supabase,
+      producerId:     opts.fee.producerId,
+      producerApiKey: opts.producerApiKey,
+      asaasBaseUrl:   opts.asaasBaseUrl,
+      mode:           opts.fee.mode,
+      planBase:       plan.base,
+    })
+    if (fee.skipPayout) return skip(fee.skipPayout, undefined, plan.due)
+    credit = fee.credit
+    if (fee.justCharged) {
+      // A transferência da taxa mudou o saldo da subconta: releia antes de planejar.
+      bal = await fetchSubaccountBalance({ apiKey: opts.producerApiKey, asaasBaseUrl: opts.asaasBaseUrl })
+      if (!bal.ok) return skip('balance_fetch_failed', bal.error, plan.due)
+    }
+    if (credit > 0) {
+      plan = planPayout({ items, balance: bal.balance, feeCredit: credit })
+      // Sobraria quase nada pro produtor: espera mais comissões, o crédito fica guardado.
+      if (plan.withdraw < SUBCONTA_FEE_MIN_WITHDRAW) return skip('fee_credit_waiting', undefined, plan.due)
+    }
+  }
+
   if (plan.base <= 0) {
     // Nada coube: ou a subconta está zerada, ou o saldo não cobre nem a primeira linha.
     return skip(bal.balance <= 0 ? 'no_balance' : 'insufficient_balance', undefined, plan.due)
@@ -49,7 +80,7 @@ export async function runPlannedPayout(opts: {
     producerPixKey: opts.producerPixKey,
     asaasBaseUrl:   opts.asaasBaseUrl,
     description:    opts.description,
-    amount:         plan.base,
+    amount:         plan.withdraw,
     exact:          true,
   })
   if (!result.swept) return { result, coveredCount: 0, coveredIds: [], due: plan.due }
@@ -78,6 +109,8 @@ export async function runPlannedPayout(opts: {
       ` transfer=${result.transferId} ids=${plan.coveredIds.join(',')} erro=${marked.error.message}`
     )
   }
+
+  if (credit > 0) await settleSubcontaFee(supabase, opts.fee!.producerId, result.transferId)
 
   return { result, coveredCount: plan.coveredIds.length, coveredIds: plan.coveredIds, due: plan.due }
 }

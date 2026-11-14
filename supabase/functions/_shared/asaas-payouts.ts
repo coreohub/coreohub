@@ -231,6 +231,11 @@ export interface InternalTransferResult {
   transferId?:  string
   authorized?:  boolean   // Asaas exige aprovação manual (código/app) pra transferência interna via API — confirmado 2026-09-16
   error?:       string
+  /** Classificação pra quem precisa distinguir (taxa de subconta): 'done' = DONE;
+   *  'pending' = 2xx mas não DONE; 'definitive_error' = a Asaas recusou (4xx), nada saiu;
+   *  'uncertain' = timeout/rede/5xx, pode ter saído. Só preenchido com `classify`. */
+  outcome?:     'done' | 'pending' | 'definitive_error' | 'uncertain'
+  httpStatus?:  number
 }
 
 /** Transferência interna Asaas-a-Asaas (master → carteira de outra conta
@@ -254,29 +259,49 @@ export async function transferToWallet(opts: {
   walletId:       string
   value:          number
   description?:   string
+  /** Opt-in (taxa de subconta): timeout em ms, `externalReference` e `outcome` classificado. */
+  timeoutMs?:         number
+  externalReference?: string
 }): Promise<InternalTransferResult> {
   const { transferApiKey, asaasBaseUrl, walletId, value } = opts
   if (!transferApiKey) return { ok: false, error: 'no_transfer_api_key' }
   if (!walletId)       return { ok: false, error: 'no_wallet_id' }
   if (!(value > 0))    return { ok: false, error: 'invalid_value' }
 
+  const ctrl = opts.timeoutMs ? new AbortController() : null
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeoutMs) : null
   try {
     const res = await fetch(`${asaasBaseUrl}/transfers`, {
       method: 'POST',
       headers: { 'access_token': transferApiKey, 'Content-Type': 'application/json' },
+      signal: ctrl?.signal,
       body: JSON.stringify({
         value,
         walletId,
         description: opts.description ?? 'CoreoHub — repasse integral (evento com absorção de taxa)',
+        ...(opts.externalReference ? { externalReference: opts.externalReference } : {}),
       }),
     })
     const data = await res.json().catch(() => null) as any
     if (!res.ok) {
-      return { ok: false, error: data?.errors?.[0]?.description ?? `${res.status}` }
+      return {
+        ok: false,
+        error: data?.errors?.[0]?.description ?? `${res.status}`,
+        httpStatus: res.status,
+        // 4xx = a Asaas recusou, nada saiu. 5xx = não dá pra saber.
+        outcome: res.status >= 400 && res.status < 500 ? 'definitive_error' : 'uncertain',
+      }
     }
-    return { ok: true, status: data?.status, transferId: data?.id, authorized: Boolean(data?.authorized) }
+    return {
+      ok: true, status: data?.status, transferId: data?.id, authorized: Boolean(data?.authorized),
+      httpStatus: res.status,
+      outcome: data?.status === 'DONE' ? 'done' : 'pending',
+    }
   } catch (e) {
-    return { ok: false, error: (e as Error).message }
+    // Timeout/rede: a transferência pode ter sido criada. Nunca tratar como falha definitiva.
+    return { ok: false, error: (e as Error).message, outcome: 'uncertain' }
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 

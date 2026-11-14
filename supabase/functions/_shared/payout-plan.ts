@@ -27,6 +27,8 @@ export interface PayoutPlan {
   available: number
   /** Linhas que ficaram de fora (não couberam inteiras no saldo). */
   leftoverIds: string[]
+  /** Valor a sacar de fato: base menos o crédito de taxa já cobrada (sem crédito = base). */
+  withdraw: number
 }
 
 export const toCents = (reais: number): number => Math.round(Number(reais) * 100)
@@ -40,8 +42,16 @@ export const fromCents = (cents: number): number => cents / 100
  * Exemplo: A=60 e B=40, saldo 150 -> cobre A e B, base 100 (saca 100, não 150).
  *          A=60 e B=40, saldo 70  -> cobre só A, base 60 (B fica pro próximo).
  */
-export function planPayout(input: { items: PayoutItem[]; balance: number }): PayoutPlan {
-  const balanceCents = Math.max(0, toCents(input.balance))
+export function planPayout(input: {
+  items: PayoutItem[]
+  balance: number
+  /** Taxa de subconta JÁ transferida pra CoreoHub e ainda não descontada do repasse.
+   *  O saldo da subconta já está menor por causa dela: as linhas cobertas podem somar
+   *  até saldo + crédito, e o saque é a soma delas menos o crédito. */
+  feeCredit?: number
+}): PayoutPlan {
+  const creditCents = Math.max(0, toCents(input.feeCredit ?? 0))
+  const balanceCents = Math.max(0, toCents(input.balance)) + creditCents
   const items = input.items
     .map((it) => ({ id: it.id, cents: toCents(it.net) }))
     .filter((it) => it.cents > 0)
@@ -71,5 +81,6 @@ export function planPayout(input: { items: PayoutItem[]; balance: number }): Pay
     due:         fromCents(dueCents),
     available:   fromCents(availableCents),
     leftoverIds,
+    withdraw:    fromCents(Math.max(0, baseCents - (baseCents > 0 ? creditCents : 0))),
   }
 }

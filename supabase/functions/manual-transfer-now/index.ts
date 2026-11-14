@@ -19,6 +19,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
 import { runPlannedPayout } from '../_shared/payout-run.ts'
+import { parseFeeMode } from '../_shared/subconta-fee.ts'
 import { resolveTransferScope } from '../_shared/transfer-scope.ts'
 
 const corsHeaders = {
@@ -167,6 +168,7 @@ Deno.serve(async (req) => {
       asaasBaseUrl,
       description:      `CoreoHub — ${scope === 'available' ? 'transferência manual' : 'antecipação manual'} (${pending.length} comissões)`,
       releasedManually: true,
+      fee:              { producerId, mode: parseFeeMode(Deno.env.get('SUBCONTA_FEE_MODE')) },
     })
     const result = run.result
 
@@ -181,6 +183,10 @@ Deno.serve(async (req) => {
         ? 'O saldo da sua subconta Asaas ainda não cobre o próximo recebimento pendente. Tente novamente em alguns minutos.'
         : result.reason === 'kyc_pending'
         ? 'Sua conta Asaas ainda não foi aprovada pra fazer transferências PIX. Conclua o KYC em Configurações.'
+        : result.reason === 'fee_pending' || result.reason === 'fee_uncertain'
+        ? 'Estamos conferindo a taxa de abertura da sua conta digital junto à Asaas. Seu repasse segue assim que isso for confirmado.'
+        : result.reason === 'fee_credit_waiting'
+        ? 'O valor disponível ainda é pequeno demais para transferir. Ele será repassado junto com os próximos recebimentos.'
         : result.reason === 'pix_invalid'
         ? 'Sua chave PIX cadastrada parece inválida. Atualize em Configurações.'
         : `Não foi possível processar a transferência agora (${result.reason ?? 'erro desconhecido'}). Tente novamente em alguns minutos.`
