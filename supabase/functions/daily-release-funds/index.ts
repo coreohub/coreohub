@@ -18,6 +18,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getTransferStatus } from '../_shared/asaas-payouts.ts'
 import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
 import { runPlannedPayout, type PlannedPayoutResult } from '../_shared/payout-run.ts'
+import { parseFeeMode } from '../_shared/subconta-fee.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -201,6 +202,7 @@ Deno.serve(async (req) => {
             asaasBaseUrl,
             description:      `CoreoHub — liberação automática D+7 (${items.length} comissões)`,
             releasedManually: false,
+            fee:              { producerId: bucket.producerId, mode: parseFeeMode(Deno.env.get('SUBCONTA_FEE_MODE')) },
           })
         }
       } finally {
