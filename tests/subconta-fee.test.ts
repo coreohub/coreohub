@@ -259,8 +259,14 @@ describe('planPayout com crédito de taxa', () => {
     expect(p.base).toBe(100)
     expect(p.withdraw).toBe(87.1)
   })
-  it('subconta com 40: só 52,90 disponíveis, A (60) não cabe', () => {
+  it('subconta com 40 + crédito: 52,90 disponíveis, A (60) não cabe mas B (40) cabe; saca 27,10', () => {
     const p = planPayout({ items: [A, B], balance: 40, feeCredit: 12.9 })
+    expect(p.coveredIds).toEqual(['B'])
+    expect(p.base).toBe(40)
+    expect(p.withdraw).toBe(27.1)
+  })
+  it('subconta com 20 + crédito: 32,90 disponíveis, nenhuma cabe', () => {
+    const p = planPayout({ items: [A, B], balance: 20, feeCredit: 12.9 })
     expect(p.coveredIds).toEqual([])
     expect(p.withdraw).toBe(0)
   })

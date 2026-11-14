@@ -22,16 +22,29 @@ describe('planPayout', () => {
     expect(p.leftoverIds).toEqual(['B'])
   })
 
-  it('saldo 50 não cobre nem A: nada a sacar', () => {
+  it('saldo 50: A (60) não cabe, mas B (40) cabe e é paga', () => {
     const p = planPayout({ items: [A, B], balance: 50 })
+    expect(p.coveredIds).toEqual(['B'])
+    expect(p.leftoverIds).toEqual(['A'])
+    expect(p.base).toBe(40)
+  })
+
+  it('saldo 30 não cobre nenhuma: nada a sacar', () => {
+    const p = planPayout({ items: [A, B], balance: 30 })
     expect(p.coveredIds).toEqual([])
     expect(p.base).toBe(0)
   })
 
-  it('não pula pra uma linha menor mais nova quando a mais antiga não cabe', () => {
-    const p = planPayout({ items: [{ id: 'old', net: 60 }, { id: 'new', net: 10 }], balance: 50 })
-    expect(p.coveredIds).toEqual([])
-    expect(p.base).toBe(0)
+  it('linha grande sem lastro na frente da fila não trava as menores', () => {
+    const p = planPayout({ items: [{ id: 'cartao', net: 500 }, { id: 'pix', net: 20 }], balance: 100 })
+    expect(p.coveredIds).toEqual(['pix'])
+    expect(p.base).toBe(20)
+  })
+
+  it('entre as que cabem, mantém a ordem da mais antiga; a soma nunca passa do saldo', () => {
+    const p = planPayout({ items: [{ id: 'a', net: 60 }, { id: 'b', net: 50 }, { id: 'c', net: 30 }], balance: 95 })
+    expect(p.coveredIds).toEqual(['a', 'c'])
+    expect(p.base).toBe(90)
   })
 
   it('saldo exato cobre sem erro de ponto flutuante (0,1 + 0,2)', () => {
@@ -111,8 +124,8 @@ describe('runPlannedPayout', () => {
     expect(calls.find((c) => c.in)!.in).toEqual(['A'])
   })
 
-  it('saldo 50: não saca nada e não marca nada', async () => {
-    const fetchMock = mockAsaas(50)
+  it('saldo 30: não saca nada e não marca nada', async () => {
+    const fetchMock = mockAsaas(30)
     const { client, calls } = fakeSupabase()
     const r = await runPlannedPayout({ ...base, supabase: client, items: [A, B] })
     expect(r.result.swept).toBe(false)

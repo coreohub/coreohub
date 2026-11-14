@@ -35,12 +35,15 @@ export const toCents = (reais: number): number => Math.round(Number(reais) * 100
 export const fromCents = (cents: number): number => cents / 100
 
 /**
- * Escolhe as linhas que o saldo comporta, em ordem, sem fracionar nenhuma:
- * para na primeira que não cabe (mantém a ordem de antiguidade, não pula pra
- * uma linha menor mais nova).
+ * Escolhe as linhas que o saldo comporta, da mais antiga pra mais nova, sem
+ * fracionar nenhuma. Uma linha que não cabe no que sobrou é PULADA (fica pro
+ * próximo ciclo) e as seguintes que couberem são pagas: o dinheiro das menores
+ * existe, e uma linha grande sem lastro (ex.: cartão ainda não creditado) não
+ * pode travar a fila inteira. A soma nunca passa do saldo.
  *
  * Exemplo: A=60 e B=40, saldo 150 -> cobre A e B, base 100 (saca 100, não 150).
  *          A=60 e B=40, saldo 70  -> cobre só A, base 60 (B fica pro próximo).
+ *          A=60 e B=40, saldo 50  -> A não cabe, B cabe: cobre só B, base 40.
  */
 export function planPayout(input: {
   items: PayoutItem[]
@@ -63,14 +66,12 @@ export function planPayout(input: {
   const leftoverIds: string[] = []
   let left = availableCents
   let baseCents = 0
-  let stopped = false
   for (const it of items) {
-    if (!stopped && it.cents <= left) {
+    if (it.cents <= left) {
       coveredIds.push(it.id)
       left -= it.cents
       baseCents += it.cents
     } else {
-      stopped = true
       leftoverIds.push(it.id)
     }
   }
