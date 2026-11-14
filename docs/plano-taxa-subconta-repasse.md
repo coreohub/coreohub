@@ -1,6 +1,6 @@
 # Plano: recuperar do produtor a taxa de abertura de subconta (R$ 12,90)
 
-Estado em 2026-11-14. Nada deste plano foi implementado ainda, além do que está em "Já feito".
+Estado em 2026-11-14 (fim do dia): **Fases 1, 2 e 3 implementadas e em produção, cobrança em modo `dry`.** Falta a Fase 4 (primeiro repasse real, cherry-pick do card/landings para a `main`, `SUBCONTA_FEE_MODE=on`). Resumo em `docs/HISTORICO.md` (2026-11-14).
 
 ## Problema
 A Asaas debita R$ 12,90 da conta principal (master CoreoHub) logo após a criação de cada subconta (Central de Ajuda da Asaas: fixo, debitado do saldo da conta responsável; apurado diariamente). Não há isenção nem desconto por volume (só subconta não-BaaS encerrada em 48h sem login). O Termo do Produtor, cláusula 11.2 (`pages/TermoProdutor.tsx:352`), diz que a taxa é do produtor e "descontada do primeiro recebimento aprovado", mas nenhum código fazia isso. Em 11 e 12/11/2026 a master ficou em R$ -19,00 por duas aberturas (Academia New Ritmo e Compete'art).
