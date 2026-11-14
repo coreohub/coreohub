@@ -37,6 +37,9 @@ export async function runPlannedPayout(opts: {
   releasedManually: boolean
   /** Taxa de abertura de subconta no repasse (Fase 2). Sem isso, nunca cobra. */
   fee?: { producerId: string; mode: FeeMode }
+  /** Como marcar as linhas pagas. Padrão: platform_commissions (released_at...).
+   *  Repasse de baixo valor passa a sua própria marcação (low_value_transfers). */
+  markCovered?: (ids: string[], result: SweepResult) => Promise<{ error: { message: string } | null }>
 }): Promise<PlannedPayoutResult> {
   const { supabase, items } = opts
   const skip = (reason: string, error?: string, due = 0): PlannedPayoutResult => ({
@@ -106,11 +109,14 @@ export async function runPlannedPayout(opts: {
     .is('released_at', null)
     .select('id')
 
+  const markIds = opts.markCovered
+    ? (ids: string[]) => opts.markCovered!(ids, result)
+    : markChunk
   let marked: { error: { message: string } | null } = { error: null }
   for (let i = 0; i < plan.coveredIds.length; i += ID_CHUNK) {
     const ids = plan.coveredIds.slice(i, i + ID_CHUNK)
-    let r = await markChunk(ids)
-    if (r.error) r = await markChunk(ids) // 1 retry: falha de rede transitória
+    let r = await markIds(ids)
+    if (r.error) r = await markIds(ids) // 1 retry: falha de rede transitória
     if (r.error) marked = r
   }
   if (marked.error) {
