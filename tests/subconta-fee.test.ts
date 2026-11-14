@@ -209,10 +209,37 @@ describe('resolveSubcontaFee — cobrança já existente', () => {
     expect(await call(fakeDb({ marker: 'x', row: row('concluido') }).client, { mode: 'off' })).toEqual({ credit: 12.9 })
   })
 
+  it('modo off é a saída de emergência: incerto/pendente não seguram o repasse', async () => {
+    mockAsaas()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    for (const st of ['incerto', 'pendente', 'reservado']) {
+      expect(await call(fakeDb({ marker: 'x', row: row(st) }).client, { mode: 'off' })).toEqual({ credit: 0 })
+    }
+  })
+
   it('falhou antes: tenta de novo', async () => {
     const { client } = fakeDb({ marker: null, row: row('falhou') }); const m = mockAsaas()
     expect((await call(client)).credit).toBe(12.9)
     expect(m.transfers.length).toBe(1)
+  })
+})
+
+describe('marcação em lotes', () => {
+  it('250 linhas cobertas são marcadas em 3 requisições (.in com no máximo 100 ids)', async () => {
+    const sizes: number[] = []
+    const chain: any = {
+      update: () => chain, is: () => chain,
+      in: (_c: string, ids: string[]) => { sizes.push(ids.length); return chain },
+      select: () => Promise.resolve({ data: [], error: null }),
+    }
+    mockAsaas({ balances: [1000] })
+    const many = Array.from({ length: 250 }, (_, i) => ({ id: `id${i}`, net: 1 }))
+    const r = await runPlannedPayout({
+      supabase: { from: () => chain }, items: many, producerApiKey: 'k', producerPixKey: 'a@b.com',
+      asaasBaseUrl: BASE_URL, description: 't', releasedManually: false,
+    })
+    expect(r.coveredCount).toBe(250)
+    expect(sizes).toEqual([100, 100, 50])
   })
 })
 
