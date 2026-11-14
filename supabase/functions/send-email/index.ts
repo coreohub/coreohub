@@ -436,11 +436,11 @@ function buildProducerWelcome(p: ProducerWelcomePayload) {
           Conforme cláusula 11 do Termo de Adesão aceito, a instituição financeira
           <strong>Asaas</strong> (parceiro financeiro da CoreoHub) aplica uma taxa única de
           <strong>R$ 12,90</strong> pela criação da sua conta digital. Este valor será
-          descontado automaticamente da sua primeira venda aprovada.
+          descontado automaticamente do seu primeiro repasse (a transferência do seu saldo para a sua chave Pix), quando esse repasse for de pelo menos R$ 17,90.
         </p>
         <p style="margin:0;font-size:12px;line-height:1.5;color:#92400e;">
           Trata-se de cobrança da instituição financeira, <strong>não da CoreoHub</strong>.
-          Da segunda venda em diante, você receberá o valor cheio da sua comissão.
+          Dos repasses seguintes em diante, nada mais é descontado por esse motivo.
         </p>
       </td></tr>
     </table>
@@ -1594,6 +1594,8 @@ interface PayoutReleasedPayload {
   pixKeyPartial?:          string
   /** Nº de comissões agregadas (ex: "12 inscrições"). Opcional. */
   commissionsCount?:       number
+  /** Taxa de abertura da conta digital descontada NESTE repasse (R$). Omitir se não houve. */
+  feeDeducted?:            number
   appUrl?:                 string
 }
 
@@ -2137,12 +2139,19 @@ function buildPayoutReleased(p: PayoutReleasedPayload) {
          Liberação automática após o período de retenção de 7 dias (Settlement D+7).
        </p>`
 
+  const feeLine = p.feeDeducted && p.feeDeducted > 0
+    ? `<p style="margin:14px 0 0;font-size:13px;line-height:1.55;color:#475569;">
+         Neste repasse foi descontada a taxa única de abertura da sua conta digital, <strong>${escape(money(p.feeDeducted))}</strong> (cobrada pela Asaas e reembolsada à CoreoHub, cláusula 11.2 do Termo). Não será descontada de novo.
+       </p>`
+    : ''
+
   const contentHtml = `
     <div style="margin-top:4px;padding:22px;border-radius:14px;background:#ecfdf5;border:2px solid #34d399;text-align:center;">
       <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#059669;">Repasse liberado</p>
       <p style="margin:8px 0 0;font-size:36px;font-weight:900;color:#0b0b0f;letter-spacing:-.02em;">${escape(money(p.releasedAmount))}</p>
       ${pixLine}
     </div>
+    ${feeLine}
     ${sourceLine}`
 
   return {

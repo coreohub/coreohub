@@ -5875,7 +5875,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         <div className="flex justify-between items-start gap-3 py-2 border-t border-slate-200 dark:border-white/10">
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-slate-900 dark:text-white">Taxa de criação de conta bancária</p>
-                            <p className="text-[10px] text-slate-500 italic">Cobrada pelo Asaas — descontada do 1º recebimento</p>
+                            <p className="text-[10px] text-slate-500 italic">Cobrada pelo Asaas — descontada do seu 1º repasse</p>
                           </div>
                           <span className="font-black text-slate-700 dark:text-slate-300 shrink-0">R$ 12,90</span>
                         </div>
@@ -6125,7 +6125,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             </p>
                             <p className="text-[10px] text-slate-500 mt-0.5">
                               Cobrada uma única vez pelo Asaas. Descontada automaticamente
-                              do seu primeiro recebimento aprovado.
+                              do seu primeiro repasse (a transferência do saldo para a sua chave Pix, a partir de R$ 17,90).
                             </p>
                           </div>
                           <span className="text-[#ff0068] font-black text-sm shrink-0">R$ 12,90</span>
@@ -6148,17 +6148,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
                       <details className="text-[11px]">
                         <summary className="cursor-pointer font-bold text-slate-700 dark:text-slate-300 hover:text-[#ff0068] transition-colors">
-                          Ver exemplo de cálculo na primeira venda
+                          Ver exemplo de cálculo no primeiro repasse
                         </summary>
                         <div className="mt-2 p-3 bg-slate-50 dark:bg-white/5 rounded-lg font-mono text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
-                          <p>Inscrição aprovada via PIX:                <strong>R$ 100,00</strong></p>
+                          <p>Inscrição aprovada via PIX (repasse):       <strong>R$ 100,00</strong></p>
                           <p>− Comissão CoreoHub (10%, exemplo):        R$  10,00 <span className="text-slate-400">(plataforma)</span></p>
                           <p>− Taxa de criação (Asaas, única):           R$  12,90 <span className="text-slate-400">(banco)</span></p>
                           <p className="border-t border-slate-300 dark:border-white/10 mt-1 pt-1 font-bold text-emerald-600 dark:text-emerald-400">
                             = Valor depositado na sua conta:           R$  77,10
                           </p>
                           <p className="mt-2 text-slate-500 italic">
-                            Da segunda venda em diante, sem desconto da taxa de criação:
+                            Dos repasses seguintes em diante, sem desconto da taxa de criação:
                             R$ 100 − R$ 10 = <strong className="text-emerald-600 dark:text-emerald-400">R$ 90,00</strong> depositados.
                           </p>
                         </div>

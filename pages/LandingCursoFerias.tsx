@@ -62,7 +62,7 @@ export const CURSO_FAQ_ITEMS = [
   },
   {
     q: 'Quanto custa para começar?',
-    a: 'Não há mensalidade. Você escolhe o plano do evento: Começo (10% sobre o vendido, sem taxa fixa), Essencial (R$250 mais 5% sobre o vendido) ou Escala, para eventos grandes (detalhes em coreohub.com/planos). A taxa do plano vale para inscrições, ingressos e workshops do evento. Além dela há a taxa de pagamento (Pix ou cartão), em linha separada no checkout e paga pelo comprador por padrão. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, debitados no primeiro recebimento.',
+    a: 'Não há mensalidade. Você escolhe o plano do evento: Começo (10% sobre o vendido, sem taxa fixa), Essencial (R$250 mais 5% sobre o vendido) ou Escala, para eventos grandes (detalhes em coreohub.com/planos). A taxa do plano vale para inscrições, ingressos e workshops do evento. Além dela há a taxa de pagamento (Pix ou cartão), em linha separada no checkout e paga pelo comprador por padrão. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, descontados do seu primeiro repasse.',
   },
   {
     q: 'Preciso ter CNPJ para vender pela CoreoHub?',

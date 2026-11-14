@@ -125,6 +125,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [lowValue, setLowValue]   = useState<LowValueTransfer[]>([]);
   const [sentComm, setSentComm]   = useState<SentCommission[]>([]);
   const [sentLow, setSentLow]     = useState<SentLowValue[]>([]);
+  // Taxa de abertura da conta digital (R$ 12,90, 1x): futura / em conferência / já descontada.
+  const [feeNote, setFeeNote]     = useState<'future' | 'checking' | 'done' | null>(null);
   // Quem aceitou o Termo 1.10 não antecipa mais o saldo retido (cláusula 12.3); o servidor também recusa.
   const [anticipationOff, setAnticipationOff] = useState(false);
   const [modalScope, setModalScope] = useState<'available' | 'all' | null>(null);
@@ -191,6 +193,12 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       .order('pix_sent_at', { ascending: false })
       .limit(SENT_QUERY_LIMIT);
 
+    // Taxa de abertura da subconta: marcador do perfil + linha da cobrança (RLS: só a própria).
+    const feeProfilePromise = supabase
+      .from('profiles').select('subconta_fee_charged_at').eq('id', targetId).maybeSingle();
+    const feeRowPromise = supabase
+      .from('subconta_fee_charges').select('status, settled_transfer_id').eq('producer_id', targetId).maybeSingle();
+
     // Decide se chama a API Asaas: força (refresh manual) ou cache miss.
     let asaasNeedsFetch = false;
     if (withAsaas === 'force') {
@@ -208,9 +216,21 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       ? supabase.functions.invoke('get-producer-asaas-balance', { body: {} })
       : Promise.resolve(null);
 
-    const [localRes, asaasRes, lowValueRes, sentCommRes, sentLowRes] = await Promise.all([
+    const [localRes, asaasRes, lowValueRes, sentCommRes, sentLowRes, feeProfRes, feeRowRes] = await Promise.all([
       localPromise, asaasPromise, lowValuePromise, sentCommPromise, sentLowPromise,
+      feeProfilePromise, feeRowPromise,
     ]);
+
+    if (feeProfRes.error || feeRowRes.error) {
+      // Tabela/coluna ausente (migration não aplicada) também cai aqui — logar sempre.
+      console.error('[ProducerBalanceCard] erro query taxa de abertura:', feeProfRes.error ?? feeRowRes.error);
+    } else {
+      const row = feeRowRes.data as { status: string; settled_transfer_id: string | null } | null;
+      if (row?.status === 'concluido' && row.settled_transfer_id) setFeeNote('done');
+      else if (row && (row.status === 'pendente' || row.status === 'incerto' || row.status === 'reservado' || row.status === 'concluido')) setFeeNote('checking');
+      else if (!(feeProfRes.data as any)?.subconta_fee_charged_at) setFeeNote('future');
+      else setFeeNote(null);
+    }
 
     if (lowValueRes.error) {
       console.error('[ProducerBalanceCard] erro query low_value_transfers:', lowValueRes.error);
@@ -536,6 +556,21 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                 ? `Já enviado ao seu PIX${sentTruncated ? ' (últimos registros)' : ''}.`
                 : 'Nada transferido ainda.'}
             </p>
+            {feeNote === 'done' && (
+              <p className={`${stepNote} mt-1`}>
+                Abertura de conta digital (Asaas): − {fmtBRL(12.9)}, descontada no seu 1º repasse.
+              </p>
+            )}
+            {feeNote === 'checking' && (
+              <p className={`${stepNote} mt-1`}>
+                Estamos conferindo a taxa de abertura da conta digital ({fmtBRL(12.9)}) junto à Asaas.
+              </p>
+            )}
+            {feeNote === 'future' && (
+              <p className={`${stepNote} mt-1`}>
+                No seu 1º repasse (a partir de {fmtBRL(17.9)}) será descontada a taxa única de abertura da conta digital, {fmtBRL(12.9)}.
+              </p>
+            )}
             {sentList.length > 0 && (
               <button
                 type="button"

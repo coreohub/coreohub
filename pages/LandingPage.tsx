@@ -22,7 +22,7 @@ const HOME_FAQ_ITEMS = [
   },
   {
     q: 'Quanto custa para começar?',
-    a: 'Não há mensalidade. Você escolhe um plano por evento: Começo (10% sobre o vendido), Essencial (R$250 por evento mais 5%) ou Escala, para eventos grandes. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, debitados no primeiro recebimento. A taxa de pagamento (Pix ou cartão) aparece separada no checkout e, por padrão, quem paga é o comprador.',
+    a: 'Não há mensalidade. Você escolhe um plano por evento: Começo (10% sobre o vendido), Essencial (R$250 por evento mais 5%) ou Escala, para eventos grandes. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, descontados do seu primeiro repasse. A taxa de pagamento (Pix ou cartão) aparece separada no checkout e, por padrão, quem paga é o comprador.',
   },
   {
     q: 'Funciona mesmo offline?',

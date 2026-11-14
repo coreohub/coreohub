@@ -73,7 +73,7 @@ const CURSO_FERIAS_FAQ: Faq[] = [
   },
   {
     q: 'Quanto custa para começar?',
-    a: 'Não há mensalidade. Você escolhe o plano do evento: Começo (10% sobre o vendido, sem taxa fixa), Essencial (R$250 mais 5% sobre o vendido) ou Escala, para eventos grandes (detalhes em coreohub.com/planos). A taxa do plano vale para inscrições, ingressos e workshops do evento. Além dela há a taxa de pagamento (Pix ou cartão), em linha separada no checkout e paga pelo comprador por padrão. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, debitados no primeiro recebimento.',
+    a: 'Não há mensalidade. Você escolhe o plano do evento: Começo (10% sobre o vendido, sem taxa fixa), Essencial (R$250 mais 5% sobre o vendido) ou Escala, para eventos grandes (detalhes em coreohub.com/planos). A taxa do plano vale para inscrições, ingressos e workshops do evento. Além dela há a taxa de pagamento (Pix ou cartão), em linha separada no checkout e paga pelo comprador por padrão. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, descontados do seu primeiro repasse.',
   },
   {
     q: 'Preciso ter CNPJ para vender pela CoreoHub?',
@@ -281,7 +281,7 @@ const HOME_JSONLD: Record<string, any> = {
           "name": "Quanto custa para começar?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Não há mensalidade. Você escolhe um plano por evento: Começo (10% sobre o vendido), Essencial (R$250 por evento mais 5%) ou Escala, para eventos grandes. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, debitados no primeiro recebimento. A taxa de pagamento (Pix ou cartão) aparece separada no checkout e, por padrão, quem paga é o comprador."
+            "text": "Não há mensalidade. Você escolhe um plano por evento: Começo (10% sobre o vendido), Essencial (R$250 por evento mais 5%) ou Escala, para eventos grandes. A Asaas cobra R$12,90 uma única vez pela abertura da sua conta digital, descontados do seu primeiro repasse. A taxa de pagamento (Pix ou cartão) aparece separada no checkout e, por padrão, quem paga é o comprador."
           }
         },
         {
