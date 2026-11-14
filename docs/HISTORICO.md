@@ -12,6 +12,7 @@ Cronológico inverso. Detalhes individuais em `memory/`.
 - **Fase 3 (`cd17642`):** card de saldo mostra a taxa (futura / em conferência / registrada / descontada), e-mail `payout_released` ganhou a linha (`feeDeducted`), textos "primeiro recebimento" viraram "primeiro repasse" (landings, FAQ, `AccountSettings`, e-mail de boas-vindas).
 - **Revisão `/code-review` (`f2bb7eb`):** ids em lotes de 100 (URL do PostgREST), trava distingue ocupada de erro, `off` é a saída de emergência (taxa pendente/incerta não trava o repasse do produtor), cron ignora cartão ainda não creditado, mensagens do botão.
 - **Em produção:** migrations 20261114d e e; functions `daily-release-funds`, `manual-transfer-now`, `release-low-value-transfers`, `send-email`. Testes: 539 verdes.
+- **Na `main`:** os 12 commits da taxa foram levados por cherry-pick em worktree (só o `docs/HISTORICO.md` conflitou) e publicados em `fa4527b` (Vercel `success`), então card de saldo e landings já estão no ar; a `dev` inteira não foi mesclada (dá conflito).
 - **Pendente (Fase 4):** (1) cherry-pick do card e das landings para a `main` (merge da `dev` inteira dá conflito); (2) primeiro repasse real de New Ritmo ou Compete'art, conferindo no log `[DRY] cobraria R$12.9`; (3) `SUBCONTA_FEE_MODE=on` com OK do dono e conferência no extrato da Asaas; (4) menores: fila FIFO do `planPayout` para na primeira linha que não cabe, sem timeout no POST do saque (de propósito).
 - **Não testado ao vivo:** nenhuma cobrança real foi feita pelo código novo; o card não teve screenshot (fica atrás de login).
 
