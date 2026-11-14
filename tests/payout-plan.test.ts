@@ -157,6 +157,32 @@ describe('runPlannedPayout', () => {
   })
 })
 
+describe('runPlannedPayout com marcação própria (baixo valor)', () => {
+  it('usa markCovered no lugar de platform_commissions e passa só as linhas cobertas', async () => {
+    mockAsaas(70)
+    const touched: string[] = []
+    const client = { from: (t: string) => { touched.push(t); return {} } }
+    const markCovered = vi.fn().mockResolvedValue({ error: null })
+    const r = await runPlannedPayout({ ...base, supabase: client, items: [A, B], markCovered })
+    expect(r.coveredIds).toEqual(['A'])
+    expect(markCovered).toHaveBeenCalledTimes(1)
+    expect(markCovered.mock.calls[0][0]).toEqual(['A'])
+    expect(markCovered.mock.calls[0][1].transferId).toBe('tr_1')
+    expect(touched).toEqual([])
+  })
+
+  it('erro na marcação própria tenta de novo e avisa [ALERT]', async () => {
+    mockAsaas(150)
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const markCovered = vi.fn().mockResolvedValue({ error: { message: 'rede' } })
+    const r = await runPlannedPayout({ ...base, supabase: {}, items: [A, B], markCovered })
+    expect(r.result.swept).toBe(true)
+    expect(markCovered).toHaveBeenCalledTimes(2)
+    expect(err.mock.calls.some((c) => String(c[0]).includes('[ALERT]'))).toBe(true)
+    err.mockRestore()
+  })
+})
+
 describe('payout lock', () => {
   it('devolve o token quando a RPC concede e null quando está em uso', async () => {
     const ok = { rpc: vi.fn().mockResolvedValue({ data: 'tok-1', error: null }) }

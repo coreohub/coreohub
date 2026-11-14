@@ -31,7 +31,10 @@
 //       headers:='{"Authorization":"Bearer <service-role>"}'::jsonb)$$);
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { transferToWallet, getTransferStatus, sweepProducerBalance, pickCoveredCommissionIds } from '../_shared/asaas-payouts.ts'
+import { transferToWallet, getTransferStatus } from '../_shared/asaas-payouts.ts'
+import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
+import { runPlannedPayout } from '../_shared/payout-run.ts'
+import { parseFeeMode } from '../_shared/subconta-fee.ts'
 import { groupLowValueByProducer } from '../_shared/low-value-pix.ts'
 
 const corsHeaders = {
@@ -198,47 +201,65 @@ Deno.serve(async (req) => {
           continue
         }
 
-        const result = await sweepProducerBalance({
-          producerApiKey: prof.asaas_api_key as string,
-          producerPixKey: prof.pix_key as string,
-          asaasBaseUrl,
-          description:    `CoreoHub — repasse integral de baixo valor (${batch.items.length} itens)`,
-          amount:         batch.total,
-        })
+        // Mesma trava do cron diário e do botão "Transferir agora": sem ela, dois
+        // saques da mesma subconta disputam o saldo (e o plano de um deles quebra).
+        const lock = await acquirePayoutLock(supabase, batch.producerId)
+        if (lock.status !== 'ok') {
+          pixSkipped++
+          if (lock.status === 'error') {
+            console.error(`[release-low-value-transfers][ALERT] produtor=${batch.producerId} NÃO consegui a trava de repasse (${lock.error}) — pula`)
+          } else {
+            console.warn(`[release-low-value-transfers] produtor=${batch.producerId} repasse em andamento (trava) — pula`)
+          }
+          continue
+        }
 
+        let run
+        try {
+          // Escolhe os itens ANTES de sacar e saca exatamente a soma; a taxa de
+          // abertura da subconta vale igual aos outros fluxos de repasse.
+          const netById = new Map(batch.items.map(i => [i.id, i.net]))
+          run = await runPlannedPayout({
+            supabase,
+            items:            batch.items,
+            producerApiKey:   prof.asaas_api_key as string,
+            producerPixKey:   prof.pix_key as string,
+            asaasBaseUrl,
+            description:      `CoreoHub — repasse integral de baixo valor (${batch.items.length} itens)`,
+            releasedManually: false,
+            fee:              { producerId: batch.producerId, mode: parseFeeMode(Deno.env.get('SUBCONTA_FEE_MODE')) },
+            markCovered: async (ids, sweep) => {
+              const nowIso = new Date().toISOString()
+              // pix_sent_amount = valor do PRÓPRIO repasse (não o total do lote);
+              // o id da transferência é que liga os repasses do mesmo saque.
+              const marks = await Promise.all(ids.map(id =>
+                supabase
+                  .from('low_value_transfers')
+                  .update({
+                    pix_sent_at:     nowIso,
+                    pix_transfer_id: sweep.transferId ?? null,
+                    pix_sent_amount: netById.get(id) ?? null,
+                    updated_at:      nowIso,
+                  })
+                  .eq('id', id)
+                  .is('pix_sent_at', null)
+              ))
+              return { error: marks.find(m => m.error)?.error ?? null }
+            },
+          })
+        } finally {
+          await releasePayoutLock(supabase, batch.producerId, lock.token)
+        }
+
+        const result = run.result
         if (!result.swept) {
           pixSkipped++
           console.warn(`[release-low-value-transfers] PIX não enviado produtor=${batch.producerId} motivo=${result.reason}${result.error ? ' ' + result.error : ''}`)
           continue
         }
 
-        const coveredIds = pickCoveredCommissionIds(batch.items, result.value)
-        if (coveredIds.length > 0) {
-          const nowIso = new Date().toISOString()
-          // pix_sent_amount = valor do PRÓPRIO repasse (não o total do lote);
-          // o id da transferência é que liga os repasses do mesmo saque.
-          const netById = new Map(batch.items.map(i => [i.id, i.net]))
-          const marks = await Promise.all(coveredIds.map(id =>
-            supabase
-              .from('low_value_transfers')
-              .update({
-                pix_sent_at:     nowIso,
-                pix_transfer_id: result.transferId ?? null,
-                pix_sent_amount: netById.get(id) ?? null,
-                updated_at:      nowIso,
-              })
-              .eq('id', id)
-              .is('pix_sent_at', null)
-          ))
-          const markErr = marks.find(m => m.error)?.error
-          if (markErr) {
-            // Dinheiro já saiu: logar alto, não reverter. Sem a marca o próximo
-            // ciclo tentaria sacar de novo (limitado ao saldo real da subconta).
-            console.error(`[release-low-value-transfers] ERRO ao marcar pix_sent_at produtor=${batch.producerId} transfer=${result.transferId}: ${markErr.message}`)
-          }
-        }
         pixSent++
-        console.log(`[release-low-value-transfers] PIX enviado produtor=${batch.producerId} valor=R$${result.value} itens=${coveredIds.length}/${batch.items.length} transfer=${result.transferId}`)
+        console.log(`[release-low-value-transfers] PIX enviado produtor=${batch.producerId} valor=R$${result.value} itens=${run.coveredCount}/${batch.items.length} transfer=${result.transferId}`)
       }
     }
 
