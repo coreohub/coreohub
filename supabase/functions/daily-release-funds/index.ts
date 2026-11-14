@@ -15,7 +15,9 @@
 // Manual run pra debug: POST direto com service-role.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sweepProducerBalance, getTransferStatus, pickCoveredCommissionIds } from '../_shared/asaas-payouts.ts'
+import { getTransferStatus } from '../_shared/asaas-payouts.ts'
+import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
+import { runPlannedPayout, type PlannedPayoutResult } from '../_shared/payout-run.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -160,31 +162,59 @@ Deno.serve(async (req) => {
         continue
       }
 
-      const result = await sweepProducerBalance({
-        producerApiKey: bucket.apiKey,
-        producerPixKey: bucket.pixKey,
-        asaasBaseUrl,
-        description:    `CoreoHub — liberação automática D+7 (${bucket.commissionIds.length} comissões)`,
-        amount:         totalRounded,
-      })
+      // Trava por produtor: o botão "Transferir agora" pode estar sacando as
+      // mesmas linhas neste instante. Sem a trava, o produtor recebe em dobro.
+      const lockToken = await acquirePayoutLock(supabase, bucket.producerId)
+      if (!lockToken) {
+        console.warn(`[daily-release-funds] produtor=${bucket.producerId} (${bucket.fullName}) repasse em andamento (trava) — skip`)
+        producersSkip++
+        continue
+      }
 
-      if (result.swept) {
-        const nowIso = new Date().toISOString()
-        const { error: updErr } = await supabase
+      let run: PlannedPayoutResult
+      try {
+        // Relê as linhas DENTRO da trava: entre a query do início do cron e agora
+        // o botão manual pode ter liberado algumas.
+        const { data: fresh, error: fErr } = await supabase
           .from('platform_commissions')
-          .update({
-            released_at:         nowIso,
-            released_amount:     result.value,
-            release_transfer_id: result.transferId ?? null,
-            released_manually:   false,
+          .select('id, net_amount, refund_amount')
+          .in('id', bucket.commissionIds)
+          .is('released_at', null)
+          .is('refunded_at', null)
+        if (fErr) {
+          run = { result: { swept: false, value: 0, reason: 'recheck_failed', error: fErr.message }, coveredCount: 0, coveredIds: [], due: 0 }
+        } else {
+          const freshById = new Map<string, any>((fresh ?? []).map((r: any) => [r.id, r]))
+          // Mantém a ordem original (mais antigas primeiro).
+          const items = bucket.items
+            .filter((it) => freshById.has(it.id))
+            .map((it) => {
+              const r = freshById.get(it.id)
+              return { id: it.id, net: parseFloat((Number(r.net_amount ?? 0) - Number(r.refund_amount ?? 0)).toFixed(2)) }
+            })
+            .filter((it) => it.net > 0)
+          run = await runPlannedPayout({
+            supabase,
+            items,
+            producerApiKey:   bucket.apiKey,
+            producerPixKey:   bucket.pixKey,
+            asaasBaseUrl,
+            description:      `CoreoHub — liberação automática D+7 (${items.length} comissões)`,
+            releasedManually: false,
           })
-          .in('id', pickCoveredCommissionIds(bucket.items, result.value))
-        if (updErr) {
-          console.error(`[daily-release-funds] ERRO update produtor=${bucket.producerId}:`, updErr.message)
         }
+      } finally {
+        await releasePayoutLock(supabase, bucket.producerId, lockToken)
+      }
+
+      const result = run.result
+      if (result.swept) {
+        // Saque = soma exata das linhas marcadas; o e-mail e o log usam só elas.
+        bucket.commissionIds = run.coveredIds
         console.log(
           `[daily-release-funds] OK produtor=${bucket.producerId} (${bucket.fullName})` +
-          ` valor=R$${result.value} commissions=${bucket.commissionIds.length} transfer=${result.transferId}`
+          ` valor=R$${result.value} commissions=${run.coveredCount} transfer=${result.transferId}` +
+          (run.due > result.value ? ` (devido R$${run.due}, o resto fica pro próximo ciclo)` : '')
         )
         producersOk++
         totalReleased += result.value
@@ -230,7 +260,7 @@ Deno.serve(async (req) => {
           ` (${bucket.commissionIds.length} comissões pendentes R$${totalRounded})`
         )
         producersSkip++
-        // Comissões NÃO são marcadas — entram no próximo ciclo. Asaas pode
+        // Comissões NÃO são marcadas (nada foi sacado) — entram no próximo ciclo. Asaas pode
         // estar retentando, KYC pode estar pendente, PIX inválido etc.
         // [ALERT] emitido se for falha técnica recorrente.
         const TECH_FAILS = new Set(['transfer_failed', 'pix_invalid', 'kyc_pending', 'exception'])
