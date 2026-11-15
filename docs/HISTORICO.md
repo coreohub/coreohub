@@ -4,6 +4,17 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-11-15 — Auditoria de segurança: Lote 1 (dinheiro, auth, RLS), Passos 1 a 6 ✅ em produção, 7 e 8 pendentes
+
+- **Origem:** auditoria em 2 rodadas (`docs/auditoria/`, 61 achados na rodada 1; rodada 2: 37 novos), desenho do Lote 1 pelo Fable (`docs/auditoria/DESENHO-lote1.md`). Cada passo tem migration/edge, script de reversão (`passoN-reverter.sql`) e teste que desfaz sozinho (`passoN-teste.sql`).
+- **Passo 1 (`becd335`, edges no ar):** `create-payment-asaas` e `create-video-selection-payment` usam o `event_id` da INSCRIÇÃO (o do corpo vira só aviso `[SECURITY] event_id divergente`); avulsa recusa inscrição já paga.
+- **Passo 2 (`938057e`):** `profiles` fechada contra DELETE+INSERT (crítico confirmado em teste: usuário comum virava super admin); `producer_terms_versions` + RPC `accept_producer_terms` valida a versão. **Ao publicar Termo novo, inserir a versão em `producer_terms_versions` ANTES do deploy do frontend.**
+- **Passo 3 (`1083f1e`):** `registrations` com regra por papel (inscrito / equipe do evento / serviço), trava de elenco após pagamento (`ELENCO_BLOQUEADO_APOS_PAGAMENTO`), gatilho de DELETE (`INSCRICAO_PAGA_NAO_PODE_SER_APAGADA`).
+- **Passo 4 (`0ef6e7d`):** `events` protegido também no INSERT (comissão, plano, setup, `is_demo`); gatilho renomeado `aa_protect_commission_columns_trigger` para rodar ANTES dos gates de Termo/taxa de plano, que confiavam em `is_demo`.
+- **Passo 5 (`a7ad02c`, `3a3e8c0`):** tabela `payment_expectations` (só service_role) gravada pelas 3 edges de cobrança (REG, VS, AGG).
+- **Passo 6 (`93a4ded`, webhook no ar):** `asaas-webhook` confere o pagamento contra `payment_expectations` via `_shared/payment-check.ts`. Segredos: `PAYMENT_CHECK_MODE=observe` (só loga `[ALERT][PAYMENT_MISMATCH]`, marca `anomaly`) e `PAYMENT_CHECK_CUTOFF=2026-11-15T19:16:37Z`. Saída de emergência: `PAYMENT_CHECK_MODE=off`. Revisado pelo Fable.
+- **Falta:** (a) conferir o 1º pagamento real: log `[PAYMENT_CHECK] ... ok` e linha em `payment_expectations` com valor igual ao da Asaas; (b) **Passo 7 (`enforce`) só depois de 14 dias sem falso positivo E dos pré-requisitos do Fable**: estado próprio "em análise" que os crons `expire-pending-payments`/`send-payment-reminders` e as edges de cobrança respeitem; aviso ao admin + procedimento manual (a Asaas já repartiu o dinheiro); tratar cobrança sem linha esperada criada após o corte; `roster_grew` só quando o preço depende do elenco; (c) Passo 8, limpeza do cliente (`ADMIN_EMAILS`, `event_id` nos bodies, erro em `Registrations.tsx:1163`); (d) Lote 2 (repasse, `judge-login` PIN, storage, anon REVOKE, `search_path`, npm audit). Nada disso foi dado push: tudo está só na `dev` local.
+
 ### 2026-11-14 — `dev` recriada a partir da `main` (fim da divergência de hashes) ✅
 
 - **Diagnóstico:** `git cherry` mostrou que 57 dos 63 commits "só da dev" tinham patch idêntico na main (cherry-pick com outro hash); os outros 5 também (diferença de 0 a 4 linhas) e o 6º (`9dbf688`, doc do send-email v90) já estava na main. Merge de teste `dev` → `main`: 19 conflitos, e em todos a main prevalece (a dev não tinha commit exclusivo nesses arquivos).
