@@ -14,9 +14,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { registration_id, event_id, coupon_id, coupon_code } = await req.json()
-    if (!registration_id || !event_id) {
-      throw new Error('registration_id e event_id são obrigatórios.')
+    const { registration_id, event_id: bodyEventId, coupon_id, coupon_code } = await req.json()
+    if (!registration_id) {
+      throw new Error('registration_id é obrigatório.')
     }
 
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
@@ -41,6 +41,18 @@ Deno.serve(async (req) => {
 
     if (!coreo) throw new Error(`Inscrição não encontrada: ${coreoErr?.message ?? 'id inexistente em registrations'}`)
     if (coreo.user_id !== user.id) throw new Error('Sem permissão para esta inscrição.')
+
+    // event_id vem SEMPRE da inscrição (auditoria 2026-11-15, L1): o valor enviado pelo
+    // cliente não é confiável. Cruzar a inscrição de um evento com outro evento fazia a
+    // cobrança sair com o preço, a comissão e a carteira do evento errado.
+    if (!coreo.event_id) throw new Error('Inscrição sem evento.')
+    const event_id: string = coreo.event_id
+    if (bodyEventId && bodyEventId !== event_id) {
+      console.warn('[SECURITY] event_id divergente', { user: user.id, registration_id, body_event_id: bodyEventId, registration_event_id: event_id })
+    }
+    if (coreo.status_pagamento === 'APROVADO' || coreo.status_pagamento === 'CONFIRMADO') {
+      throw new Error('Inscrição já paga.')
+    }
 
     // ── 2. Perfil do inscrito ────────────────────────────────────────────────
     const { data: inscritoProfile } = await supabase
