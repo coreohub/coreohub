@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../_shared/asaas-env.ts'
 import { cardCreditFallback } from '../_shared/card-credit-date.ts'
+import { paymentCheckMode, checkPaymentExpectation, markExpectationAnomaly } from '../_shared/payment-check.ts'
 import { requestInstallmentAnticipation } from '../_shared/asaas-anticipation.ts'
 import {
   allocateProportional,
@@ -101,6 +102,61 @@ async function notifySuperAdmins(supabase: any, opts: {
   } catch (e) {
     console.error('[asaas-webhook] falha ao notificar super admins:', (e as Error).message)
   }
+}
+
+/** Conferência do pagamento contra payment_expectations (auditoria 2026-11-15, Lote 1, L1-c).
+ *  Segredo PAYMENT_CHECK_MODE: off (padrão) | observe | enforce. Só age em APROVADO.
+ *  - off:     retorna null sem consultar nada.
+ *  - observe: confere e LOGA; sempre retorna null (o fluxo segue exatamente como antes).
+ *  - enforce: se houver divergência que prejudica (valor menor, evento trocado, elenco maior),
+ *             retorna uma Response 200 e o chamador NÃO aprova (a inscrição fica PENDENTE).
+ *  Nunca lança: erro de leitura vira "ok" (checkPaymentExpectation). */
+async function paymentCheckGate(supabase: any, opts: {
+  kind: 'REG' | 'VS' | 'AGG'
+  payment: any
+  statusInterno: string
+  registrationId?: string | null
+  paymentGroupId?: string | null
+}): Promise<Response | null> {
+  if (opts.statusInterno !== 'APROVADO') return null
+  const mode = paymentCheckMode(Deno.env.get('PAYMENT_CHECK_MODE'))
+  if (mode === 'off') return null
+  try {
+    const v = await checkPaymentExpectation(supabase, {
+      kind: opts.kind, payment: opts.payment,
+      registrationId: opts.registrationId, paymentGroupId: opts.paymentGroupId,
+    })
+    const tag = `kind=${opts.kind} payment=${opts.payment?.id} mode=${mode}`
+    if (!v.ok) {
+      console.error(
+        `[ALERT][PAYMENT_MISMATCH] ${tag} reasons=${v.reasons.join(',')}` +
+        ` expected=${v.expectedTotal} received=${v.receivedValue}` +
+        (opts.registrationId ? ` registration=${opts.registrationId}` : '') +
+        (opts.paymentGroupId ? ` group=${opts.paymentGroupId}` : '')
+      )
+      await markExpectationAnomaly(supabase, String(opts.payment?.id), v.reasons, mode)
+      if (mode === 'enforce') {
+        return new Response(
+          JSON.stringify({ status: 'held_payment_mismatch', payment_id: String(opts.payment?.id), reasons: v.reasons }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else if (v.reasons.length > 0) {
+      // Cobrança criada DEPOIS do deploy da gravação (PAYMENT_CHECK_CUTOFF, ISO) e sem linha esperada:
+      // a gravação falhou ou foi pulada. Só mede em observe; vira divergência antes do enforce.
+      const cutoff = Date.parse(Deno.env.get('PAYMENT_CHECK_CUTOFF') ?? '')
+      const created = Date.parse(String(opts.payment?.dateCreated ?? ''))
+      if (v.reasons.includes('no_expectation') && Number.isFinite(cutoff) && Number.isFinite(created) && created >= cutoff) {
+        console.error(`[ALERT][PAYMENT_EXPECTATION_MISSING] ${tag} dateCreated=${opts.payment?.dateCreated} cutoff=${Deno.env.get('PAYMENT_CHECK_CUTOFF')}`)
+      }
+      console.warn(`[PAYMENT_CHECK] ${tag} ok reasons=${v.reasons.join(',')} expected=${v.expectedTotal} received=${v.receivedValue}`)
+    } else {
+      console.log(`[PAYMENT_CHECK] ${tag} ok expected=${v.expectedTotal} received=${v.receivedValue}`)
+    }
+  } catch (e) {
+    console.error('[asaas-webhook] paymentCheckGate falhou (segue):', (e as Error)?.message)
+  }
+  return null
 }
 
 /** Pixel ID + Measurement ID master da CoreoHub. Espelha index.html. */
@@ -1383,6 +1439,10 @@ async function handleAggregatePayment(opts: {
     }
   }
 
+  // Conferência contra o que a edge de cobrança esperava (PAYMENT_CHECK_MODE; observe só loga).
+  const heldAgg = await paymentCheckGate(supabase, { kind: 'AGG', payment, statusInterno, paymentGroupId: paymentId })
+  if (heldAgg) return heldAgg
+
   if (STALE_DOWNGRADE_STATUSES.has(statusInterno)) {
     const { data: currentPayment } = await supabase
       .from('payments')
@@ -1834,6 +1894,10 @@ async function handleVideoSelectionFee(opts: {
       return respond({ status: 'already_processed' })
     }
   }
+
+  // Conferência contra o que a edge de cobrança esperava (PAYMENT_CHECK_MODE; observe só loga).
+  const heldVs = await paymentCheckGate(supabase, { kind: 'VS', payment, statusInterno, registrationId })
+  if (heldVs) return heldVs
 
   // Mapeia status interno → video_fee_status
   // APROVADO → paid (libera upload de vídeo)
@@ -2718,6 +2782,10 @@ Deno.serve(async (req) => {
         return ok({ status: 'already_processed' })
       }
     }
+
+    // Conferência contra o que a edge de cobrança esperava (PAYMENT_CHECK_MODE; observe só loga).
+    const heldReg = await paymentCheckGate(supabase, { kind: 'REG', payment, statusInterno, registrationId })
+    if (heldReg) return heldReg
 
     // Defesa contra cobrança duplicada/abandonada OU evento fora de ordem da
     // MESMA cobrança sobrescrevendo pagamento real. É comum o inscrito gerar
