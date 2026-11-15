@@ -102,7 +102,7 @@ const base: SeatSelectionCtx = {
 describe('seatBlockReason', () => {
   it('comum: livre até o limite de ingressos comuns', () => {
     expect(seatBlockReason(base)).toBeNull()
-    expect(seatBlockReason({ ...base, selectedComum: 2 })).toMatch(/ingressos comuns/)
+    expect(seatBlockReason({ ...base, selectedComum: 2 })).toMatch(/Para trocar um, toque nele para desmarcar/)
   })
   it('pedido só de PCD/acompanhante: assento comum recusado com mensagem própria', () => {
     expect(seatBlockReason({ ...base, comumQty: 0, pcdQty: 1 })).toMatch(/PCD, para pessoa obesa ou de acompanhante/)
