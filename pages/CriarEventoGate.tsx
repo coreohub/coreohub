@@ -81,8 +81,8 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
 
       if (!profile) {
         // Primeiro login (via Google geralmente) — cria profile com role ORGANIZER.
-        // INSERT não é afetado pelo trigger protect_profiles_privileged_columns
-        // (que só dispara em UPDATE), então funciona direto do client.
+        // O trigger protect_profiles_privileged_columns também cobre INSERT (Passo 2 do Lote 1):
+        // só aceita role USER/ORGANIZER/INDEPENDENT/inscrito (qualquer outro vira USER).
         await supabase.from('profiles').insert({
           id:         user.id,
           email:      user.email ?? '',

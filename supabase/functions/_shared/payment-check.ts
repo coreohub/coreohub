@@ -9,6 +9,8 @@
 // Regra de ouro: este módulo NUNCA lança. Qualquer falha de leitura vira veredito "ok" com o motivo
 // 'check_error', para que um problema aqui jamais bloqueie um pagamento legítimo.
 
+import { countBailarinos } from './payment-expectations.ts'
+
 export type PaymentCheckMode = 'off' | 'observe' | 'enforce'
 
 export function paymentCheckMode(raw: string | null | undefined): PaymentCheckMode {
@@ -22,10 +24,6 @@ export interface PaymentCheckVerdict {
   reasons: string[]           // códigos curtos (event_mismatch, value_below_expected, roster_grew, ...)
   expectedTotal: number | null
   receivedValue: number | null
-}
-
-function bailarinosCount(detalhes: unknown): number {
-  return Array.isArray(detalhes) ? detalhes.length : 0
 }
 
 // deno-lint-ignore no-explicit-any
@@ -89,7 +87,7 @@ export async function checkPaymentExpectation(supabase: Sb, opts: {
       const reg = row.registration_id ? regById.get(row.registration_id) : undefined
       if (!reg) { reasons.push('registration_missing'); continue }
       if (row.event_id && reg.event_id !== row.event_id) { reasons.push('event_mismatch'); bad = true }
-      if (row.bailarinos_count != null && bailarinosCount(reg.bailarinos_detalhes) > row.bailarinos_count) {
+      if (row.bailarinos_count != null && countBailarinos(reg.bailarinos_detalhes) > row.bailarinos_count) {
         reasons.push('roster_grew'); bad = true
       }
     }
