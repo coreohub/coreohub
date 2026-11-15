@@ -4,7 +4,9 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
-### 2026-11-15 — Auditoria de segurança: Lote 1 (dinheiro, auth, RLS), Passos 1 a 6 ✅ em produção, 7 e 8 pendentes
+### 2026-11-15 — Auditoria de segurança: Lote 1 (dinheiro, auth, RLS), Passos 1 a 6 e 8 ✅ (7 pendente)
+**Atualização (mesmo dia):** Passo 8 feito (a2ded04: sem promoção a admin por e-mail no cliente; erro da triagem tratado). Teste de pagamento no sandbox Asaas (cartão de teste, evento de teste, fatura agregada): cobrança gravou `payment_expectations` (26,98), o webhook em `observe` aprovou a inscrição, gravou 1 comissão e deixou `anomaly` nulo. Dados do teste e a função temporária `tmp-sandbox-pay` foram apagados. Testes de rollback dos passos 2, 3, 4 e 5 re-rodados: todos passam.
+
 
 - **Origem:** auditoria em 2 rodadas (`docs/auditoria/`, 61 achados na rodada 1; rodada 2: 37 novos), desenho do Lote 1 pelo Fable (`docs/auditoria/DESENHO-lote1.md`). Cada passo tem migration/edge, script de reversão (`passoN-reverter.sql`) e teste que desfaz sozinho (`passoN-teste.sql`).
 - **Passo 1 (`becd335`, edges no ar):** `create-payment-asaas` e `create-video-selection-payment` usam o `event_id` da INSCRIÇÃO (o do corpo vira só aviso `[SECURITY] event_id divergente`); avulsa recusa inscrição já paga.
