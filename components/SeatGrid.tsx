@@ -349,7 +349,7 @@ export default function SeatGrid(props: SeatGridProps) {
   const complete = totalQty > 0 && totalSel >= totalQty;
   const statusBar = mode === 'sell' && totalQty > 0 ? (
     <div className="mb-2 space-y-1.5">
-      <p role="status" aria-live="polite" className={`flex items-center gap-1.5 text-[11px] font-bold ${complete ? 'text-emerald-600 dark:text-emerald-400' : variant === 'dark' ? 'text-slate-300' : 'text-slate-600 dark:text-slate-300'}`}>
+      <p role="status" aria-live="polite" className={`flex items-center gap-1.5 text-[11px] font-bold ${complete ? (variant === 'dark' ? 'text-emerald-400' : 'text-emerald-600 dark:text-emerald-400') : variant === 'dark' ? 'text-slate-300' : 'text-slate-600 dark:text-slate-300'}`}>
         {complete && <Check size={13} aria-hidden="true" />}
         <span>
           {totalSel} de {totalQty} {totalQty === 1 ? 'lugar escolhido' : 'lugares escolhidos'}
@@ -357,7 +357,7 @@ export default function SeatGrid(props: SeatGridProps) {
         </span>
       </p>
       {notice && (
-        <p role="alert" className="text-[11px] font-medium rounded-lg px-3 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-400/40">
+        <p role="alert" className={`text-[11px] font-medium rounded-lg px-3 py-2 bg-amber-500/10 ${variant === 'dark' ? 'text-amber-300' : 'text-amber-700 dark:text-amber-300'} ring-1 ring-amber-400/40`}>
           {notice}
         </p>
       )}
