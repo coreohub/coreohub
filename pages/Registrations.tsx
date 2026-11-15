@@ -1160,7 +1160,9 @@ const Registrations = () => {
       const r = await registrationStatusAction('producer_disqualify', regId);
       if (!r.ok) { alert(r.error ?? 'Não foi possível desclassificar.'); return; }
     } else {
-      await supabase.from('registrations').update(update).eq('id', regId);
+      // Checa o erro: com a proteção de colunas (RLS/trigger) um UPDATE negado não pode parecer salvo.
+      const { error: triageErr } = await supabase.from('registrations').update(update).eq('id', regId);
+      if (triageErr) { alert(`Não foi possível salvar a decisão: ${triageErr.message}`); return; }
     }
     setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, ...update } : r));
     setTriageAction(null);

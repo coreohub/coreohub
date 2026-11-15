@@ -1,15 +1,10 @@
 import { supabase } from './supabase';
 import { Profile, UserRole } from '../types';
 
-// Emails com acesso de Super Admin. Emails legados (*@usualdance.*) permanecem
-// temporariamente para não bloquear acesso durante a transição para CoreoHub —
-// remover após confirmar migração completa da equipe.
-const ADMIN_EMAILS = [
-  'admin@coreohub.com',
-  'coreohub@gmail.com',
-  'admin@usualdance.com.br',
-  'usualdance@gmail.com',
-];
+// Promoção a admin NÃO acontece no cliente: `role` e `is_super_admin` são colunas protegidas
+// (trigger protect_profiles_privileged_columns reverte UPDATE e força INSERT). Quem concede
+// é o banco/serviço. A lista de e-mails de admin que existia aqui era código morto e expunha
+// os endereços no bundle (auditoria 2026-11-15, Passo 8).
 
 export const getOrCreateProfile = async (user: any): Promise<Profile | null> => {
   if (!user) return null;
@@ -42,30 +37,15 @@ export const getOrCreateProfile = async (user: any): Promise<Profile | null> => 
         Object.assign(existingProfile, updates);
       }
 
-      if (user.email && ADMIN_EMAILS.includes(user.email) && existingProfile.role !== UserRole.COREOHUB_ADMIN) {
-        // Item 39: maybeSingle pra evitar PGRST116 caso o UPDATE não toque
-        // nenhuma linha (trigger protect_profiles_privileged_columns pode
-        // reverter, ou profile pode ter sido deletado entre fetch e update).
-        // Promoção a admin é best-effort — falha cai pra existingProfile.
-        const { data: updatedProfile } = await supabase
-          .from('profiles')
-          .update({ role: UserRole.COREOHUB_ADMIN })
-          .eq('id', user.id)
-          .select()
-          .maybeSingle();
-        if (updatedProfile) return updatedProfile as Profile;
-      }
       return existingProfile as Profile;
     }
-
-    const isAdminEmail = user.email && ADMIN_EMAILS.includes(user.email);
 
     const newProfile: any = {
       id: user.id,
       full_name: fullNameFromProvider || user.email?.split('@')[0] || 'Novo Usuário',
       email: user.email,
       avatar_url: avatarFromProvider,  // Google foto vai pro perfil automaticamente
-      role: isAdminEmail ? UserRole.COREOHUB_ADMIN : UserRole.INDEPENDENT,
+      role: UserRole.INDEPENDENT,
     };
 
     const { data: createdProfile, error: insertError } = await supabase
