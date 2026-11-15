@@ -5,6 +5,7 @@ import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { normalizeInstallments } from '../_shared/processing-fee.ts'
 import { computeInscricaoCheckout, inscricaoLineApplies } from '../_shared/inscricao-checkout.ts'
+import { recordPaymentExpectations, countBailarinos } from '../_shared/payment-expectations.ts'
 
 // Cria a cobrança Asaas da TAXA DE SELETIVA (Modelo 3 - Catanduva/SESI/CaconDance).
 // Distinto de create-payment-asaas (cobrança da inscrição cheia) porque:
@@ -338,6 +339,19 @@ Deno.serve(async (req) => {
       console.error('[create-video-selection-payment] erro Asaas:', payData)
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança de seletiva')
     }
+
+    // ── 9-bis. O que esperamos receber desta cobrança (conferido pelo webhook) ──
+    await recordPaymentExpectations(supabase, [{
+      asaas_payment_id:   String(payData.id),
+      registration_id:    registration_id,
+      kind:               'VS',
+      event_id:           event_id,
+      producer_wallet_id: skipSplit ? null : (producer.asaas_wallet_id ?? null),
+      expected_value:     chargedAmount,
+      installments:       installments,
+      formato:            coreo.formato_participacao ?? null,
+      bailarinos_count:   countBailarinos(coreo.bailarinos_detalhes),
+    }], 'create-video-selection-payment')
 
     // ── 10. Salva marker em registrations ───────────────────────────────────
     await supabase

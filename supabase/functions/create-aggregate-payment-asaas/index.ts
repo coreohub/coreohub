@@ -13,6 +13,7 @@ import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { normalizeInstallments } from '../_shared/processing-fee.ts'
 import { computeInscricaoCheckout, inscricaoLineApplies } from '../_shared/inscricao-checkout.ts'
+import { recordPaymentExpectations, expectedPerItem, countBailarinos } from '../_shared/payment-expectations.ts'
 
 type RegistrationRow = {
   id:                    string
@@ -808,6 +809,23 @@ Deno.serve(async (req) => {
       .eq('id', paymentId)
     if (updPayErr) {
       console.warn('[create-aggregate-payment-asaas] update payment parcial:', updPayErr.message)
+    }
+
+    // ── 10-bis. O que esperamos receber desta fatura (conferido pelo webhook) ──
+    // Uma linha por inscrição; a soma das linhas = chargedTotal (value enviado à Asaas).
+    {
+      const parts = expectedPerItem(priced.map(p => p.charged), itemFees, chargedTotal)
+      await recordPaymentExpectations(supabase, priced.map((p, k) => ({
+        asaas_payment_id:   String(payData.id),
+        registration_id:    p.reg.id as string,
+        kind:               'AGG' as const,
+        event_id:           event_id,
+        producer_wallet_id: (useNoSplitAbsorb || skipSplit) ? null : (producer.asaas_wallet_id ?? null),
+        expected_value:     parts[k],
+        installments:       installments,
+        formato:            p.reg.formato_participacao ?? null,
+        bailarinos_count:   countBailarinos(p.reg.bailarinos_detalhes),
+      })), 'create-aggregate-payment-asaas')
     }
 
     // ── 10a. Rastreio de repasse integral (sem split) ────────────────────────

@@ -4,6 +4,7 @@ import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
 import { inscricaoLineApplies } from '../_shared/inscricao-checkout.ts'
+import { recordPaymentExpectations, countBailarinos } from '../_shared/payment-expectations.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -494,6 +495,19 @@ Deno.serve(async (req) => {
       delete updatePayload.discount_amount
       await supabase.from('registrations').update(updatePayload).eq('id', registration_id)
     }
+
+    // ── 10-bis. O que esperamos receber desta cobrança (conferido pelo webhook) ──
+    await recordPaymentExpectations(supabase, [{
+      asaas_payment_id:   String(payData.id),
+      registration_id:    registration_id,
+      kind:               'REG',
+      event_id:           event_id,
+      producer_wallet_id: useNoSplitAbsorb ? null : (producer.asaas_wallet_id ?? null),
+      expected_value:     chargedAmount,
+      installments:       1,
+      formato:            formacaoUsada,
+      bailarinos_count:   countBailarinos(coreo.bailarinos_detalhes),
+    }], 'create-payment-asaas')
 
     // ── 10a. Rastreio de repasse integral (sem split) ────────────────────────
     if (useNoSplitAbsorb) {
