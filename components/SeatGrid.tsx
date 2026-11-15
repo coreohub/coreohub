@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Loader2, Accessibility, Minus, Plus, Maximize2, X, RotateCcw, ArrowLeftRight, Users, Ban } from 'lucide-react';
+import { Loader2, Accessibility, Minus, Plus, Maximize2, X, RotateCcw, ArrowLeftRight, Users, Ban, Check } from 'lucide-react';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
 import { displayOrder, seatSide } from '../utils/venueRows';
 import { companionBySpecial, isSpecialTipo, seatBlockReason, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
@@ -71,6 +71,14 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 export default function SeatGrid(props: SeatGridProps) {
   const { rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors, maxFit = 1, fullscreenable = false, tall = false } = props;
   const [full, setFull] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotice = (text: string) => {
+    setNotice(text);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 4500);
+  };
+  useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
   useEffect(() => {
     if (!full) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false); };
@@ -292,7 +300,12 @@ export default function SeatGrid(props: SeatGridProps) {
                   <button
                     type="button"
                     onClick={e => {
-                      if (locked) { onBlocked?.(reason!); return; }
+                      if (locked) {
+                        // Venda: aviso local e temporário (não fica preso na tela). Bloqueio: segue pro chamador.
+                        if (mode === 'sell') showNotice(reason!); else onBlocked?.(reason!);
+                        return;
+                      }
+                      setNotice(null);
                       handleSeatClick(seatId, e);
                     }}
                     disabled={isTaken && !isSelected}
@@ -320,10 +333,41 @@ export default function SeatGrid(props: SeatGridProps) {
     </div>
   );
 
+  // Progresso da escolha (só na venda, e só quando o pedido informa as quantidades).
+  const selTipos = selectedSeats.map(tipoBySeat);
+  const selComum = selTipos.filter(t => t === 'comum').length;
+  const selEsp = selTipos.filter(t => isSpecialTipo(t)).length;
+  const selComp = selTipos.filter(t => t === 'acompanhante').length;
+  const comumKnown = comumQty !== Number.MAX_SAFE_INTEGER;
+  const parts = [
+    comumKnown && comumQty > 0 ? { label: 'comuns', sel: selComum, qty: comumQty } : null,
+    pcdQty > 0 ? { label: 'especiais', sel: selEsp, qty: pcdQty } : null,
+    compQty > 0 ? { label: 'acompanhante', sel: selComp, qty: compQty } : null,
+  ].filter((p): p is { label: string; sel: number; qty: number } => !!p);
+  const totalQty = parts.reduce((a, p) => a + p.qty, 0);
+  const totalSel = parts.reduce((a, p) => a + Math.min(p.sel, p.qty), 0);
+  const complete = totalQty > 0 && totalSel >= totalQty;
+  const statusBar = mode === 'sell' && totalQty > 0 ? (
+    <div className="mb-2 space-y-1.5">
+      <p role="status" aria-live="polite" className={`flex items-center gap-1.5 text-[11px] font-bold ${complete ? 'text-emerald-600 dark:text-emerald-400' : variant === 'dark' ? 'text-slate-300' : 'text-slate-600 dark:text-slate-300'}`}>
+        {complete && <Check size={13} aria-hidden="true" />}
+        <span>
+          {totalSel} de {totalQty} {totalQty === 1 ? 'lugar escolhido' : 'lugares escolhidos'}
+          {parts.length > 1 && <span className="font-medium opacity-75"> ({parts.map(p => `${p.label} ${Math.min(p.sel, p.qty)}/${p.qty}`).join(', ')})</span>}
+        </span>
+      </p>
+      {notice && (
+        <p role="alert" className="text-[11px] font-medium rounded-lg px-3 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-400/40">
+          {notice}
+        </p>
+      )}
+    </div>
+  ) : null;
+
   if (!canZoom) {
     // w-max + mx-auto: a grade centraliza quando cabe na tela e rola quando não cabe.
     // Fileiras com menos assentos ficam centralizadas (recuo natural nas pontas do teatro).
-    return <div className="overflow-x-auto pb-1">{grid}</div>;
+    return <div>{statusBar}<div className="overflow-x-auto pb-1">{grid}</div></div>;
   }
 
   const sizerW = natural.w * scale;
@@ -342,6 +386,7 @@ export default function SeatGrid(props: SeatGridProps) {
         </div>,
         document.body,
       )}
+      {statusBar}
       <div className="flex items-center justify-end gap-2 mb-2">
         <span className="mr-auto text-[10px] text-slate-500 sm:hidden">Toque num lugar para ampliar. Use dois dedos para dar zoom.</span>
         <button type="button" aria-label="Diminuir zoom do mapa" onClick={() => zoomTo(scale / 1.25)} disabled={scale <= MIN_SCALE + 0.01} className={`${ctrlClass} flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed`}>

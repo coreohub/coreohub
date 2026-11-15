@@ -53,7 +53,7 @@ export function seatBlockReason(c: SeatSelectionCtx): string | null {
   if (isSpecialTipo(c.tipo)) {
     if (c.liberado) return null;
     if (c.pcdQty <= 0) return 'Reservado para pessoas com deficiência ou obesidade. Escolha o ingresso PCD ou para pessoa obesa para usar este lugar.';
-    if (c.selectedSpecial >= c.pcdQty) return 'Você já escolheu os lugares especiais do seu pedido.';
+    if (c.selectedSpecial >= c.pcdQty) return `Você já escolheu ${c.pcdQty === 1 ? 'o lugar especial' : `os ${c.pcdQty} lugares especiais`}. Para trocar, toque no lugar escolhido para desmarcar.`;
     if (c.tipo === 'cadeirante' && (c.obesoQty ?? 0) > 0 && (c.selectedCadeirante ?? 0) >= c.pcdQty - (c.obesoQty ?? 0)) {
       return 'Este lugar é de cadeirante. O ingresso para pessoa obesa usa o assento largo.';
     }
@@ -62,12 +62,12 @@ export function seatBlockReason(c: SeatSelectionCtx): string | null {
   if (c.tipo === 'acompanhante') {
     if (c.liberado) return null;
     if (c.compQty <= 0) return 'Reservado ao acompanhante de uma pessoa com deficiência.';
-    if (c.selectedComp >= c.compQty) return 'Você já escolheu o lugar do acompanhante.';
+    if (c.selectedComp >= c.compQty) return `Você já escolheu ${c.compQty === 1 ? 'o lugar do acompanhante' : `os ${c.compQty} lugares de acompanhante`}. Para trocar, toque no lugar escolhido para desmarcar.`;
     if (!c.companionOk) return 'Escolha primeiro o lugar PCD ao lado deste.';
     return null;
   }
   if (c.comumQty <= 0) return 'Este pedido é de ingresso PCD, para pessoa obesa ou de acompanhante. Escolha um lugar marcado em azul no mapa.';
-  if (c.selectedComum >= c.comumQty) return 'Você já escolheu os lugares dos ingressos comuns. Ajuste a quantidade ou remova um lugar.';
+  if (c.selectedComum >= c.comumQty) return `Você já escolheu ${c.comumQty === 1 ? 'o lugar' : `os ${c.comumQty} lugares`}. Para trocar um, toque nele para desmarcar.`;
   return null;
 }
 
