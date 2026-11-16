@@ -316,6 +316,10 @@ export interface PermissoesCustom {
   /** Publica Avisos vistos por todos os inscritos do evento. Mesma
    *  classe de achado do controle_telao — rota sem gate até 2026-07-10. */
   gerenciar_avisos: boolean;
+  /** Trocar o lugar de ingresso já pago (mesma zona/preço, sem mexer em dinheiro).
+   *  Desligada por padrão. Precisa também de vendas_ingressos (a tela fica lá).
+   *  O banco confere de novo (swap_seat_actor_role). */
+  trocar_assento: boolean;
 }
 
 export const PERMISSOES_DEFAULT: PermissoesCustom = {
@@ -340,6 +344,7 @@ export const PERMISSOES_DEFAULT: PermissoesCustom = {
   resultados_leitura: false,
   controle_telao: false,
   gerenciar_avisos: false,
+  trocar_assento: false,
 };
 
 export interface Profile {

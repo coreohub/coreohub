@@ -9,8 +9,18 @@ export const SWAP_REASON_MAX = 200
 const SEAT_ID_RE = /^[A-Za-z0-9]{1,6}-\d{1,4}$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+export const SWAP_MAX_ITEMS = 10
+
+export interface SwapItem {
+  ticketId: string
+  newSeatId: string
+}
+
 export interface SwapInput {
   eventId: string
+  /** 1 ingresso (corpo antigo) ou varios do mesmo pedido (corpo `swaps`). */
+  items: SwapItem[]
+  /** Atalhos do primeiro item (compatibilidade com o corpo de 1 ingresso). */
   ticketId: string
   newSeatId: string
   releaseOld: boolean
@@ -20,21 +30,43 @@ export interface SwapInput {
 
 export type SwapParse = { ok: true; value: SwapInput } | { ok: false; error: string }
 
-/** Valida o corpo da requisicao. Opcoes omitidas assumem o padrao: liberar o antigo e avisar a cliente. */
+/**
+ * Valida o corpo. Aceita { ticket_id, new_seat_id } (1 ingresso) OU
+ * { swaps: [{ ticket_id, new_seat_id }] } (pedido inteiro, ate 10). Opcoes omitidas
+ * assumem o padrao: liberar o antigo e avisar a cliente.
+ */
 export function parseSwapBody(body: unknown): SwapParse {
   const b = (body ?? {}) as Record<string, unknown>
   const eventId = typeof b.event_id === 'string' ? b.event_id.trim() : ''
-  const ticketId = typeof b.ticket_id === 'string' ? b.ticket_id.trim() : ''
-  const newSeatId = typeof b.new_seat_id === 'string' ? b.new_seat_id.trim() : ''
   if (!UUID_RE.test(eventId)) return { ok: false, error: 'event_id inválido' }
-  if (!UUID_RE.test(ticketId)) return { ok: false, error: 'ticket_id inválido' }
-  if (!SEAT_ID_RE.test(newSeatId)) return { ok: false, error: 'Lugar inválido' }
+
+  const rawItems: Array<Record<string, unknown>> = Array.isArray(b.swaps)
+    ? (b.swaps as Array<Record<string, unknown>>)
+    : [{ ticket_id: b.ticket_id, new_seat_id: b.new_seat_id }]
+  if (rawItems.length === 0) return { ok: false, error: 'Informe ao menos um ingresso' }
+  if (rawItems.length > SWAP_MAX_ITEMS) return { ok: false, error: `Máximo de ${SWAP_MAX_ITEMS} ingressos por troca` }
+
+  const items: SwapItem[] = []
+  const seenT = new Set<string>()
+  const seenS = new Set<string>()
+  for (const it of rawItems) {
+    const ticketId = typeof it?.ticket_id === 'string' ? it.ticket_id.trim() : ''
+    const newSeatId = typeof it?.new_seat_id === 'string' ? it.new_seat_id.trim() : ''
+    if (!UUID_RE.test(ticketId)) return { ok: false, error: 'ticket_id inválido' }
+    if (!SEAT_ID_RE.test(newSeatId)) return { ok: false, error: 'Lugar inválido' }
+    if (seenT.has(ticketId)) return { ok: false, error: 'Ingresso repetido na troca' }
+    if (seenS.has(newSeatId)) return { ok: false, error: 'O mesmo lugar foi escolhido para mais de um ingresso' }
+    seenT.add(ticketId)
+    seenS.add(newSeatId)
+    items.push({ ticketId, newSeatId })
+  }
   return {
     ok: true,
     value: {
       eventId,
-      ticketId,
-      newSeatId,
+      items,
+      ticketId: items[0].ticketId,
+      newSeatId: items[0].newSeatId,
       releaseOld: b.release_old === undefined ? true : b.release_old === true,
       notifyBuyer: b.notify_buyer === undefined ? true : b.notify_buyer === true,
       reason: sanitizeSwapReason(b.reason),

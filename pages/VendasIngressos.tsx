@@ -24,6 +24,7 @@ import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
 import SeatZoneLegend from '../components/SeatZoneLegend';
 import SwapSeatModal from '../components/SwapSeatModal';
+import SeatChangeHistory from '../components/SeatChangeHistory';
 import { swapBlockedReason } from '../utils/seatSwap';
 import { priceForZone, priceRangeForType, zonePricingActive, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
@@ -195,6 +196,8 @@ const VendasIngressos: React.FC = () => {
 
   // Bloqueio de lugares (docs/plano-bloqueio-assentos.md): só dono e super admin.
   const [canManageBlocks, setCanManageBlocks] = useState(false);
+  // Trocar lugar: dono/super admin OU equipe com a permissao trocar_assento (o banco confere de novo).
+  const [canSwapSeats, setCanSwapSeats] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
   const [blockSelected, setBlockSelected] = useState<string[]>([]);
@@ -248,18 +251,23 @@ const VendasIngressos: React.FC = () => {
         let allowed = Boolean(me && (ev as any)?.created_by === me.id);
         let superAdmin = false;
         let adminLike = false;
+        let teamSwap = false;
         if (me) {
-          const { data: prof, error: profErr } = await supabase.from('profiles').select('is_super_admin, role').eq('id', me.id).maybeSingle();
+          const { data: prof, error: profErr } = await supabase.from('profiles').select('is_super_admin, role, permissoes_custom').eq('id', me.id).maybeSingle();
           if (profErr) console.error('[VendasIngressos] perfil (super admin):', profErr.message);
           superAdmin = prof?.is_super_admin === true;
           adminLike = superAdmin || (prof as any)?.role === 'COREOHUB_ADMIN';
           allowed = allowed || superAdmin;
+          const pc = (prof as any)?.permissoes_custom;
+          teamSwap = pc?.trocar_assento === true && pc?.vendas_ingressos === true;
         }
         setIsAdmin(adminLike);
         setCanManageBlocks(allowed);
+        setCanSwapSeats(allowed || teamSwap);
       } catch (e) {
         console.error('[VendasIngressos] checar permissão de bloqueio:', e);
         setCanManageBlocks(false);
+        setCanSwapSeats(false);
       }
       setBlockSelected([]);
       setBlockMsg(null);
@@ -2199,6 +2207,10 @@ const VendasIngressos: React.FC = () => {
                 <Field label="Compra criada" value={new Date(detailRow.created_at).toLocaleString('pt-BR')} />
               </Section>
 
+              {seatMapEnabled && canManageBlocks && detailRow.seat_id && (
+                <SeatChangeHistory ticketId={detailRow.id} refreshKey={detailRow.seat_id} />
+              )}
+
               <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 pt-2">
                 <a
                   href={`/meu-ingresso/${detailRow.access_token}`}
@@ -2208,7 +2220,7 @@ const VendasIngressos: React.FC = () => {
                 >
                   Ver ingresso público <ExternalLink size={12} />
                 </a>
-                {seatMapEnabled && canManageBlocks && detailRow.seat_id && (() => {
+                {seatMapEnabled && canSwapSeats && detailRow.seat_id && (() => {
                   const blockedWhy = swapBlockedReason({
                     status_pagamento: detailRow.status_pagamento,
                     refunded_at: detailRow.refunded_at,
@@ -2263,6 +2275,9 @@ const VendasIngressos: React.FC = () => {
           groupOtherSeats={rows
             .filter(r => swapTarget.group_id && r.group_id === swapTarget.group_id && r.id !== swapTarget.id && r.status_pagamento === 'APROVADO' && !r.refunded_at && r.seat_id)
             .map(r => r.seat_id as string)}
+          orderMates={rows
+            .filter(r => swapTarget.group_id && r.group_id === swapTarget.group_id && r.id !== swapTarget.id && r.status_pagamento === 'APROVADO' && !r.refunded_at && r.check_in_status === 'PENDENTE' && r.seat_id && seatTipoFromLayout(rowsConfig, r.seat_id) === 'comum')
+            .map(r => ({ id: r.id, seat_id: r.seat_id as string, ticket_type_nome: r.ticket_type_nome }))}
           onClose={() => setSwapTarget(null)}
           onDone={r => {
             refreshSeats();
