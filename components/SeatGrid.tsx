@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2, Accessibility, Minus, Plus, Maximize2, X, RotateCcw, ArrowLeftRight, Users, Ban, Check } from 'lucide-react';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
-import { displayOrder, seatSide } from '../utils/venueRows';
+import { displayOrder, seatSide, stageOnTop } from '../utils/venueRows';
 import { companionBySpecial, isSpecialTipo, seatBlockReason, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
 
 interface SeatGridProps {
@@ -198,7 +198,7 @@ export default function SeatGrid(props: SeatGridProps) {
   };
 
   // ── Fase 3: tipo do assento, liberação e regra de seleção ────────────────
-  const tipoOf = (row: SeatRow, n: number): SeatTipo => {
+  const tipoOf = (row: Omit<SeatRow, 'alinhamento'>, n: number): SeatTipo => {
     const st = seatStatuses[`${row.codigo}-${n}`];
     return (st?.seat_tipo as SeatTipo | undefined) ?? tipoFromRow(row, n);
   };
@@ -240,8 +240,10 @@ export default function SeatGrid(props: SeatGridProps) {
 
   // Com cor de zona no checkout, o selecionado ganha anel branco (a zona "Frente" também pode ser magenta).
   const selectedClass = showOrientation && seatZoneColors ? 'bg-[#ff0068] text-white ring-2 ring-white' : 'bg-[#ff0068] text-white';
-  const palcoLast = !!rowsConfig[rowsConfig.length - 1]?.palco_apos;
-  const orient = showOrientation && palcoLast;
+  // Palco no topo (como as outras plataformas): o desenho gira 180 graus, os dados não mudam.
+  const viewRows = stageOnTop(rowsConfig);
+  const hasStage = !!rowsConfig[rowsConfig.length - 1]?.palco_apos;
+  const orient = showOrientation && hasStage;
   const barTone = variant === 'dark' ? 'bg-white/10 text-slate-300' : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300';
   const takenClass = variant === 'dark'
     ? 'bg-white/5 text-slate-700 cursor-not-allowed'
@@ -267,13 +269,19 @@ export default function SeatGrid(props: SeatGridProps) {
   const grid = (
     <div ref={contentRef} className={`space-y-1.5 w-max ${canZoom ? '' : 'min-w-full mx-auto'} ${s.pad}`}
       style={canZoom ? { transform: `scale(${scale})`, transformOrigin: '0 0' } : undefined}>
-      {orient && (
-        <div className={`mx-auto mb-3 h-7 w-2/3 rounded-t-3xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap ${barTone}`}>
-          Fundo
-        </div>
+      {hasStage && (
+        orient ? (
+          <div className={`mx-auto mb-4 h-8 w-2/3 rounded-b-3xl flex items-center justify-center text-xs font-black uppercase tracking-[0.25em] whitespace-nowrap ring-1 ${variant === 'dark' ? 'bg-white/20 text-white ring-white/40' : 'bg-slate-300 dark:bg-white/20 text-slate-800 dark:text-white ring-slate-400/50 dark:ring-white/40'}`}>
+            Palco
+          </div>
+        ) : (
+          <div className={`mx-auto mb-4 h-6 w-2/3 rounded-b-3xl flex items-center justify-center text-[9px] font-black uppercase tracking-[0.4em] ${barTone}`}>
+            Palco
+          </div>
+        )
       )}
-      {rowsConfig.map(row => (
-        <div key={row.codigo} className={`relative flex items-center ${row.alinhamento === 'esquerda' ? 'justify-start' : 'justify-center'} min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
+      {viewRows.map(row => (
+        <div key={row.codigo} className={`relative flex items-center ${row.alinhamento === 'esquerda' ? 'justify-start' : row.alinhamento === 'direita' ? 'justify-end' : 'justify-center'} min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
           {(mode === 'block' || mode === 'zone') && onToggleRow ? (
             <button
               type="button"
@@ -340,17 +348,6 @@ export default function SeatGrid(props: SeatGridProps) {
           </div>
         </div>
       ))}
-      {rowsConfig.some(r => r.palco_apos) && (
-        orient ? (
-          <div className={`mx-auto mt-4 h-8 w-2/3 rounded-b-3xl flex items-center justify-center text-xs font-black uppercase tracking-[0.25em] whitespace-nowrap ring-1 ${variant === 'dark' ? 'bg-white/20 text-white ring-white/40' : 'bg-slate-300 dark:bg-white/20 text-slate-800 dark:text-white ring-slate-400/50 dark:ring-white/40'}`}>
-            Palco / Frente
-          </div>
-        ) : (
-        <div className={`mx-auto mt-4 h-6 w-2/3 rounded-b-3xl flex items-center justify-center text-[9px] font-black uppercase tracking-[0.4em] ${variant === 'dark' ? 'bg-white/10 text-slate-400' : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
-          Palco
-        </div>
-        )
-      )}
     </div>
   );
 
