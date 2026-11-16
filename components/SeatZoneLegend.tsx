@@ -16,7 +16,7 @@ interface Props {
 /** Legenda do mapa por zona: cor, nome e preço de cada ingresso na zona. */
 export default function SeatZoneLegend({ zones, types, freeByZone, variant = 'dark' }: Props) {
   if (zones.length === 0) return null;
-  const muted = variant === 'dark' ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400';
+  const muted = variant === 'dark' ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400';
   const strong = variant === 'dark' ? 'text-white' : 'text-slate-900 dark:text-white';
   return (
     <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1" aria-label="Zonas do mapa e preços">

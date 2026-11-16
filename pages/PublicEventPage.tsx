@@ -2354,7 +2354,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               )}
               {social.facebook && (
                 <a href={social.facebook} target="_blank" rel="noopener noreferrer"
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-[#1877F2] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-[#1465d6] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <Facebook size={16} /> Facebook
                 </a>
               )}
@@ -2372,7 +2372,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               )}
               {social.whatsapp && (
                 <a href={social.whatsapp} target="_blank" rel="noopener noreferrer"
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-emerald-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <WhatsAppIcon size={16} /> WhatsApp
                 </a>
               )}
@@ -2456,7 +2456,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleShareWhatsapp}
-              className="text-white flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
+              className="text-white flex items-center gap-2 px-5 py-3 bg-emerald-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
             >
               <WhatsAppIcon size={16} /> Enviar via WhatsApp
             </button>

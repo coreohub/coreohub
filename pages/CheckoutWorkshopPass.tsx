@@ -604,6 +604,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}
           {breakdown?.payOptions && (!isALaCarte || selectedIds.size > 0) && (
             <PaymentMethodPicker
+              theme="light"
               options={breakdown.payOptions}
               method={payMethod}
               installments={installments}

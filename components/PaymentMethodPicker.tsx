@@ -47,11 +47,13 @@ const PaymentMethodPicker: React.FC<Props> = ({
     ? installmentDisclosure(options.cardTotals[1], options.cardTotals[installments] ?? 0, installments)
     : null;
   const pct = (v: number) => `${(v * 100).toFixed(2).replace('.', ',')}%`;
-  const adaptive = theme === 'adaptive';
-  const box = adaptive
+  const adaptive = theme === 'adaptive' || theme === 'light';
+  const box = theme === 'light'
+    ? 'bg-white border border-slate-200 rounded-2xl p-5 mb-4 space-y-3'
+    : adaptive
     ? 'space-y-3'
     : 'bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3';
-  const muted = adaptive ? 'text-slate-500' : 'text-slate-400';
+  const muted = adaptive ? 'text-slate-600 dark:text-slate-400' : 'text-slate-400';
   const title = adaptive ? 'text-slate-900 dark:text-white' : '';
   const optionCls = (active: boolean) => {
     const base = 'px-3 py-3 rounded-xl border text-left transition-colors';
