@@ -3,6 +3,14 @@ import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../
 import { cardCreditFallback } from '../_shared/card-credit-date.ts'
 import { paymentCheckMode, checkPaymentExpectation, markExpectationAnomaly } from '../_shared/payment-check.ts'
 import { HOLD_PREFIX } from '../_shared/payment-hold.ts'
+import {
+  commissionFailureKey,
+  unexpectedFailureKey,
+  isDuplicateKeyError,
+  recordWebhookFailure,
+  resolveWebhookFailure,
+  MAX_WEBHOOK_RETRIES,
+} from '../_shared/webhook-failure.ts'
 import { checkSplitWallet, expectedProducerWallet } from '../_shared/payment-wallet-check.ts'
 import { requestInstallmentAnticipation } from '../_shared/asaas-anticipation.ts'
 import {
@@ -134,6 +142,64 @@ async function notifyPaymentHeld(supabase: any, opts: { asaasPaymentId: string; 
   } catch (e) {
     console.error('[asaas-webhook] falha ao notificar pagamento retido:', (e as Error).message)
   }
+}
+
+/** Falha ao registrar a comissão (ou erro inesperado) no webhook: avisa todo super admin (in-app).
+ *  Só na 1a falha e quando as tentativas esgotam, para não inundar o sino a cada reenvio. Best-effort. */
+async function notifyWebhookFailure(supabase: any, opts: {
+  kind: string; asaasPaymentId: string; attempts: number | null; exhausted: boolean; error: string; eventName?: string | null
+}): Promise<void> {
+  try {
+    const { data: admins, error } = await supabase.from('profiles').select('id').eq('is_super_admin', true)
+    if (error || !admins?.length) return
+    const label = SALE_KIND_LABELS[opts.kind] ?? opts.kind
+    const title = opts.exhausted
+      ? 'Comissão NÃO registrada: conferir na mão'
+      : 'Falha ao registrar comissão (a Asaas vai reenviar)'
+    const body = opts.exhausted
+      ? `${label}${opts.eventName ? ` · ${opts.eventName}` : ''} · cobrança ${opts.asaasPaymentId}: as ${MAX_WEBHOOK_RETRIES} tentativas acabaram e a venda segue aprovada, sem a linha de comissão. Erro: ${opts.error.slice(0, 160)}`
+      : `${label}${opts.eventName ? ` · ${opts.eventName}` : ''} · cobrança ${opts.asaasPaymentId}: erro ao gravar, tentativa ${opts.attempts ?? '?'} de ${MAX_WEBHOOK_RETRIES}. Erro: ${opts.error.slice(0, 160)}`
+    const rows = admins.map((a: any) => ({
+      user_id:   a.id,
+      type:      'webhook_failure',
+      severity:  'error',
+      title,
+      body,
+      cta_url:   '/super-admin',
+      cta_label: 'Ver painel',
+      metadata:  { asaas_payment_id: opts.asaasPaymentId, kind: opts.kind, attempts: opts.attempts, exhausted: opts.exhausted },
+    }))
+    await supabase.from('notifications').insert(rows)
+  } catch (e) {
+    console.error('[asaas-webhook] falha ao notificar falha de webhook:', (e as Error).message)
+  }
+}
+
+/** Resultado da gravação da comissão. Devolve uma Response 500 (a Asaas reenvia) enquanto restarem tentativas,
+ *  ou null para o fluxo seguir. Sucesso e chave duplicada (23505 = já registrada) seguem sem pedir reenvio.
+ *  Esgotadas as tentativas, segue como antes (200) com o admin avisado. Nunca lança. */
+async function commissionRetryResponse(supabase: any, opts: {
+  commErr: any; kind: string; paymentId: string; eventName?: string | null
+}): Promise<Response | null> {
+  const key = commissionFailureKey(opts.paymentId)
+  if (!opts.commErr) {
+    await resolveWebhookFailure(supabase, key)
+    return null
+  }
+  if (isDuplicateKeyError(opts.commErr)) return null
+  const msg = String(opts.commErr?.message ?? opts.commErr)
+  const d = await recordWebhookFailure(supabase, { key, kind: opts.kind, paymentId: opts.paymentId, error: msg })
+  console.error(`[ALERT][COMMISSION_FAILED] kind=${opts.kind} payment=${opts.paymentId} tentativa=${d.attempts ?? '?'} retry=${d.retry}: ${msg}`)
+  if (d.attempts === 1 || d.exhausted) {
+    await notifyWebhookFailure(supabase, { kind: opts.kind, asaasPaymentId: opts.paymentId, attempts: d.attempts, exhausted: d.exhausted, error: msg, eventName: opts.eventName })
+  }
+  if (d.retry) {
+    return new Response(
+      JSON.stringify({ status: 'error', reason: 'commission_insert_failed', retry: true }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    )
+  }
+  return null
 }
 
 /** Cobrança retida SEM linha esperada (não há o que marcar): grava uma linha-marcador (valor 0, sem inscrição)
@@ -883,6 +949,11 @@ async function handleAudienceTicket(opts: {
       } : {}),
     })
 
+  // Falha ao gravar a comissão: pede reenvio à Asaas (até MAX_WEBHOOK_RETRIES) ANTES dos e-mails; o reenvio
+  // reprocessa tudo (update, assento e comissão são idempotentes) e os e-mails saem uma vez só.
+  const audienceRetry = await commissionRetryResponse(supabase, { commErr, kind: 'audience', paymentId: String(payment.id), eventName: eventData?.name })
+  if (audienceRetry) return audienceRetry
+
   if (commErr) {
     console.error('[asaas-webhook][audience] erro inserir comissão:', commErr.message)
   } else {
@@ -1155,6 +1226,9 @@ async function handleWorkshopRegistration(opts: {
     })
   }
 
+  const workshopRetry = await commissionRetryResponse(supabase, { commErr, kind: 'workshop', paymentId: String(payment.id), eventName: workshop?.name })
+  if (workshopRetry) return workshopRetry
+
   if (commErr) {
     console.error('[asaas-webhook][workshop] erro inserir comissão:', commErr.message)
   } else {
@@ -1387,6 +1461,9 @@ async function handleWorkshopPassPayment(opts: {
       asaasBaseUrl, asaasApiKey,
     })
   }
+
+  const passRetry = await commissionRetryResponse(supabase, { commErr, kind: 'workshop_pass', paymentId: String(payment.id), eventName: pass?.name })
+  if (passRetry) return passRetry
 
   if (commErr) {
     console.error('[asaas-webhook][workshop-pass] erro inserir comissões:', commErr.message)
@@ -1774,6 +1851,9 @@ async function handleAggregatePayment(opts: {
     const { error: commErr } = await supabase
       .from('platform_commissions')
       .upsert(commissionRows, { onConflict: 'asaas_payment_id,registration_id', ignoreDuplicates: true })
+    const aggRetry = await commissionRetryResponse(supabase, { commErr, kind: 'aggregate', paymentId: String(payment.id), eventName: (eventData as any)?.name })
+    if (aggRetry) return aggRetry
+
     if (commErr) {
       console.error('[asaas-webhook][aggregate] erro inserir comissões:', commErr.message)
     } else {
@@ -2171,6 +2251,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
+  // Identifica o evento em andamento para o catch global contar falhas inesperadas (pedir reenvio com teto).
+  let unexpectedKey: { key: string; paymentId: string } | null = null
   try {
     let body: any = {}
     try {
@@ -2198,6 +2280,7 @@ Deno.serve(async (req) => {
     if (!event.startsWith('PAYMENT_')) {
       return ok({ status: 'ignored', reason: 'not_payment_event' })
     }
+    unexpectedKey = { key: unexpectedFailureKey(payment.id, event), paymentId: String(payment.id) }
 
     const externalRef: string | undefined = payment.externalReference
     if (!externalRef) {
@@ -3258,6 +3341,26 @@ Deno.serve(async (req) => {
     })
   } catch (error: any) {
     console.error('[asaas-webhook] erro inesperado:', error?.message ?? error)
+    // Antes respondia 200 sempre e a Asaas nunca reenviava. Agora pede reenvio nas primeiras tentativas do
+    // mesmo evento (o reprocessamento é idempotente) e volta a 200 depois, para não pausar a fila (15 falhas).
+    if (unexpectedKey) {
+      const failSb = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? '',
+      )
+      const msg = String(error?.message ?? error ?? 'unknown')
+      const d = await recordWebhookFailure(failSb, { key: unexpectedKey.key, kind: 'unexpected', paymentId: unexpectedKey.paymentId, error: msg })
+      console.error(`[ALERT][WEBHOOK_UNEXPECTED] payment=${unexpectedKey.paymentId} tentativa=${d.attempts ?? '?'} retry=${d.retry}: ${msg}`)
+      if (d.attempts === 1 || d.exhausted) {
+        await notifyWebhookFailure(failSb, { kind: 'unexpected', asaasPaymentId: unexpectedKey.paymentId, attempts: d.attempts, exhausted: d.exhausted, error: msg })
+      }
+      if (d.retry) {
+        return new Response(
+          JSON.stringify({ status: 'error', reason: 'unexpected_error', retry: true }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
     return new Response(
       JSON.stringify({ status: 'error', message: error?.message ?? 'unknown' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
