@@ -23,6 +23,8 @@ import EventPickerSheet from '../components/EventPickerSheet';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
 import SeatZoneLegend from '../components/SeatZoneLegend';
+import SwapSeatModal from '../components/SwapSeatModal';
+import { swapBlockedReason } from '../utils/seatSwap';
 import { priceForZone, priceRangeForType, zonePricingActive, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
@@ -143,6 +145,8 @@ const VendasIngressos: React.FC = () => {
   const [refundError, setRefundError] = useState<string | null>(null);
   // Detail drawer (Stripe Dashboard pattern: row click → side sheet com detalhes)
   const [detailRow, setDetailRow] = useState<Row | null>(null);
+  // Troca de lugar de ingresso já pago (dono do evento / super admin).
+  const [swapTarget, setSwapTarget] = useState<Row | null>(null);
   // Histórico de titulares do ingresso aberto no drawer (Decreto 13.108/2026, art. 17 §1º)
   const [transferHistory, setTransferHistory] = useState<TransferHistoryRow[] | null>(null);
   useEffect(() => {
@@ -2079,7 +2083,7 @@ const VendasIngressos: React.FC = () => {
 
       {/* Drawer de detalhes do comprador (Stripe Dashboard pattern: side sheet
           em desktop, bottom sheet em mobile). Abre ao clicar em qualquer linha. */}
-      {detailRow && (
+      {detailRow && createPortal(
         <div
           className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-end animate-in fade-in duration-200"
           onClick={() => setDetailRow(null)}
@@ -2195,7 +2199,7 @@ const VendasIngressos: React.FC = () => {
                 <Field label="Compra criada" value={new Date(detailRow.created_at).toLocaleString('pt-BR')} />
               </Section>
 
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 pt-2">
                 <a
                   href={`/meu-ingresso/${detailRow.access_token}`}
                   target="_blank"
@@ -2204,6 +2208,29 @@ const VendasIngressos: React.FC = () => {
                 >
                   Ver ingresso público <ExternalLink size={12} />
                 </a>
+                {seatMapEnabled && canManageBlocks && detailRow.seat_id && (() => {
+                  const blockedWhy = swapBlockedReason({
+                    status_pagamento: detailRow.status_pagamento,
+                    refunded_at: detailRow.refunded_at,
+                    check_in_status: detailRow.check_in_status,
+                    seat_id: detailRow.seat_id,
+                    seatTipo: seatTipoFromLayout(rowsConfig, detailRow.seat_id),
+                  });
+                  return (
+                    <div className="order-last basis-full w-full flex flex-col gap-1">
+                      <button
+                        type="button"
+                        disabled={!!blockedWhy}
+                        title={blockedWhy ?? undefined}
+                        onClick={() => setSwapTarget(detailRow)}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-[11px] font-black uppercase tracking-widest disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:bg-white/5 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
+                      >
+                        <Armchair size={12} /> Trocar lugar
+                      </button>
+                      {blockedWhy && <p className="text-[10px] text-slate-500 leading-snug">{blockedWhy}</p>}
+                    </div>
+                  );
+                })()}
                 {detailRow.status_pagamento === 'APROVADO' && !detailRow.refunded_at && (
                   <button
                     type="button"
@@ -2221,9 +2248,30 @@ const VendasIngressos: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       </>)}
+
+      {swapTarget && swapTarget.seat_id && (
+        <SwapSeatModal
+          ticket={{ id: swapTarget.id, event_id: swapTarget.event_id, buyer_name: swapTarget.buyer_name, ticket_type_nome: swapTarget.ticket_type_nome, seat_id: swapTarget.seat_id }}
+          rowsConfig={rowsConfig}
+          seatStatuses={seatStatuses}
+          zoneBySeat={zoneBySeat}
+          seatZones={seatZones}
+          groupOtherSeats={rows
+            .filter(r => swapTarget.group_id && r.group_id === swapTarget.group_id && r.id !== swapTarget.id && r.status_pagamento === 'APROVADO' && !r.refunded_at && r.seat_id)
+            .map(r => r.seat_id as string)}
+          onClose={() => setSwapTarget(null)}
+          onDone={r => {
+            refreshSeats();
+            if (selectedEventId) void load(selectedEventId);
+            setDetailRow(prev => (prev && prev.id === swapTarget.id ? { ...prev, seat_id: r.new_seat_id } : prev));
+            setSwapTarget(prev => (prev ? { ...prev, seat_id: r.new_seat_id } : prev));
+          }}
+        />
+      )}
     </div>
   );
 };
