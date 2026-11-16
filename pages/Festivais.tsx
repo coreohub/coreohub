@@ -487,7 +487,7 @@ const EventCard: React.FC<{
   return (
     <Link
       to={target}
-      className={`group relative overflow-hidden rounded-3xl border border-slate-200 bg-white hover:border-[#ff0068]/40 transition-all flex flex-col ${muted ? 'opacity-70 hover:opacity-100' : ''}`}
+      className={`group relative overflow-hidden rounded-3xl border border-slate-200 bg-white hover:border-[#ff0068]/40 transition-all flex flex-col ${muted ? 'grayscale-[50%] hover:grayscale-0' : ''}`}
     >
       <div className="relative aspect-[1200/630] overflow-hidden bg-slate-900">
         {event.cover_url ? (

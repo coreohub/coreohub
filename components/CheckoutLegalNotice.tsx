@@ -68,7 +68,7 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); setModalOpen(true); }}
-              className={`underline font-bold ${isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-[#ff0068] hover:text-[#e0005c]'}`}
+              className={`underline font-bold ${isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-brand-primary-ink hover:text-[#b8004f]'}`}
             >
               política de reembolso
             </button>
@@ -78,7 +78,7 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
 
         {/* PIX recomendado — bem discreto, na linha de baixo */}
         {!hidePixRecommendation && (
-          <div className={`mt-1.5 ml-7 flex items-center gap-1 ${isDark ? 'text-emerald-400/70' : 'text-emerald-600/80'}`}>
+          <div className={`mt-1.5 ml-7 flex items-center gap-1 ${isDark ? 'text-emerald-400/70' : 'text-emerald-700'}`}>
             <Zap size={9} className="shrink-0" />
             <p className="text-[9px] font-bold uppercase tracking-widest">PIX recomendado</p>
           </div>
