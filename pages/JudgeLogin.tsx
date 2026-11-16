@@ -68,6 +68,8 @@ export interface JudgeSession {
    *  2026-07-15). Sessões antigas (pré-refactor) podem não ter isso — o
    *  terminal trata como sessão inválida e força relogin. */
   event_id: string;
+  /** Sessão assinada pelo servidor após o PIN (Lote 2, B#3). Ausente em sessões antigas. */
+  session_token?: string;
   expires_at: number;
 }
 
@@ -321,6 +323,7 @@ const JudgeLogin: React.FC = () => {
           language: data.judge.language ?? 'pt-BR',
           producer_token: paramToken,
           event_id: paramEventId,
+          session_token: typeof data.session_token === 'string' ? data.session_token : undefined,
           expires_at: Date.now() + SESSION_TTL_MS,
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
