@@ -60,23 +60,23 @@ const MeiaEntradaInfo: React.FC<Props> = ({ eventId, ingressos, seatMapEnabled =
   const s = useMemo(() => summarizeMeia(ingressos, stock), [ingressos, stock]);
 
   return (
-    <section aria-label="Informações sobre meia-entrada" className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3 text-slate-300">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+    <section aria-label="Informações sobre meia-entrada" className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 text-slate-700">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-1.5">
         <Info size={12} aria-hidden="true" /> Ingressos e meia-entrada
       </p>
 
       <div className="text-xs space-y-1">
         {seatCount && !s.totalKnown && (
           <p>
-            <strong className="text-white">{seatCount.total}</strong> lugares no mapa,{' '}
-            <strong className="text-white">{seatCount.livres}</strong> ainda disponíve{seatCount.livres === 1 ? 'l' : 'is'}.
+            <strong className="text-slate-900">{seatCount.total}</strong> lugares no mapa,{' '}
+            <strong className="text-slate-900">{seatCount.livres}</strong> ainda disponíve{seatCount.livres === 1 ? 'l' : 'is'}.
           </p>
         )}
         {s.totalKnown ? (
           <p>
-            <strong className="text-white">{s.total}</strong> ingressos no total ·{' '}
-            <strong className="text-white">{s.meiaTotal}</strong> de meia-entrada
-            {s.hasMeia && <> (<strong className="text-white">{s.meiaRemaining}</strong> ainda disponíve{s.meiaRemaining === 1 ? 'l' : 'is'})</>}
+            <strong className="text-slate-900">{s.total}</strong> ingressos no total ·{' '}
+            <strong className="text-slate-900">{s.meiaTotal}</strong> de meia-entrada
+            {s.hasMeia && <> (<strong className="text-slate-900">{s.meiaRemaining}</strong> ainda disponíve{s.meiaRemaining === 1 ? 'l' : 'is'})</>}
           </p>
         ) : (
           <p>
@@ -85,7 +85,7 @@ const MeiaEntradaInfo: React.FC<Props> = ({ eventId, ingressos, seatMapEnabled =
           </p>
         )}
         {s.rows.length > 0 && (
-          <ul className="text-[11px] text-slate-400 space-y-0.5 pt-1">
+          <ul className="text-[11px] text-slate-600 space-y-0.5 pt-1">
             {s.rows.map(r => (
               <li key={r.idx}>
                 {r.nome}
@@ -98,21 +98,21 @@ const MeiaEntradaInfo: React.FC<Props> = ({ eventId, ingressos, seatMapEnabled =
           </ul>
         )}
         {s.meiaExhausted && (
-          <p role="status" className="text-[11px] font-black text-amber-300 pt-1">
+          <p role="status" className="text-[11px] font-black text-amber-700 pt-1">
             Aviso: os ingressos de meia-entrada estão esgotados.
           </p>
         )}
       </div>
 
       <details className="text-[11px] leading-relaxed">
-        <summary className="cursor-pointer font-bold text-slate-200 hover:text-white">
+        <summary className="cursor-pointer font-bold text-slate-800 hover:text-slate-900">
           Condições da meia-entrada (Lei nº 12.933/2013, art. 1º) e órgãos de fiscalização
         </summary>
-        <div className="mt-2 space-y-2 text-slate-400">
+        <div className="mt-2 space-y-2 text-slate-600">
           {LEI_12933_ART1.map((p, i) => <p key={i}>{p}</p>)}
-          <p className="pt-2 border-t border-white/10">
-            <strong className="text-slate-200">Órgãos de fiscalização:</strong> {FISCALIZACAO_MEIA.texto}{' '}
-            <a href={FISCALIZACAO_MEIA.linkHref} target="_blank" rel="noopener noreferrer" className="underline text-emerald-400">
+          <p className="pt-2 border-t border-slate-200">
+            <strong className="text-slate-800">Órgãos de fiscalização:</strong> {FISCALIZACAO_MEIA.texto}{' '}
+            <a href={FISCALIZACAO_MEIA.linkHref} target="_blank" rel="noopener noreferrer" className="underline text-emerald-700">
               {FISCALIZACAO_MEIA.linkLabel}
             </a>
           </p>

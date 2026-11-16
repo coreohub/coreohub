@@ -640,7 +640,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       </div>
       <div className="min-w-0">
         <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Produzido por</p>
-        <p className="text-sm font-black text-white group-hover:text-[#ff0068] transition-colors truncate">
+        <p className="text-sm font-black text-slate-900 group-hover:text-brand-primary-ink transition-colors truncate">
           {publicProducer.full_name}
         </p>
       </div>
@@ -649,18 +649,18 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <Loader2 className="text-[#ff0068] animate-spin" size={48} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="text-brand-primary-ink animate-spin" size={48} />
       </div>
     );
   }
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center gap-6 p-8">
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center justify-center gap-6 p-8">
         <Trophy size={64} className="text-slate-700" />
         <h1 className="text-3xl font-black uppercase tracking-tighter">Evento não encontrado</h1>
-        <button onClick={() => navigate('/festivais')} className="flex items-center gap-2 text-[#ff0068] font-black uppercase text-sm">
+        <button onClick={() => navigate('/festivais')} className="flex items-center gap-2 text-brand-primary-ink font-black uppercase text-sm">
           <ArrowLeft size={16} /> Ver outros festivais
         </button>
       </div>
@@ -1044,7 +1044,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       {(event as any).payment_sandbox && <SandboxBanner />}
       {searchParams.get('aviso') === 'saiu' && (
         <div role="status" className="max-w-5xl mx-auto px-4 pt-4">
@@ -1053,7 +1053,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       )}
       {(event.sessao_status === 'adiada' || event.sessao_status === 'cancelada') && (
         <div className="max-w-5xl mx-auto px-4 pt-4">
-          <SessionStatusBanner {...event} dataAtual={event.start_date} horaAtual={event.event_time} context="vitrine" />
+          <SessionStatusBanner {...event} dataAtual={event.start_date} horaAtual={event.event_time} context="vitrine" theme="light" />
         </div>
       )}
       {/* Pixels do produtor — Fase 4B. Carrega GA4+Pixel do dono do festival
@@ -1089,21 +1089,21 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           BreadcrumbList que injetamos pro Google. URL canônica continua
           /evento/<slug>, breadcrumb só descreve contexto. Padrão a11y:
           <nav aria-label="Breadcrumb"> + lista ordenada. */}
-      <nav aria-label="Breadcrumb" className="relative z-10 bg-black/40 backdrop-blur-sm border-b border-white/5">
-        <ol className="max-w-6xl mx-auto px-8 py-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 overflow-x-auto whitespace-nowrap">
+      <nav aria-label="Breadcrumb" className="relative z-10 bg-white/80 backdrop-blur-sm border-b border-slate-100">
+        <ol className="max-w-6xl mx-auto px-8 py-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600 overflow-x-auto whitespace-nowrap">
           <li>
-            <a href="https://coreohub.com" className="hover:text-[#ff0068] transition-colors">
+            <a href="https://coreohub.com" className="hover:text-brand-primary-ink transition-colors">
               CoreoHub
             </a>
           </li>
           <li aria-hidden="true" className="text-slate-600">›</li>
           <li>
-            <Link to="/festivais" className="hover:text-[#ff0068] transition-colors">
+            <Link to="/festivais" className="hover:text-brand-primary-ink transition-colors">
               Festivais
             </Link>
           </li>
           <li aria-hidden="true" className="text-slate-600">›</li>
-          <li aria-current="page" className="text-white truncate max-w-[60vw]">
+          <li aria-current="page" className="text-slate-900 truncate max-w-[60vw]">
             {event.name}
           </li>
         </ol>
@@ -1118,7 +1118,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           em troca de garantir que a info nunca some sem rolar. */}
       <div id="hero" className="relative px-8 lg:px-16 pt-10 pb-6">
         <div className="max-w-6xl mx-auto">
-          <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
+          <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink transition-colors">
             <ArrowLeft size={12} /> Vitrine de festivais
           </Link>
           <div className="grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 lg:gap-12 items-start">
@@ -1128,13 +1128,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <img
                   src={event.cover_url}
                   alt={event.name}
-                  className="w-full aspect-[1200/630] object-cover rounded-2xl border border-white/10"
+                  className="w-full aspect-[1200/630] object-cover rounded-2xl border border-slate-200"
                   style={{ objectPosition: `${event.cover_focal_x ?? 50}% ${event.cover_focal_y ?? 50}%` }}
                 />
               ) : (
-                <div className="w-full aspect-[1200/630] rounded-2xl bg-gradient-to-br from-[#ff0068]/25 via-slate-900 to-[#050505] border border-white/10 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <div className="w-full aspect-[1200/630] rounded-2xl bg-gradient-to-br from-[#ff0068]/10 via-slate-100 to-slate-50 border border-slate-200 flex flex-col items-center justify-center gap-3 p-6 text-center">
                   <img src="/coreohub-avatar.png" alt="" aria-hidden="true" width={56} height={56} className="w-14 h-14 rounded-2xl opacity-90" />
-                  <p className="text-sm font-black uppercase tracking-tighter italic text-white/80 line-clamp-2">{event.name}</p>
+                  <p className="text-sm font-black uppercase tracking-tighter italic text-slate-700 line-clamp-2">{event.name}</p>
                 </div>
               )}
               {/* Redes sociais compactas — só desktop (lg+). No mobile a versão
@@ -1158,7 +1158,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       target={href!.startsWith('mailto:') ? undefined : '_blank'}
                       rel="noopener noreferrer"
                       aria-label={label}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-colors"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 transition-colors"
                     >
                       <Icon size={14} />
                     </a>
@@ -1168,24 +1168,24 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               {/* Desktop: colado nos ícones acima, dentro da coluna da foto
                   (ver comentário de renderProducerBadge sobre o motivo de
                   não usar 1 instância só via CSS Grid). */}
-              {renderProducerBadge('hidden lg:flex items-center gap-3 mt-4 pt-4 border-t border-white/10 group')}
+              {renderProducerBadge('hidden lg:flex items-center gap-3 mt-4 pt-4 border-t border-slate-200 group')}
             </div>
 
             {/* Coluna de informações */}
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 {isRegistrationOpen && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-[10px] font-black text-emerald-700 uppercase tracking-widest">
                     ● Inscrições abertas
                   </span>
                 )}
                 {(event as any).video_selection_enabled && (
                   <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full">
-                    <Video size={12} className="text-amber-400" />
-                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                    <Video size={12} className="text-amber-700" />
+                    <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">
                       Seletiva por vídeo
                       {(event as any).video_selection_fee_required && Number((event as any).video_selection_fee ?? 0) > 0 && (
-                        <span className="font-bold text-amber-300/80 normal-case tracking-normal ml-2">
+                        <span className="font-bold text-amber-700/80 normal-case tracking-normal ml-2">
                           · taxa R$ {Number((event as any).video_selection_fee).toFixed(2).replace('.', ',')} antes da análise
                         </span>
                       )}
@@ -1202,34 +1202,34 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               </motion.h1>
               <div className="flex flex-col gap-2.5 mb-6">
                 {event.start_date && (
-                  <div className="flex items-center gap-2.5 text-sm text-slate-300">
-                    <Calendar size={16} className="text-[#ff0068] shrink-0" />
+                  <div className="flex items-center gap-2.5 text-sm text-slate-700">
+                    <Calendar size={16} className="text-brand-primary-ink shrink-0" />
                     {formatEventRange(event.start_date, event.end_date)}
                   </div>
                 )}
                 {event.event_time && (
-                  <div className="flex items-center gap-2.5 text-sm text-slate-300">
-                    <Clock size={16} className="text-[#ff0068] shrink-0" />
+                  <div className="flex items-center gap-2.5 text-sm text-slate-700">
+                    <Clock size={16} className="text-brand-primary-ink shrink-0" />
                     {event.event_time}
                   </div>
                 )}
                 {localCidadeUf && (
-                  <div className="flex items-center gap-2.5 text-sm text-slate-300">
-                    <MapPin size={16} className="text-[#ff0068] shrink-0" />
+                  <div className="flex items-center gap-2.5 text-sm text-slate-700">
+                    <MapPin size={16} className="text-brand-primary-ink shrink-0" />
                     {localCidadeUf}
                   </div>
                 )}
               </div>
               {primaryCta && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 max-w-sm">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-3">
                     {primaryCta.kind === 'link' ? 'Inscrições' : 'Ingressos'}
                   </p>
                   {primaryCta.kind === 'link' ? (
                     <Link
                       to={primaryCta.to}
                       onClick={onInscrevaseClick}
-                      className="flex items-center justify-center gap-1.5 py-3.5 rounded-xl bg-[#ff0068] text-white text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all"
+                      className="flex items-center justify-center gap-1.5 py-3.5 rounded-xl bg-brand-primary-strong text-white text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all"
                     >
                       {primaryCta.label} <ChevronRight size={13} />
                     </Link>
@@ -1237,7 +1237,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     <button
                       type="button"
                       onClick={() => scrollToSection(primaryCta.id)}
-                      className="w-full flex items-center justify-center gap-1.5 py-3.5 rounded-xl bg-[#ff0068] text-white text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all"
+                      className="w-full flex items-center justify-center gap-1.5 py-3.5 rounded-xl bg-brand-primary-strong text-white text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all"
                     >
                       {primaryCta.label} <ChevronRight size={13} />
                     </button>
@@ -1252,7 +1252,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 quem visita o evento vê do que se trata ANTES de saber quem
                 produziu — no mobile, onde cada rolagem custa mais, isso
                 importa ainda mais que no desktop. */}
-            {renderProducerBadge('flex lg:hidden items-center gap-3 pt-5 border-t border-white/10 group')}
+            {renderProducerBadge('flex lg:hidden items-center gap-3 pt-5 border-t border-slate-200 group')}
           </div>
         </div>
       </div>
@@ -1274,7 +1274,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   <a
                     href={authedUrl(primaryCta.to)}
                     onClick={onInscrevaseClick}
-                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-brand-primary-strong text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
                   >
                     {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
                   </a>
@@ -1282,7 +1282,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   <Link
                     to={primaryCta.to}
                     onClick={onInscrevaseClick}
-                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-brand-primary-strong text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
                   >
                     {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
                   </Link>
@@ -1291,7 +1291,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <button
                   type="button"
                   onClick={() => scrollToSection(primaryCta.id)}
-                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-brand-primary-strong text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
                 >
                   {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
                 </button>
@@ -1305,14 +1305,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             {isMarketingHost && isLoggedIn ? (
               <a
                 href={authedUrl('/inicio')}
-                className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/30 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
+                className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-300 text-slate-900 hover:border-[#ff0068] hover:text-brand-primary-ink transition-colors whitespace-nowrap"
               >
                 Minha conta
               </a>
             ) : (
               <Link
                 to={isLoggedIn ? '/inicio' : `/login?redirectTo=${encodeURIComponent(`/evento/${idOrSlug}${sessaoParam ? `?sessao=${encodeURIComponent(sessaoParam)}` : ""}`)}`}
-                className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/30 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
+                className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-300 text-slate-900 hover:border-[#ff0068] hover:text-brand-primary-ink transition-colors whitespace-nowrap"
               >
                 {isLoggedIn ? 'Minha conta' : 'Entrar'}
               </Link>
@@ -1328,8 +1328,8 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             (inscrição/ingresso/workshop/pass) ficam desabilitadas. */}
         {eventOver && (
           <div role="status" className="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-6 py-4 flex items-center gap-3">
-            <Clock size={20} className="text-amber-400 shrink-0" />
-            <p className="text-sm font-bold text-amber-300">Este evento já aconteceu. Vendas e inscrições estão encerradas.</p>
+            <Clock size={20} className="text-amber-700 shrink-0" />
+            <p className="text-sm font-bold text-amber-700">Este evento já aconteceu. Vendas e inscrições estão encerradas.</p>
           </div>
         )}
 
@@ -1377,10 +1377,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {statCards.map(({ key, label, value, icon: Icon }) => (
-                <div key={key} className="bg-white/5 border border-white/10 rounded-3xl p-6">
-                  <Icon size={20} className="text-[#ff0068] mb-3" />
+                <div key={key} className="bg-white border border-slate-200 rounded-3xl p-6">
+                  <Icon size={20} className="text-brand-primary-ink mb-3" />
                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-                  <p className="text-xl font-black text-white tracking-tighter mt-1">{value}</p>
+                  <p className="text-xl font-black text-slate-900 tracking-tighter mt-1">{value}</p>
                 </div>
               ))}
               {docCards.map(({ key, title, subtitle, href }) => (
@@ -1390,14 +1390,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   target="_blank"
                   rel="noopener noreferrer"
                   download
-                  className="bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-3xl p-6 transition-all group flex flex-col"
+                  className="bg-white border border-slate-200 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-3xl p-6 transition-all group flex flex-col"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <FileText size={20} aria-hidden="true" className="text-[#ff0068]" />
-                    <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
+                    <FileText size={20} aria-hidden="true" className="text-brand-primary-ink" />
+                    <Download size={16} className="text-slate-600 group-hover:text-brand-primary-ink transition-colors" />
                   </div>
                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{subtitle}</p>
-                  <p className="text-sm font-black text-white tracking-tight mt-1">{title}</p>
+                  <p className="text-sm font-black text-slate-900 tracking-tight mt-1">{title}</p>
                 </a>
               ))}
             </div>
@@ -1418,10 +1418,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1de7f2] opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1de7f2]" />
             </span>
-            <p className="flex-1 text-sm font-black uppercase tracking-tight text-[#1de7f2]">
+            <p className="flex-1 text-sm font-black uppercase tracking-tight text-brand-cyan-ink">
               {event.destaque_link_label || 'Acessar'}
             </p>
-            <ExternalLink size={16} aria-hidden="true" className="text-[#1de7f2]/70 group-hover:text-[#1de7f2] transition-colors" />
+            <ExternalLink size={16} aria-hidden="true" className="text-[#1de7f2]/70 group-hover:text-brand-cyan-ink transition-colors" />
           </a>
         )}
 
@@ -1429,7 +1429,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {event.description && (
           <div id="sobre" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Sobre o Evento</h2>
-            <p className="text-slate-400 leading-relaxed whitespace-pre-line">{event.description}</p>
+            <p className="text-slate-600 leading-relaxed whitespace-pre-line">{event.description}</p>
           </div>
         )}
 
@@ -1440,14 +1440,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {hasLocalInfo && (
           <div id="local" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <MapPin size={24} className="text-[#ff0068]" /> Local
+              <MapPin size={24} className="text-brand-primary-ink" /> Local
             </h2>
             <div className="space-y-3">
               {/* Sem endereço específico, cidade/UF já apareceu no Hero logo
                   acima — repetir aqui só duplicava ("Tatuí/SP" 2x na mesma
                   tela). Só mostra texto aqui quando há algo NOVO a dizer. */}
               {event.location && (
-                <p className="text-slate-400 leading-relaxed">
+                <p className="text-slate-600 leading-relaxed">
                   {event.location}<br />
                   {localCidadeUf}
                 </p>
@@ -1457,7 +1457,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] hover:border-[#ff0068]/50 transition-all"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] hover:border-[#ff0068]/50 transition-all"
                 >
                   <MapPin size={16} /> Ver no Google Maps
                 </a>
@@ -1472,21 +1472,21 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {publicGenres.length > 0 && (
           <div id="estilos" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Music size={24} className="text-[#ff0068]" /> Estilos & Modalidades
+              <Music size={24} className="text-brand-primary-ink" /> Estilos & Modalidades
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {publicGenres.map(g => (
                 <div
                   key={g.name}
-                  className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-[#ff0068]/30 transition-colors"
+                  className="p-4 bg-white border border-slate-200 rounded-2xl hover:border-[#ff0068]/30 transition-colors"
                 >
-                  <p className="text-sm font-black uppercase tracking-tight text-white">{g.name}</p>
+                  <p className="text-sm font-black uppercase tracking-tight text-slate-900">{g.name}</p>
                   {g.sub_types.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {g.sub_types.map(s => (
                         <span
                           key={s.name}
-                          className="text-[10px] font-bold px-2 py-1 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-full"
+                          className="text-[10px] font-bold px-2 py-1 bg-[#ff0068]/10 text-brand-primary-ink border border-[#ff0068]/20 rounded-full"
                         >
                           {s.name}
                         </span>
@@ -1503,18 +1503,18 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {Array.isArray(event.programacao_config) && event.programacao_config.length > 0 && (
           <div id="programacao" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Clock size={24} className="text-[#ff0068]" /> Programação
+              <Clock size={24} className="text-brand-primary-ink" /> Programação
             </h2>
             <div className="space-y-2">
               {event.programacao_config
                 .filter((p: any) => p.atividade)
                 .map((item: any, i: number) => (
-                  <div key={i} className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-[#ff0068]/30 transition-colors">
+                  <div key={i} className="flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl hover:border-[#ff0068]/30 transition-colors">
                     <div className="shrink-0 w-20 text-center">
-                      <p className="text-2xl font-black text-[#ff0068] tabular-nums tracking-tighter">{item.hora || '--:--'}</p>
+                      <p className="text-2xl font-black text-brand-primary-ink tabular-nums tracking-tighter">{item.hora || '--:--'}</p>
                     </div>
-                    <div className="w-px h-10 bg-white/10 shrink-0" />
-                    <p className="font-bold text-sm text-white">{item.atividade}</p>
+                    <div className="w-px h-10 bg-slate-100 shrink-0" />
+                    <p className="font-bold text-sm text-slate-900">{item.atividade}</p>
                   </div>
                 ))}
             </div>
@@ -1525,10 +1525,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {eventSessions.length > 1 && (
           <div id="sessoes" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Calendar size={24} className="text-[#ff0068]" /> Escolha a sessão
+              <Calendar size={24} className="text-brand-primary-ink" /> Escolha a sessão
             </h2>
             {needsSessionChoice && (
-              <p className="text-xs text-slate-400">Escolha a sessão que você quer assistir para ver os ingressos.</p>
+              <p className="text-xs text-slate-600">Escolha a sessão que você quer assistir para ver os ingressos.</p>
             )}
             <div role="radiogroup" aria-label="Sessões" className={`grid grid-cols-1 gap-3 ${eventSessions.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
               {eventSessions.map(s => {
@@ -1540,12 +1540,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     role="radio"
                     aria-checked={selected}
                     onClick={() => { if (!selected) pickSession(s); else scrollToSection('ingressos'); }}
-                    className={`relative text-left p-5 border rounded-2xl transition-colors ${selected ? 'bg-[#ff0068]/10 border-[#ff0068] ring-1 ring-[#ff0068]/50' : 'bg-white/5 border-white/10 hover:border-[#ff0068]/50'}`}
+                    className={`relative text-left p-5 border rounded-2xl transition-colors ${selected ? 'bg-[#ff0068]/10 border-[#ff0068] ring-1 ring-[#ff0068]/50' : 'bg-white border-slate-200 hover:border-[#ff0068]/50'}`}
                   >
-                    {s.session_label && <p className="text-[11px] font-black uppercase tracking-widest text-[#ff0068] mb-1">{s.session_label}</p>}
-                    <p className="font-bold text-sm text-white">{formatDate(s.start_date ?? undefined)}</p>
-                    <p className="text-4xl font-black text-[#ff0068] tabular-nums tracking-tighter mt-2">{s.event_time?.slice(0, 5) || '--:--'}</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">
+                    {s.session_label && <p className="text-[11px] font-black uppercase tracking-widest text-brand-primary-ink mb-1">{s.session_label}</p>}
+                    <p className="font-bold text-sm text-slate-900">{formatDate(s.start_date ?? undefined)}</p>
+                    <p className="text-4xl font-black text-brand-primary-ink tabular-nums tracking-tighter mt-2">{s.event_time?.slice(0, 5) || '--:--'}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mt-2">
                       {selected ? 'Sessão escolhida' : 'Escolher esta sessão'}
                     </p>
                   </button>
@@ -1573,15 +1573,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             return (
               <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                  <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+                  <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
                 </h2>
                 <button
                   type="button"
                   onClick={() => scrollToSection('sessoes')}
-                  className="w-full text-left bg-white/5 border border-dashed border-[#ff0068]/40 rounded-2xl p-5 hover:border-[#ff0068] transition-colors"
+                  className="w-full text-left bg-white border border-dashed border-[#ff0068]/40 rounded-2xl p-5 hover:border-[#ff0068] transition-colors"
                 >
-                  <p className="font-black uppercase text-sm text-[#ff0068]">Escolha a sessão para ver os ingressos</p>
-                  <p className="text-xs text-slate-400 mt-1">Dia, horário e lugares mudam de uma sessão para outra.</p>
+                  <p className="font-black uppercase text-sm text-brand-primary-ink">Escolha a sessão para ver os ingressos</p>
+                  <p className="text-xs text-slate-600 mt-1">Dia, horário e lugares mudam de uma sessão para outra.</p>
                 </button>
               </div>
             );
@@ -1592,20 +1592,20 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             return (
               <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                  <Ticket size={24} className="text-emerald-400" /> Ingressos
+                  <Ticket size={24} className="text-emerald-700" /> Ingressos
                 </h2>
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 flex items-start gap-4">
-                  <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-400 shrink-0">
+                  <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-700 shrink-0">
                     <Ticket size={24} />
                   </div>
                   <div>
                     {/* Produtor com nota própria (ex: entrada solidária com doação)
                         pode não querer a palavra "gratuita" — o título neutro deixa
                         a nota carregar a framing real, sem contradizer o texto dela. */}
-                    <p className="font-black uppercase text-sm text-emerald-400">
+                    <p className="font-black uppercase text-sm text-emerald-700">
                       {notaCustom ? 'Acesso ao evento' : 'Entrada gratuita'}
                     </p>
-                    <p className="text-xs text-slate-300 mt-1">
+                    <p className="text-xs text-slate-700 mt-1">
                       {notaCustom || 'Não é necessário ingresso para assistir. Chegue cedo para garantir lugar.'}
                     </p>
                   </div>
@@ -1618,17 +1618,17 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             return (
               <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                  <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+                  <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
                 </h2>
-                <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
+                <p className="text-xs text-slate-600">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
                 {eventOver ? (
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Vendas encerradas</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Vendas encerradas</p>
                 ) : (
                 <a
                   href={safeHttpUrl(config.url_ingressos)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-3 px-6 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
+                  className="inline-flex items-center gap-3 px-6 py-4 bg-brand-primary-strong text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
                 >
                   <Ticket size={18} /> Comprar Ingressos <ExternalLink size={14} />
                 </a>
@@ -1669,12 +1669,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             return (
               <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                  <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+                  <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
                 </h2>
-                <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
+                <p className="text-xs text-slate-600">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
                 {salesEnabled && event.seat_map_enabled && (
-                  <p className="text-xs text-slate-300 flex items-center gap-2">
-                    <Armchair size={14} className="text-[#ff0068] shrink-0" aria-hidden="true" />
+                  <p className="text-xs text-slate-700 flex items-center gap-2">
+                    <Armchair size={14} className="text-brand-primary-ink shrink-0" aria-hidden="true" />
                     Lugar marcado: escolha a quantidade e depois marque seus assentos no mapa.
                   </p>
                 )}
@@ -1707,27 +1707,27 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       return (
                         <div
                           key={realIdx}
-                          className={`bg-white/5 border rounded-2xl p-5 flex flex-col gap-2 transition-colors ${
-                            soldOut ? 'border-white/10 opacity-60' : 'border-white/10 hover:border-[#ff0068]/40'
+                          className={`bg-white border rounded-2xl p-5 flex flex-col gap-2 transition-colors ${
+                            soldOut ? 'border-slate-200 opacity-60' : 'border-slate-200 hover:border-[#ff0068]/40'
                           }`}
                         >
                           <div className="flex items-baseline justify-between gap-2">
                             <div>
-                              <p className="font-black uppercase text-sm text-white">{t.nome}</p>
+                              <p className="font-black uppercase text-sm text-slate-900">{t.nome}</p>
                               {nomeLote && (
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mt-0.5">{nomeLote}</p>
                               )}
                             </div>
                             <div className="text-right">
-                              <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-[#ff0068]'}`}>
+                              <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-brand-primary-ink'}`}>
                                 {preco > 0 ? (zoned ? `R$ ${formatPrecoBR(zoneRange!.min)} a R$ ${formatPrecoBR(zoneRange!.max)}` : `R$ ${formatPrecoBR(preco)}`) : 'Grátis'}
                               </p>
-                              {zoned && <p className="text-[10px] font-bold text-slate-400">conforme o lugar</p>}
+                              {zoned && <p className="text-[10px] font-bold text-slate-600">conforme o lugar</p>}
                               {/* "+ taxas" com "?" (Decreto 13.108/2026, art. 4º VI e 7º): mesma conta do checkout
                                   (computeAudienceCheckout) — o total desde o primeiro contato vai no "?". */}
                               {preco > 0 && salesEnabled && (
                                 <PriceFeeNote
-                                  className="text-[10px] font-bold text-slate-400"
+                                  className="text-[10px] font-bold text-slate-600"
                                   disclosure={computePriceDisclosure({
                                     product: 'plateia',
                                     preco,
@@ -1743,7 +1743,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                               )}
                             </div>
                           </div>
-                          {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
+                          {t.obs && <p className="text-[10px] text-slate-600">{t.obs}</p>}
 
                           {ticketCategory(t) === 'promocional' && (
                             <p className="text-[10px] font-bold text-violet-300">
@@ -1753,37 +1753,37 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
                           {/* Meia-entrada (Lei 12.933): sinaliza tipo + exigência de comprovação na entrada. */}
                           {(t.kind === 'meia' || String(t.nome).toLowerCase().includes('meia')) && (
-                            <p className="text-[10px] font-bold text-sky-400">
+                            <p className="text-[10px] font-bold text-sky-700">
                               Meia-entrada · apresente o comprovante do benefício na portaria
                             </p>
                           )}
 
                           {/* Fim do lote sem virada de preço pra maior (aviso de virada cobre o caso contrário). */}
                           {!hint && !soldOut && r?.lote.data_virada && (
-                            <p className="text-[10px] font-bold text-slate-400">
+                            <p className="text-[10px] font-bold text-slate-600">
                               Vendas neste lote até {new Date(r.lote.data_virada + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                             </p>
                           )}
 
                           {hint && !soldOut && (
-                            <p className="text-[10px] font-bold text-[#ff0068]">
+                            <p className="text-[10px] font-bold text-brand-primary-ink">
                               <AvisoViradaLote preco={hint.proximoPreco} dataVirada={hint.dataVirada} dias={hint.dias} formatPreco={n => (nextRange && nextRange.min > 0 && nextRange.min !== nextRange.max ? `R$ ${formatPrecoBR(nextRange.min)} a R$ ${formatPrecoBR(nextRange.max)}` : `R$ ${formatPrecoBR(n)}`)} />
                             </p>
                           )}
 
                           {/* Estoque (Tier 2) */}
                           {soldOut ? (
-                            <span className="inline-flex self-start items-center gap-1.5 px-3 py-1 bg-slate-700/40 text-slate-300 rounded-full text-[10px] font-black uppercase tracking-widest">
+                            <span className="inline-flex self-start items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-[10px] font-black uppercase tracking-widest">
                               Esgotado
                             </span>
                           ) : lowStock ? (
-                            <span className="inline-flex self-start items-center gap-1.5 text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                            <span className="inline-flex self-start items-center gap-1.5 text-[10px] font-black text-amber-700 uppercase tracking-widest">
                               ⚠ Últimos {stock!.remaining}
                             </span>
                           ) : null}
 
                           {eventOver && (
-                            <span className="self-start text-[10px] font-black uppercase tracking-widest text-amber-400 mt-2">Vendas encerradas</span>
+                            <span className="self-start text-[10px] font-black uppercase tracking-widest text-amber-700 mt-2">Vendas encerradas</span>
                           )}
 
                           {/* Carrinho multi-tipo: +/− por tipo (padrão Sympla/Eventbrite).
@@ -1803,7 +1803,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                                   aria-label={`Adicionar ${t.nome} ao carrinho`}
                                   onClick={() => setTypeQty(realIdx, 1)}
                                   title={atGlobalMax ? `Máximo de ${maxPurchase} ingressos por compra` : undefined}
-                                  className="self-start inline-flex items-center gap-1.5 px-4 py-2 mt-2 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                  className="self-start inline-flex items-center gap-1.5 px-4 py-2 mt-2 bg-brand-primary-strong text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 >
                                   <Plus size={12} /> Adicionar
                                 </button>
@@ -1815,7 +1815,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                                   type="button"
                                   aria-label={qty <= 1 ? `Remover ${t.nome} do carrinho` : `Diminuir quantidade de ${t.nome}`}
                                   onClick={() => setTypeQty(realIdx, qty - 1)}
-                                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
+                                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
                                 >
                                   <Minus size={14} />
                                 </button>
@@ -1826,7 +1826,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                                   disabled={qty >= typeCap || atGlobalMax}
                                   title={atGlobalMax ? `Máximo de ${maxPurchase} ingressos por compra` : (qty >= typeCap ? 'Limite deste tipo atingido' : undefined)}
                                   onClick={() => setTypeQty(realIdx, Math.min(typeCap, qty + 1))}
-                                  className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
+                                  className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-brand-primary-strong disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
                                 >
                                   <Plus size={14} />
                                 </button>
@@ -1838,7 +1838,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                               href={safeHttpUrl(t.link)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"
+                              className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-brand-primary-ink uppercase tracking-widest hover:underline"
                             >
                               Comprar <ExternalLink size={10} />
                             </a>
@@ -1866,9 +1866,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {event.formacoes_config && event.formacoes_config.length > 0 && (
           <div id="inscricoes" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Music size={24} className="text-[#ff0068]" /> Inscrições disponíveis
+              <Music size={24} className="text-brand-primary-ink" /> Inscrições disponíveis
             </h2>
-            <p className="text-xs text-slate-400 -mt-2">
+            <p className="text-xs text-slate-600 -mt-2">
               Escolha a modalidade pra começar sua inscrição.
             </p>
             {/* Tags dos tipos de mostra aceitos. Padrão de mercado (Stripe/Linear):
@@ -1884,13 +1884,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               return (
                 <div className="flex flex-wrap items-center gap-2 -mt-1">
                   {aceitaCompetitiva && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">
-                      <Trophy size={12} className="text-[#ff0068]" />
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-700">
+                      <Trophy size={12} className="text-brand-primary-ink" />
                       Competitiva
                     </span>
                   )}
                   {aceitaAvaliada && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-700">
                       <GraduationCap size={12} className="text-violet-300" />
                       {resolveAvaliadaLabel(config)}
                     </span>
@@ -1923,7 +1923,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 // PR-B: usa rota nova do wizard de 4 passos. PrivateRoute
                 // redireciona pra login se necessário (preservando redirectTo).
                 const targetUrl = `/festival/${event?.slug ?? idOrSlug}/inscrever/${encodeURIComponent(mod.name)}`;
-                const cardClassName = `block bg-white/5 border border-white/10 rounded-2xl p-5 transition-all group ${
+                const cardClassName = `block bg-white border border-slate-200 rounded-2xl p-5 transition-all group ${
                   isRegistrationOpen
                     ? 'hover:border-[#ff0068]/50 hover:bg-[#ff0068]/5 cursor-pointer'
                     : 'opacity-60 cursor-not-allowed'
@@ -1934,32 +1934,32 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       <div className="min-w-0">
                         <span className="font-black uppercase text-sm">{mod.name}</span>
                         {nomeLote && (
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mt-0.5">{nomeLote}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[#ff0068] font-black text-sm">
+                        <span className="text-brand-primary-ink font-black text-sm">
                           {precoExibir != null && precoExibir > 0
                             ? `${isProgressiva ? 'a partir de ' : ''}R$ ${formatPrecoBR(precoExibir)}`
                             : 'Gratuito'}
                         </span>
                         {isRegistrationOpen && (
-                          <ChevronRight size={16} className="text-slate-500 group-hover:text-[#ff0068] group-hover:translate-x-0.5 transition-all" />
+                          <ChevronRight size={16} className="text-slate-500 group-hover:text-brand-primary-ink group-hover:translate-x-0.5 transition-all" />
                         )}
                       </div>
                     </div>
                     {!isRegistrationOpen && (
-                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mt-3 pt-3 border-t border-white/5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mt-3 pt-3 border-t border-slate-100">
                         Inscrições encerradas
                       </p>
                     )}
                     {hint && isRegistrationOpen && (
-                      <p className="text-[10px] font-bold mt-3 pt-3 border-t border-white/5 text-[#ff0068]">
+                      <p className="text-[10px] font-bold mt-3 pt-3 border-t border-slate-100 text-brand-primary-ink">
                         <AvisoViradaLote preco={hint.proximoPreco} dataVirada={hint.dataVirada} dias={hint.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
                       </p>
                     )}
                     {isRegistrationOpen && (
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:text-[#ff0068] mt-3 pt-3 border-t border-white/5 transition-colors">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:text-brand-primary-ink mt-3 pt-3 border-t border-slate-100 transition-colors">
                         Inscrever {mod.name.toLowerCase()} →
                       </p>
                     )}
@@ -1997,7 +1997,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <a
                   href={authedUrl(`/festival/${slugOrId}/register`)}
                   onClick={onInscrevaseClick}
-                  className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
+                  className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-brand-primary-ink rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
                 >
                   Ver todas e escolher depois <ChevronRight size={16} />
                 </a>
@@ -2005,7 +2005,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <Link
                   to={`/festival/${slugOrId}/register`}
                   onClick={onInscrevaseClick}
-                  className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
+                  className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-brand-primary-ink rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
                 >
                   Ver todas e escolher depois <ChevronRight size={16} />
                 </Link>
@@ -2020,7 +2020,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <BrandIcon size={24} /> Workshops
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {hasFormacoes
                 ? 'Aprimore sua técnica com quem é referência. Inscritos da mostra têm preço especial.'
                 : 'Aprimore sua técnica com quem é referência.'}
@@ -2043,29 +2043,29 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     className="text-left bg-gradient-to-br from-[#ff0068]/15 to-[#1de7f2]/10 border-2 border-[#ff0068]/40 hover:border-[#ff0068] rounded-2xl p-5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068] text-white px-2.5 py-1 rounded-full">
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-brand-primary-strong text-white px-2.5 py-1 rounded-full">
                         <Ticket size={11} />{isALaCarte ? 'Single Class' : 'Pass'}
                       </span>
                       {!isALaCarte && pass.esgotado && !eventOver && (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Esgotado</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-rose-700">Esgotado</span>
                       )}
                       {eventOver && (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Vendas encerradas</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-700">Vendas encerradas</span>
                       )}
                     </div>
-                    <h3 className="font-black uppercase tracking-tight text-white text-base leading-tight">{pass.name}</h3>
-                    {pass.description && <p className="text-xs text-slate-300 mt-1 line-clamp-2">{pass.description}</p>}
+                    <h3 className="font-black uppercase tracking-tight text-slate-900 text-base leading-tight">{pass.name}</h3>
+                    {pass.description && <p className="text-xs text-slate-700 mt-1 line-clamp-2">{pass.description}</p>}
                     {isALaCarte ? (
                       <>
-                        <p className="text-[11px] text-slate-400 mt-2">Escolha entre: {pass.workshop_names.filter(Boolean).join(', ')}</p>
-                        <p className="text-sm font-black text-white pt-2">Você escolhe quais aulas fazer</p>
-                        <p className="text-[11px] text-slate-400">Preço soma conforme a seleção →</p>
+                        <p className="text-[11px] text-slate-600 mt-2">Escolha entre: {pass.workshop_names.filter(Boolean).join(', ')}</p>
+                        <p className="text-sm font-black text-slate-900 pt-2">Você escolhe quais aulas fazer</p>
+                        <p className="text-[11px] text-slate-600">Preço soma conforme a seleção →</p>
                         {(() => {
                           const tiers = normalizeQuantityTiers(pass.quantity_discount_tiers);
                           if (tiers.length === 0) return null;
                           const last = tiers[tiers.length - 1];
                           return (
-                            <ul className="mt-2 space-y-0.5 text-[11px] font-bold text-emerald-300">
+                            <ul className="mt-2 space-y-0.5 text-[11px] font-bold text-emerald-700">
                               {tiers.map(t => (
                                 <li key={t.min}>
                                   {t.min === last.min && tiers.length > 1 ? `${t.min} ou mais aulas` : `${t.min} aulas`}: {t.percent}% de desconto
@@ -2077,8 +2077,8 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       </>
                     ) : (
                       <>
-                        <p className="text-[11px] text-slate-400 mt-2">Inclui: {pass.workshop_names.filter(Boolean).join(', ')}</p>
-                        <p className="text-lg font-black text-white pt-2">
+                        <p className="text-[11px] text-slate-600 mt-2">Inclui: {pass.workshop_names.filter(Boolean).join(', ')}</p>
+                        <p className="text-lg font-black text-slate-900 pt-2">
                           {Number(pass.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                         {pass.preco_inscritos_mostra != null && (
@@ -2125,7 +2125,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     className={
                       featured
                         ? 'text-left col-span-1 sm:col-span-2 lg:col-span-3 bg-gradient-to-br from-amber-400/15 via-yellow-300/5 to-amber-500/15 border-2 border-amber-400/60 hover:border-amber-300 rounded-2xl overflow-hidden transition-colors group relative shadow-[0_0_30px_-10px_rgba(251,191,36,0.4)]'
-                        : 'text-left bg-white/5 border border-white/10 hover:border-[#ff0068]/40 rounded-2xl overflow-hidden transition-colors group'
+                        : 'text-left bg-white border border-slate-200 hover:border-[#ff0068]/40 rounded-2xl overflow-hidden transition-colors group'
                     }
                   >
                     {featured && ws.featured_badge_text && (
@@ -2147,15 +2147,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                           />
                         )}
                         {ws.gratis_para_inscritos && (
-                          <span className="absolute top-2 right-2 inline-flex items-center text-[9px] font-black uppercase tracking-widest bg-violet-500/90 text-white px-2 py-0.5 rounded-full">
+                          <span className="absolute top-2 right-2 inline-flex items-center text-[9px] font-black uppercase tracking-widest bg-violet-500/90 text-slate-900 px-2 py-0.5 rounded-full">
                             Grátis p/ inscritos
                           </span>
                         )}
                       </div>
                       <div className={featured ? 'p-4 sm:p-6 space-y-1.5 sm:flex-1 sm:flex sm:flex-col sm:justify-center' : 'p-4 space-y-1.5'}>
-                      <p className={featured ? 'text-[10px] font-black uppercase tracking-widest text-amber-400' : 'text-[9px] font-black uppercase tracking-widest text-[#ff0068]'}>{ws.modalidade ?? 'Workshop'} · {nivelLabel}</p>
-                      <h3 className={featured ? 'font-black uppercase tracking-tight text-white text-xl sm:text-2xl leading-tight' : 'font-black uppercase tracking-tight text-white text-sm leading-tight line-clamp-2'}>{ws.name}</h3>
-                      <p className="text-xs text-slate-400">com {ws.professor_name}</p>
+                      <p className={featured ? 'text-[10px] font-black uppercase tracking-widest text-amber-700' : 'text-[9px] font-black uppercase tracking-widest text-brand-primary-ink'}>{ws.modalidade ?? 'Workshop'} · {nivelLabel}</p>
+                      <h3 className={featured ? 'font-black uppercase tracking-tight text-slate-900 text-xl sm:text-2xl leading-tight' : 'font-black uppercase tracking-tight text-slate-900 text-sm leading-tight line-clamp-2'}>{ws.name}</h3>
+                      <p className="text-xs text-slate-600">com {ws.professor_name}</p>
                       <p className="text-[11px] text-slate-500">{dataFmt}{ws.duracao_minutos ? ` · ${ws.duracao_minutos}min` : ''}</p>
                       {featured && ws.description && (
                         <p className="text-xs font-medium text-amber-200/90 whitespace-pre-line leading-relaxed pt-1">
@@ -2163,16 +2163,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                         </p>
                       )}
                       {loteAtivo && (
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{loteAtivo.nome}</p>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600">{loteAtivo.nome}</p>
                       )}
-                      <p className={featured ? 'text-2xl font-black text-amber-300 pt-1' : 'text-sm font-black text-white pt-1'}>
+                      <p className={featured ? 'text-2xl font-black text-amber-700 pt-1' : 'text-sm font-black text-slate-900 pt-1'}>
                         {preco === 0
                           ? 'Grátis'
                           : Number(preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                       {preco > 0 && (
                         <PriceFeeNote
-                          className="text-[10px] font-bold text-slate-400"
+                          className="text-[10px] font-bold text-slate-600"
                           disclosure={computePriceDisclosure({
                             product: 'workshop',
                             preco: Number(preco),
@@ -2187,12 +2187,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                         />
                       )}
                       {loteAtivo?.proximo && (
-                        <p className="text-[10px] font-bold text-[#ff0068]">
+                        <p className="text-[10px] font-bold text-brand-primary-ink">
                           <AvisoViradaLote preco={loteAtivo.proximo.preco} dataVirada={loteAtivo.proximo.dataVirada} dias={loteAtivo.proximo.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
                         </p>
                       )}
                       {ws.hospedagem_delta != null && (
-                        <p className="text-[10px] font-bold text-slate-400">
+                        <p className="text-[10px] font-bold text-slate-600">
                           + hospedagem: {(Number(preco) + Number(ws.hospedagem_delta)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                       )}
@@ -2223,7 +2223,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {enabledAwards.length > 0 && (
           <div id="premiacao" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Trophy size={24} className="text-[#ff0068]" /> Premiação
+              <Trophy size={24} className="text-brand-primary-ink" /> Premiação
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {enabledAwards.map((award: any) => {
@@ -2244,37 +2244,37 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   revealed && Array.isArray(award.winner_items) && award.winner_items.length > 0 ? award.winner_items : undefined;
                 const winnerNome: string | undefined = revealed && !winnerItems ? award.winner_nome : undefined;
                 return (
-                  <div key={award.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                    <p className="font-black uppercase text-sm tracking-tight text-white">{award.name}</p>
+                  <div key={award.id} className="bg-white border border-slate-200 rounded-2xl p-5">
+                    <p className="font-black uppercase text-sm tracking-tight text-slate-900">{award.name}</p>
                     {valor && (
-                      <p className="text-lg font-black text-emerald-400 tabular-nums mt-1">
+                      <p className="text-lg font-black text-emerald-700 tabular-nums mt-1">
                         {valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                     )}
                     {award.description && (
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">{award.description}</p>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed">{award.description}</p>
                     )}
                     {award.formation && award.formation !== 'TODOS' && (
-                      <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
+                      <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-brand-primary-ink text-[9px] font-black uppercase tracking-widest">
                         {award.formation}
                       </span>
                     )}
                     {winnerItems && (
-                      <div className="mt-3 pt-3 border-t border-white/10 space-y-1.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vencedores(as)</p>
+                      <div className="mt-3 pt-3 border-t border-slate-200 space-y-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-600">Vencedores(as)</p>
                         {winnerItems.map((w, i) => (
-                          <p key={i} className="text-sm font-black uppercase tracking-tight text-[#ff0068]">
-                            {w.nome}{w.estudio && <span className="text-slate-400 font-bold text-[10px] normal-case tracking-normal"> · {w.estudio}</span>}
+                          <p key={i} className="text-sm font-black uppercase tracking-tight text-brand-primary-ink">
+                            {w.nome}{w.estudio && <span className="text-slate-600 font-bold text-[10px] normal-case tracking-normal"> · {w.estudio}</span>}
                           </p>
                         ))}
                       </div>
                     )}
                     {winnerNome && (
-                      <div className="mt-3 pt-3 border-t border-white/10">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vencedor(a)</p>
-                        <p className="text-sm font-black uppercase tracking-tight text-[#ff0068] mt-0.5">{winnerNome}</p>
+                      <div className="mt-3 pt-3 border-t border-slate-200">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-600">Vencedor(a)</p>
+                        <p className="text-sm font-black uppercase tracking-tight text-brand-primary-ink mt-0.5">{winnerNome}</p>
                         {award.winner_estudio && (
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">{award.winner_estudio}</p>
+                          <p className="text-[10px] text-slate-600 uppercase font-bold">{award.winner_estudio}</p>
                         )}
                       </div>
                     )}
@@ -2292,7 +2292,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             <h3 className="text-3xl font-black uppercase tracking-tighter italic">
               {hasFormacoes ? 'Pronto para dançar?' : 'Garanta sua vaga nos workshops'}
             </h3>
-            <p className="text-slate-400 text-sm mt-2">
+            <p className="text-slate-600 text-sm mt-2">
               {hasFormacoes
                 ? (isRegistrationOpen ? 'As inscrições estão abertas. Garanta sua vaga agora.' : 'Inscrições encerradas.')
                 : (hasWorkshopsSection ? 'Escolha seu pass e garanta sua vaga.' : 'Confira os detalhes do evento acima.')}
@@ -2304,7 +2304,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <a
                   href={authedUrl(`/festival/${slugOrId}/register`)}
                   onClick={onInscrevaseClick}
-                  className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
+                  className="px-8 py-4 bg-brand-primary-strong text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
                 >
                   Inscreva-se <ChevronRight size={16} />
                 </a>
@@ -2312,7 +2312,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <Link
                   to={`/festival/${slugOrId}/register`}
                   onClick={onInscrevaseClick}
-                  className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
+                  className="px-8 py-4 bg-brand-primary-strong text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
                 >
                   Inscreva-se <ChevronRight size={16} />
                 </Link>
@@ -2322,7 +2322,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               <button
                 type="button"
                 onClick={() => scrollToSection('workshops')}
-                className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
+                className="px-8 py-4 bg-brand-primary-strong text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
               >
                 Ver workshops <ChevronRight size={16} />
               </button>
@@ -2330,7 +2330,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             {hasFormacoes && (
               <Link
                 to={`/festival/${slugOrId}/leaderboard`}
-                className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:border-[#ff0068]/50 transition-all flex items-center justify-center gap-2"
+                className="px-8 py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:border-[#ff0068]/50 transition-all flex items-center justify-center gap-2"
               >
                 <Trophy size={16} /> Resultados
               </Link>
@@ -2348,43 +2348,43 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             <div className="flex flex-wrap gap-3">
               {social.instagram && (
                 <a href={social.instagram} target="_blank" rel="noopener noreferrer"
-                   className="flex items-center gap-2 px-5 py-3 bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <Instagram size={16} /> Instagram
                 </a>
               )}
               {social.facebook && (
                 <a href={social.facebook} target="_blank" rel="noopener noreferrer"
-                   className="flex items-center gap-2 px-5 py-3 bg-[#1877F2] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-[#1877F2] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <Facebook size={16} /> Facebook
                 </a>
               )}
               {social.tiktok && (
                 <a href={social.tiktok} target="_blank" rel="noopener noreferrer"
-                   className="flex items-center gap-2 px-5 py-3 bg-black border border-white/20 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-black border border-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <TikTokIcon size={16} /> TikTok
                 </a>
               )}
               {social.youtube && (
                 <a href={social.youtube} target="_blank" rel="noopener noreferrer"
-                   className="flex items-center gap-2 px-5 py-3 bg-red-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-red-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <Youtube size={16} /> YouTube
                 </a>
               )}
               {social.whatsapp && (
                 <a href={social.whatsapp} target="_blank" rel="noopener noreferrer"
-                   className="flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <WhatsAppIcon size={16} /> WhatsApp
                 </a>
               )}
               {social.website && (
                 <a href={social.website} target="_blank" rel="noopener noreferrer"
-                   className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all">
+                   className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all">
                   <Globe size={16} /> Site oficial
                 </a>
               )}
               {social.email && (
                 <a href={social.email}
-                   className="flex items-center gap-2 px-5 py-3 bg-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                   className="text-white flex items-center gap-2 px-5 py-3 bg-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <Mail size={16} /> E-mail
                 </a>
               )}
@@ -2396,7 +2396,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {Array.isArray(event.patrocinadores_config) && event.patrocinadores_config.filter((s: any) => s.logo_url).length > 0 && (
           <div className="space-y-4">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Realização & Apoio</h2>
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-8">
+            <div className="bg-white border border-slate-200 rounded-3xl p-8">
               <div className="flex flex-wrap items-center justify-center gap-8">
                 {event.patrocinadores_config
                   .filter((s: any) => s.logo_url)
@@ -2424,14 +2424,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           <div className="bg-gradient-to-r from-red-600/10 to-transparent border border-red-500/20 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center shrink-0">
-                <Youtube size={22} className="text-white" />
+                <Youtube size={22} className="text-slate-900" />
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-[9px] font-black text-red-400 uppercase tracking-widest">Transmissão ao Vivo</span>
+                  <span className="text-[9px] font-black text-red-700 uppercase tracking-widest">Transmissão ao Vivo</span>
                 </div>
-                <p className="font-black text-white text-sm uppercase tracking-tight">Acompanhe o festival pelo YouTube</p>
+                <p className="font-black text-slate-900 text-sm uppercase tracking-tight">Acompanhe o festival pelo YouTube</p>
               </div>
             </div>
             <a
@@ -2451,20 +2451,20 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {/* Compartilhar */}
         <div className="space-y-4">
           <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-            <Share2 size={22} className="text-[#ff0068]" /> Compartilhar
+            <Share2 size={22} className="text-brand-primary-ink" /> Compartilhar
           </h2>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleShareWhatsapp}
-              className="flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
+              className="text-white flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
             >
               <WhatsAppIcon size={16} /> Enviar via WhatsApp
             </button>
             <button
               onClick={handleShareCopy}
-              className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
+              className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all"
             >
-              {copied ? (<><Check size={16} className="text-emerald-400" /> Link copiado!</>) : (<><Copy size={16} /> Copiar link</>)}
+              {copied ? (<><Check size={16} className="text-emerald-700" /> Link copiado!</>) : (<><Copy size={16} /> Copiar link</>)}
             </button>
           </div>
         </div>
@@ -2479,20 +2479,20 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       {/* Sticky bar do carrinho — aparece quando há ≥1 ingresso selecionado.
           Mostra qty + total de face; checkout exibe taxa/cupom (padrão Sympla). */}
       {cartTotalQty > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-[60] bg-[#0b0b0f]/95 backdrop-blur border-t border-[#ff0068]/30 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
+        <div className="fixed bottom-0 inset-x-0 z-[60] bg-white/95 backdrop-blur border-t border-[#ff0068]/30 shadow-[0_-8px_30px_rgba(15,23,42,0.12)]">
           <div className="max-w-6xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">
                 {cartTotalQty} ingresso{cartTotalQty === 1 ? '' : 's'}
               </p>
-              <p className="text-lg font-black text-white tabular-nums leading-tight">
+              <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">
                 R$ {formatPrecoBR(cartTotalBRL)}
               </p>
             </div>
             <button
               type="button"
               onClick={() => navigate(`/checkout-ingresso/${slugOrId}`, { state: { cart } })}
-              className="inline-flex items-center gap-2 px-5 sm:px-7 py-3 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f] shrink-0 shadow-lg shadow-[#ff0068]/20"
+              className="inline-flex items-center gap-2 px-5 sm:px-7 py-3 bg-brand-primary-strong text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f] shrink-0 shadow-lg shadow-[#ff0068]/20"
             >
               {event.seat_map_enabled ? <Armchair size={14} /> : <Ticket size={14} />}
               {event.seat_map_enabled ? 'Escolher lugares' : 'Ir pro carrinho'} <ChevronRight size={14} />

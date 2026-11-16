@@ -35,7 +35,7 @@ const PriceFeeNote: React.FC<Props> = ({ disclosure, className }) => {
   return (
     <>
       <span
-        className={className ?? 'text-[11px] font-bold text-slate-400'}
+        className={className ?? 'text-[11px] font-bold text-slate-600'}
         onClick={stop}
       >
         + taxas
@@ -47,12 +47,12 @@ const PriceFeeNote: React.FC<Props> = ({ disclosure, className }) => {
           onClick={(e) => { stop(e); setOpen(true); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { stop(e); setOpen(true); } }}
           aria-label="Entenda as taxas"
-          className="ml-1 inline-flex cursor-pointer align-middle text-slate-400 hover:text-white"
+          className="ml-1 inline-flex cursor-pointer align-middle text-slate-600 hover:text-slate-900"
         >
           <CircleHelp size={13} />
         </span>
         {installments && (
-          <span className="ml-2 inline-block rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-300 align-middle">
+          <span className="ml-2 inline-block rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-700 align-middle">
             em até {installments.n}x de {brl(installments.perInstallment)}
           </span>
         )}
@@ -60,21 +60,21 @@ const PriceFeeNote: React.FC<Props> = ({ disclosure, className }) => {
 
       {open && createPortal(
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4"
           onClick={() => setOpen(false)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Entenda as taxas"
-            className="relative w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-6 text-left text-white shadow-2xl"
+            className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 text-left text-slate-900 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Fechar"
-              className="absolute right-4 top-4 text-slate-400 hover:text-white"
+              className="absolute right-4 top-4 text-slate-600 hover:text-slate-900"
             >
               <X size={18} />
             </button>
@@ -84,25 +84,25 @@ const PriceFeeNote: React.FC<Props> = ({ disclosure, className }) => {
               {serviceFee > 0 && (
                 <div>
                   <p className="font-black">Taxa de serviço: {brl(serviceFee)}</p>
-                  <p className="text-xs text-slate-400">Valor pela utilização da plataforma CoreoHub para realizar a compra online.</p>
+                  <p className="text-xs text-slate-600">Valor pela utilização da plataforma CoreoHub para realizar a compra online.</p>
                 </div>
               )}
               {hasPaymentFee && (
                 <div>
                   <p className="font-black">Taxa de pagamento</p>
-                  <p className="text-xs text-slate-400">Custo do processamento do pagamento. O valor muda conforme a forma escolhida (Pix ou cartão).</p>
+                  <p className="text-xs text-slate-600">Custo do processamento do pagamento. O valor muda conforme a forma escolhida (Pix ou cartão).</p>
                 </div>
               )}
               {installments && (
                 <div>
                   <p className="font-black">Taxa de parcelamento</p>
-                  <p className="text-xs text-slate-400">Só no cartão parcelado. Varia com o número de parcelas, e o checkout mostra juros ao mês e CET antes de você confirmar.</p>
+                  <p className="text-xs text-slate-600">Só no cartão parcelado. Varia com o número de parcelas, e o checkout mostra juros ao mês e CET antes de você confirmar.</p>
                 </div>
               )}
             </div>
 
-            <div className="mt-5 space-y-1 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total a partir de</p>
+            <div className="mt-5 space-y-1 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Total a partir de</p>
               <p className="flex justify-between"><span>No Pix</span><strong>{brl(pixTotal)}</strong></p>
               <p className="flex justify-between"><span>No cartão à vista</span><strong>{brl(cardTotal)}</strong></p>
               {installments && (
@@ -112,7 +112,7 @@ const PriceFeeNote: React.FC<Props> = ({ disclosure, className }) => {
                 </p>
               )}
             </div>
-            <p className="mt-4 text-[11px] text-slate-400">O valor final aparece no checkout, antes da confirmação do pagamento.</p>
+            <p className="mt-4 text-[11px] text-slate-600">O valor final aparece no checkout, antes da confirmação do pagamento.</p>
           </div>
         </div>,
         document.body,
