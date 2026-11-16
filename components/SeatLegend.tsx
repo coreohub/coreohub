@@ -20,8 +20,8 @@ export default function SeatLegend({ rowsConfig, variant = 'dark', showBlocked =
   const hasLargo = has(r => Object.values(r.tipos ?? {}).includes('pcd_largo'));
   const hasComp = has(r => Object.keys(r.acompanhante ?? {}).length > 0);
 
-  const box = variant === 'dark' ? 'bg-white/10' : 'bg-slate-200 dark:bg-white/10';
-  const boxTaken = variant === 'dark' ? 'bg-white/5' : 'bg-slate-100 dark:bg-white/5';
+  const box = variant === 'dark' ? 'bg-white/10' : 'bg-white ring-1 ring-slate-400 dark:ring-0 dark:bg-white/10';
+  const boxTaken = variant === 'dark' ? 'bg-white/5' : 'bg-slate-300 dark:bg-white/5';
   const sky = variant === 'dark' ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/50' : 'bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 ring-1 ring-sky-400/60';
   const amber = variant === 'dark' ? 'bg-amber-500/10 text-amber-300 ring-1 ring-dashed ring-amber-400/50' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-dashed ring-amber-400/70';
   const chip = `w-4 h-4 rounded inline-flex items-center justify-center shrink-0`;
