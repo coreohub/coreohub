@@ -34,6 +34,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { transferToWallet, getTransferStatus } from '../_shared/asaas-payouts.ts'
 import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
 import { runPlannedPayout } from '../_shared/payout-run.ts'
+import { attemptsMode } from '../_shared/payout-attempts.ts'
 import { parseFeeMode } from '../_shared/subconta-fee.ts'
 import { groupLowValueByProducer } from '../_shared/low-value-pix.ts'
 
@@ -139,16 +140,32 @@ Deno.serve(async (req) => {
           const label = row.registration_id
             ? `inscrição ${row.registration_id}`
             : `fatura agregada ${row.payment_group_id}`
+          // Lote 2 (B-N3): com PAYOUT_ATTEMPTS_MODE=on, reserva a linha ANTES de transferir; resultado
+          // incerto (timeout/5xx) deixa a linha em 'transferencia_em_andamento' (nunca volta pra fila).
+          const guarded = attemptsMode(Deno.env.get('PAYOUT_ATTEMPTS_MODE')) === 'on'
+          if (guarded) {
+            const { data: claimed, error: claimErr } = await supabase
+              .from('low_value_transfers')
+              .update({ status: 'transferencia_em_andamento', updated_at: new Date().toISOString() })
+              .eq('id', row.id).eq('status', 'aguardando_janela')
+              .select('id')
+            if (claimErr || !claimed?.length) {
+              if (claimErr) console.error(`[release-low-value-transfers] nao reservei linha id=${row.id}: ${claimErr.message}`)
+              skipped++
+              continue
+            }
+          }
           const result = await transferToWallet({
             transferApiKey,
             asaasBaseUrl,
             walletId:    row.producer_wallet_id as string,
             value:       Number(row.value),
             description: `CoreoHub — repasse integral (${label})`,
+            ...(guarded ? { timeoutMs: 25000, externalReference: row.id as string } : {}),
           })
 
           if (result.ok) {
-            await supabase
+            const { error: updErr } = await supabase
               .from('low_value_transfers')
               .update({
                 status:            'transferencia_pedida',
@@ -156,6 +173,13 @@ Deno.serve(async (req) => {
                 updated_at:        new Date().toISOString(),
               })
               .eq('id', row.id)
+            if (updErr) {
+              console.error(
+                `[release-low-value-transfers][ALERT] transferencia criada mas NAO gravei id=${row.id}` +
+                ` transfer=${result.transferId} valor=R$${row.value} erro=${updErr.message}` +
+                (guarded ? ' (linha segura em transferencia_em_andamento)' : ' (RISCO de repetir a transferencia)')
+              )
+            }
             created++
             console.log(
               `[release-low-value-transfers] transferência pedida id=${row.id} valor=R$${row.value}` +
@@ -164,7 +188,20 @@ Deno.serve(async (req) => {
             )
           } else {
             skipped++
-            console.error(`[release-low-value-transfers] falha ao criar transferência id=${row.id}: ${result.error}`)
+            if (guarded && result.outcome === 'uncertain') {
+              await supabase.from('low_value_transfers')
+                .update({ last_error: `incerto: ${String(result.error ?? '').slice(0, 300)}`, updated_at: new Date().toISOString() })
+                .eq('id', row.id)
+              console.error(`[release-low-value-transfers][ALERT] transferencia INCERTA id=${row.id} valor=R$${row.value} (linha parada em transferencia_em_andamento ate conciliar): ${result.error}`)
+            } else {
+              if (guarded) {
+                // Recusa definitiva (4xx) ou falha antes do envio: nada saiu, volta pra fila.
+                await supabase.from('low_value_transfers')
+                  .update({ status: 'aguardando_janela', last_error: String(result.error ?? '').slice(0, 300), updated_at: new Date().toISOString() })
+                  .eq('id', row.id).eq('status', 'transferencia_em_andamento')
+              }
+              console.error(`[release-low-value-transfers] falha ao criar transferência id=${row.id}: ${result.error}`)
+            }
           }
         }
       }
@@ -227,6 +264,8 @@ Deno.serve(async (req) => {
             asaasBaseUrl,
             description:      `CoreoHub — repasse integral de baixo valor (${batch.items.length} itens)`,
             releasedManually: false,
+            attemptsMode:     attemptsMode(Deno.env.get('PAYOUT_ATTEMPTS_MODE')),
+            producerId:       batch.producerId,
             fee:              { producerId: batch.producerId, mode: parseFeeMode(Deno.env.get('SUBCONTA_FEE_MODE')) },
             markCovered: async (ids, sweep) => {
               const nowIso = new Date().toISOString()

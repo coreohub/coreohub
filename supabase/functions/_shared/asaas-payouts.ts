@@ -125,6 +125,10 @@ export interface SweepResult {
   transferId?:  string        // id da transferência Asaas (se DONE/PENDING)
   reason?:      string        // motivo do skip (no_balance, no_pix, kyc_pending, etc)
   error?:       string        // mensagem se falhou
+  /** Só preenchido quando o POST /transfers foi tentado (Lote 2, B-N1):
+   *  'sent' = 2xx; 'refused' = nada saiu (falhou antes do POST, ou 4xx);
+   *  'uncertain' = 5xx/timeout/rede NO POST, a Asaas pode ter criado a transferência. */
+  outcome?:     'sent' | 'refused' | 'uncertain'
 }
 
 /** Varre o saldo atual da subconta do produtor e dispara 1 transferência
@@ -150,6 +154,8 @@ export async function sweepProducerBalance(opts: {
   amount?:        number
   /** Com `amount`: saca exatamente esse valor ou não saca (sem clamp ao saldo). */
   exact?:         boolean
+  /** Id da tentativa (payout_attempts.id): vai como externalReference do PIX. */
+  externalReference?: string
 }): Promise<SweepResult> {
   const { producerApiKey, producerPixKey, asaasBaseUrl } = opts
   if (!producerApiKey)   return { swept: false, value: 0, reason: 'no_api_key' }
@@ -163,7 +169,7 @@ export async function sweepProducerBalance(opts: {
 
   try {
     // 1) Saldo atual da subconta — também usado como clamp do amount
-    const balRes = await fetch(`${asaasBaseUrl}/finance/balance`, { headers })
+    const balRes = await fetch(`${asaasBaseUrl}/finance/balance`, { headers, signal: AbortSignal.timeout(15000) })
     if (!balRes.ok) {
       const body = await balRes.text().catch(() => '')
       return { swept: false, value: 0, reason: 'balance_fetch_failed', error: `${balRes.status}: ${body.slice(0, 200)}` }
@@ -192,26 +198,37 @@ export async function sweepProducerBalance(opts: {
       return { swept: false, value: 0, reason: 'pix_invalid', error: (e as Error).message }
     }
 
-    // 3) Dispara transferência
-    const transferRes = await fetch(`${asaasBaseUrl}/transfers`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        value:           desired,
-        operationType:   'PIX',
-        pixAddressKey:   pix.pixAddressKey,
-        pixAddressKeyType: pix.pixAddressKeyType,
-        description:     opts.description ?? 'Repasse automático CoreoHub',
-      }),
-    })
+    // 3) Dispara transferência. Timeout/rede/5xx AQUI = resultado incerto (pode ter saído).
+    let transferRes: Response
+    try {
+      transferRes = await fetch(`${asaasBaseUrl}/transfers`, {
+        method: 'POST',
+        headers,
+        signal: AbortSignal.timeout(25000),
+        body: JSON.stringify({
+          value:           desired,
+          operationType:   'PIX',
+          pixAddressKey:   pix.pixAddressKey,
+          pixAddressKeyType: pix.pixAddressKeyType,
+          description:     opts.description ?? 'Repasse automático CoreoHub',
+          ...(opts.externalReference ? { externalReference: opts.externalReference } : {}),
+        }),
+      })
+    } catch (e) {
+      return { swept: false, value: 0, reason: 'transfer_uncertain', error: (e as Error).message, outcome: 'uncertain' }
+    }
 
     if (!transferRes.ok) {
       const body = await transferRes.text().catch(() => '')
+      if (transferRes.status >= 500) {
+        return { swept: false, value: 0, reason: 'transfer_uncertain', error: `${transferRes.status}: ${body.slice(0, 300)}`, outcome: 'uncertain' }
+      }
       return {
         swept: false,
         value: 0,
         reason: isKycPendingError(body) ? 'kyc_pending' : 'transfer_failed',
         error: `${transferRes.status}: ${body.slice(0, 300)}`,
+        outcome: 'refused',
       }
     }
 
@@ -220,6 +237,7 @@ export async function sweepProducerBalance(opts: {
       swept:      true,
       value:      desired,
       transferId: transferData?.id,
+      outcome:    'sent',
     }
   } catch (e) {
     return { swept: false, value: 0, reason: 'exception', error: (e as Error).message }
@@ -347,4 +365,42 @@ export function pickCoveredCommissionIds(
     }
   }
   return ids
+}
+
+export interface ListedTransfer {
+  id:                string
+  value:             number
+  status:            string
+  externalReference: string | null
+  dateCreated:       string | null
+}
+
+/** Lista transferências recentes da subconta (conciliação de repasse incerto, Lote 2).
+ *  Formato da resposta NÃO confirmado em doc oficial: parse defensivo. Falha => ok:false (inconclusivo). */
+export async function listRecentTransfers(opts: {
+  apiKey:       string
+  asaasBaseUrl: string
+  sinceIso:     string
+}): Promise<{ ok: boolean; items: ListedTransfer[]; error?: string }> {
+  try {
+    const day = opts.sinceIso.slice(0, 10)
+    const res = await fetch(`${opts.asaasBaseUrl}/transfers?offset=0&limit=100&dateCreated[ge]=${day}`, {
+      headers: { 'access_token': opts.apiKey, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    })
+    const data = await res.json().catch(() => null) as any
+    if (!res.ok || !Array.isArray(data?.data)) {
+      return { ok: false, items: [], error: `${res.status}: ${JSON.stringify(data?.errors ?? data ?? '').slice(0, 200)}` }
+    }
+    return {
+      ok: true,
+      items: data.data.map((t: any) => ({
+        id: String(t.id ?? ''), value: Number(t.value), status: String(t.status ?? ''),
+        externalReference: t.externalReference ? String(t.externalReference) : null,
+        dateCreated: t.dateCreated ? String(t.dateCreated) : null,
+      })),
+    }
+  } catch (e) {
+    return { ok: false, items: [], error: (e as Error).message }
+  }
 }
