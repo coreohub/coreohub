@@ -18,8 +18,8 @@ interface LeaderboardEntry {
 }
 
 const MedalIcon = ({ rank }: { rank: number }) => {
-  if (rank === 1) return <Trophy size={20} className="text-yellow-400" />;
-  if (rank === 2) return <Medal size={20} className="text-slate-300" />;
+  if (rank === 1) return <Trophy size={20} className="text-yellow-700" />;
+  if (rank === 2) return <Medal size={20} className="text-slate-700" />;
   if (rank === 3) return <Medal size={20} className="text-amber-600" />;
   return <span className="text-sm font-black text-slate-500 w-5 text-center">{rank}</span>;
 };
@@ -107,27 +107,27 @@ const Leaderboard = () => {
   }, [search, filterCategory, filterStyle, entries]);
 
   const scoreColor = (score: number) => {
-    if (score >= 9) return 'text-emerald-400';
-    if (score >= 7) return 'text-yellow-400';
+    if (score >= 9) return 'text-emerald-700';
+    if (score >= 7) return 'text-yellow-700';
     if (score >= 5) return 'text-amber-500';
     return 'text-rose-500';
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Header */}
-      <div className="border-b border-white/5 bg-black/40 backdrop-blur-xl p-6 lg:p-8 sticky top-0 z-20">
+      <div className="border-b border-slate-100 bg-white/80 backdrop-blur-xl p-6 lg:p-8 sticky top-0 z-20">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
             <BrandIcon size={28} />
             <div>
-              <p className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.4em]">Resultados Oficiais</p>
+              <p className="text-[9px] font-black text-brand-primary-ink uppercase tracking-[0.4em]">Resultados Oficiais</p>
               <h1 className="text-2xl font-black uppercase tracking-tighter">
                 {eventName || 'CoreoHub'}
               </h1>
             </div>
           </div>
-          <button onClick={fetchLeaderboard} className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-all">
+          <button onClick={fetchLeaderboard} className="p-3 bg-white rounded-2xl hover:bg-slate-100 transition-all">
             <RefreshCw size={18} />
           </button>
         </div>
@@ -143,13 +143,13 @@ const Leaderboard = () => {
               placeholder="Buscar coreografia ou estúdio..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm outline-none focus:border-[#ff0068]/50"
+              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:border-[#ff0068]/50"
             />
           </div>
           <select
             value={filterCategory}
             onChange={e => setFilterCategory(e.target.value)}
-            className="px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm outline-none"
+            className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none"
           >
             <option value="">Todas as Categorias</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -157,7 +157,7 @@ const Leaderboard = () => {
           <select
             value={filterStyle}
             onChange={e => setFilterStyle(e.target.value)}
-            className="px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm outline-none"
+            className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none"
           >
             <option value="">Todos os Estilos</option>
             {styles.map(s => <option key={s} value={s}>{s}</option>)}
@@ -179,7 +179,7 @@ const Leaderboard = () => {
                   transition={{ delay: i * 0.1 }}
                   className="flex flex-col items-center gap-3 text-center"
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
                     <MedalIcon rank={podiumRank} />
                   </div>
                   <div>
@@ -197,17 +197,17 @@ const Leaderboard = () => {
         )}
 
         {/* Full Table */}
-        <div className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden">
-          <div className="p-5 border-b border-white/10 flex justify-between items-center">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden">
+          <div className="p-5 border-b border-slate-200 flex justify-between items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
               Classificação Completa
             </span>
-            <span className="text-[10px] font-black text-[#ff0068] uppercase">{filtered.length} inscrições</span>
+            <span className="text-[10px] font-black text-brand-primary-ink uppercase">{filtered.length} inscrições</span>
           </div>
 
           {loading ? (
             <div className="p-16 flex flex-col items-center gap-4">
-              <Loader2 size={40} className="text-[#ff0068] animate-spin" />
+              <Loader2 size={40} className="text-brand-primary-ink animate-spin" />
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Calculando ranking...</p>
             </div>
           ) : filtered.length === 0 ? (
@@ -223,7 +223,7 @@ const Leaderboard = () => {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: idx * 0.03 }}
-                  className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors"
+                  className="flex items-center gap-4 p-4 hover:bg-white transition-colors"
                 >
                   <div className="w-8 flex justify-center">
                     <MedalIcon rank={entry.rank} />
@@ -233,8 +233,8 @@ const Leaderboard = () => {
                     <p className="text-[9px] text-slate-500 uppercase font-bold">{entry.estudio}</p>
                   </div>
                   <div className="hidden md:flex gap-3">
-                    <span className="px-2 py-1 bg-white/5 rounded-lg text-[8px] font-black uppercase text-slate-400">{entry.categoria}</span>
-                    <span className="px-2 py-1 bg-white/5 rounded-lg text-[8px] font-black uppercase text-slate-400">{entry.estilo_danca}</span>
+                    <span className="px-2 py-1 bg-white rounded-lg text-[8px] font-black uppercase text-slate-600">{entry.categoria}</span>
+                    <span className="px-2 py-1 bg-white rounded-lg text-[8px] font-black uppercase text-slate-600">{entry.estilo_danca}</span>
                   </div>
                   <div className="text-right">
                     <p className={`text-2xl font-black italic tracking-tighter ${scoreColor(entry.average_score)}`}>

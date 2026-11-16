@@ -392,55 +392,55 @@ const CheckoutWorkshopPass: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#ff0068]" size={32} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-primary-ink" size={32} />
       </div>
     );
   }
 
   if ((error && !pass) || (esgotado && !pass)) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white/5 border border-rose-500/30 rounded-2xl p-6 text-center">
-          <AlertCircle className="text-rose-400 mx-auto mb-3" size={32} />
-          <p className="text-white font-bold mb-2">Não foi possível carregar</p>
-          <p className="text-sm text-slate-400 mb-4">{error}</p>
-          <button onClick={() => navigate(-1)} className="text-xs font-black text-[#ff0068] uppercase tracking-widest">← Voltar</button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white border border-rose-500/30 rounded-2xl p-6 text-center">
+          <AlertCircle className="text-rose-700 mx-auto mb-3" size={32} />
+          <p className="text-slate-900 font-bold mb-2">Não foi possível carregar</p>
+          <p className="text-sm text-slate-600 mb-4">{error}</p>
+          <button onClick={() => navigate(-1)} className="text-xs font-black text-brand-primary-ink uppercase tracking-widest">← Voltar</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="max-w-2xl mx-auto px-4 py-6 relative">
-        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-6">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink mb-6">
           <ArrowLeft size={14} /> Voltar
         </button>
 
-        <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-[#ff0068] px-2.5 py-1 rounded-full mb-2">
+        <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-brand-primary-ink px-2.5 py-1 rounded-full mb-2">
           <Ticket size={11} />{isALaCarte ? 'Single Class' : 'Workshop Pass'}
         </div>
         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase mb-1">{pass.name}</h1>
-        {pass.description && <p className="text-sm text-slate-400 mb-2">{pass.description}</p>}
+        {pass.description && <p className="text-sm text-slate-600 mb-2">{pass.description}</p>}
         {!isALaCarte && <p className="text-xs text-slate-500 mb-6">Inclui: {workshopNames.join(', ')}</p>}
 
         {esgotado && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-200 flex items-center gap-2">
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-700 flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0" />
             <span className="font-bold">{isALaCarte ? 'Todas as aulas deste pacote estão esgotadas.' : 'Esgotado — um dos workshops inclusos não tem mais vagas.'}</span>
           </div>
         )}
         {error && !esgotado && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-200 flex items-center gap-2">
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-700 flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0" />
             <span className="font-bold">{error}</span>
           </div>
         )}
 
         {isALaCarte && !esgotado && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1">
               Escolha suas aulas
             </p>
             <p className="text-xs text-slate-500 mb-3">
@@ -457,7 +457,7 @@ const CheckoutWorkshopPass: React.FC = () => {
                 return (
                   <label
                     key={w.id}
-                    className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition ${w.esgotado ? 'border-white/5 opacity-40 cursor-not-allowed' : checked ? 'border-[#ff0068] bg-[#ff0068]/10 cursor-pointer' : 'border-white/10 hover:border-white/20 cursor-pointer'}`}
+                    className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition ${w.esgotado ? 'border-slate-100 opacity-40 cursor-not-allowed' : checked ? 'border-[#ff0068] bg-[#ff0068]/10 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer'}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <input
@@ -468,19 +468,19 @@ const CheckoutWorkshopPass: React.FC = () => {
                         className="shrink-0 accent-[#ff0068]"
                       />
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-white truncate">{w.name}</p>
+                        <p className="text-sm font-bold text-slate-900 truncate">{w.name}</p>
                         {dataFmt && <p className="text-[11px] text-slate-500">{dataFmt}</p>}
-                        {w.esgotado && <p className="text-[11px] text-rose-400 font-bold">Esgotada</p>}
+                        {w.esgotado && <p className="text-[11px] text-rose-700 font-bold">Esgotada</p>}
                       </div>
                     </div>
-                    <span className="text-sm font-black text-white shrink-0">{formatBRL(precoW)}</span>
+                    <span className="text-sm font-black text-slate-900 shrink-0">{formatBRL(precoW)}</span>
                   </label>
                 );
               })}
             </div>
             {breakdown && breakdown.tiers.length > 0 && (
               <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300 mb-1.5">Desconto por quantidade de aulas</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-1.5">Desconto por quantidade de aulas</p>
                 <ul className="text-xs text-emerald-100 space-y-0.5">
                   {breakdown.tiers.map(t => (
                     <li key={t.min} className={breakdown.quantityPercent === t.percent ? 'font-black' : ''}>
@@ -489,7 +489,7 @@ const CheckoutWorkshopPass: React.FC = () => {
                   ))}
                 </ul>
                 {breakdown.nextTier && selectedIds.size > 0 && breakdown.nextTier.min <= (pass.max_selecionaveis ?? poolItems.length) && (
-                  <p className="mt-2 text-xs font-bold text-white">
+                  <p className="mt-2 text-xs font-bold text-slate-900">
                     {breakdown.nextTier.missing === 1
                       ? `Falta 1 aula para ${breakdown.nextTier.percent}% de desconto.`
                       : `Faltam ${breakdown.nextTier.missing} aulas para ${breakdown.nextTier.percent}% de desconto.`}
@@ -498,7 +498,7 @@ const CheckoutWorkshopPass: React.FC = () => {
               </div>
             )}
             {!selectionOk && selectedIds.size > 0 && (
-              <p className="mt-2 text-[11px] text-rose-300">
+              <p className="mt-2 text-[11px] text-rose-700">
                 {selectedIds.size < (pass.min_selecionaveis ?? 1)
                   ? `Selecione pelo menos ${pass.min_selecionaveis ?? 1} aula(s)`
                   : `Selecione no máximo ${pass.max_selecionaveis ?? poolItems.length} aula(s)`}
@@ -508,7 +508,7 @@ const CheckoutWorkshopPass: React.FC = () => {
         )}
 
         <form onSubmit={handlePay} className="space-y-4">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
             <FieldLabel icon={UserIcon} label="Nome completo">
               <input type="text" value={name} onChange={e => setName(e.target.value)} className={inputCls} placeholder="Como vai aparecer no certificado" required disabled={esgotado} />
             </FieldLabel>
@@ -518,7 +518,7 @@ const CheckoutWorkshopPass: React.FC = () => {
             <FieldLabel icon={FileText} label="CPF">
               <input type="text" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} className={inputCls} placeholder="000.000.000-00" maxLength={14} required disabled={esgotado} />
               {cpf.length === 14 && !isValidCpf(cpf) && (
-                <p className="mt-1 text-[11px] text-rose-300">CPF inválido</p>
+                <p className="mt-1 text-[11px] text-rose-700">CPF inválido</p>
               )}
             </FieldLabel>
             <FieldLabel icon={Phone} label="Telefone (opcional)">
@@ -529,12 +529,12 @@ const CheckoutWorkshopPass: React.FC = () => {
           {pass.auto_detect_combo && (
             <>
               {userId === null && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 flex items-start gap-2">
-                  <Sparkles size={16} className="text-[#ff0068] mt-0.5 shrink-0" />
+                <div className="bg-white border border-slate-200 rounded-xl p-3 text-sm text-slate-700 flex items-start gap-2">
+                  <Sparkles size={16} className="text-brand-primary-ink mt-0.5 shrink-0" />
                   <div>
                     <p className="font-bold">Tem preço de inscrito?</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      <button type="button" onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`/checkout-workshop-pass/${pass.slug ?? pass.id}`)}`)} className="text-[#ff0068] font-bold underline">
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      <button type="button" onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`/checkout-workshop-pass/${pass.slug ?? pass.id}`)}`)} className="text-brand-primary-ink font-bold underline">
                         Entre na sua conta
                       </button> para verificar se você tem o preço especial de inscrito da mostra.
                     </p>
@@ -542,13 +542,13 @@ const CheckoutWorkshopPass: React.FC = () => {
                 </div>
               )}
               {comboLoading && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-slate-400 flex items-center gap-2">
+                <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex items-center gap-2">
                   <Loader2 size={12} className="animate-spin" /> Verificando inscrição na mostra...
                 </div>
               )}
               {!comboLoading && combo?.found && (
-                <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 text-sm text-violet-200 flex items-start gap-2">
-                  <Sparkles size={16} className="text-violet-400 mt-0.5 shrink-0" />
+                <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 text-sm text-violet-700 flex items-start gap-2">
+                  <Sparkles size={16} className="text-violet-700 mt-0.5 shrink-0" />
                   <div>
                     <p className="font-bold">✨ Desconto de inscrito aplicado</p>
                     <p className="text-xs opacity-80 mt-0.5">
@@ -561,18 +561,18 @@ const CheckoutWorkshopPass: React.FC = () => {
           )}
 
           {breakdown && breakdown.precoAposCombo > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 inline-flex items-center gap-1.5">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-2 inline-flex items-center gap-1.5">
                 <Tag size={11} />Cupom
               </p>
               {couponApplied ? (
                 <div className="flex items-center justify-between gap-2">
                   <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-1.5 text-sm">
-                    <Check size={14} className="text-emerald-400" />
-                    <span className="font-bold text-emerald-200">{couponApplied.code}</span>
-                    <span className="text-emerald-300">−{formatBRL(couponApplied.discount)}</span>
+                    <Check size={14} className="text-emerald-700" />
+                    <span className="font-bold text-emerald-700">{couponApplied.code}</span>
+                    <span className="text-emerald-700">−{formatBRL(couponApplied.discount)}</span>
                   </div>
-                  <button type="button" onClick={handleRemoveCoupon} className="text-slate-400 hover:text-rose-400"><X size={14} /></button>
+                  <button type="button" onClick={handleRemoveCoupon} className="text-slate-600 hover:text-rose-700"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="flex items-stretch gap-2">
@@ -586,15 +586,15 @@ const CheckoutWorkshopPass: React.FC = () => {
                     type="button"
                     disabled={!couponInput.trim() || couponLoading}
                     onClick={handleApplyCoupon}
-                    className="px-4 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+                    className="px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
                   >
                     {couponLoading ? <Loader2 size={14} className="animate-spin" /> : 'Aplicar'}
                   </button>
                 </div>
               )}
-              {couponError && <p className="mt-2 text-xs text-rose-300">{couponError}</p>}
+              {couponError && <p className="mt-2 text-xs text-rose-700">{couponError}</p>}
               {breakdown.couponIgnored && (
-                <p className="mt-2 text-xs text-amber-300">
+                <p className="mt-2 text-xs text-amber-700">
                   O desconto por quantidade de aulas é maior que este cupom, então vale o desconto maior e o cupom não é usado.
                 </p>
               )}
@@ -616,7 +616,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           )}
 
           {breakdown && (!isALaCarte || selectedIds.size > 0) && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
               <Row label={isALaCarte ? `Aulas selecionadas (${selectedIds.size})` : 'Preço do pass'} value={formatBRL(breakdown.precoBase)} />
               {breakdown.comboApplied && breakdown.precoAposCombo !== breakdown.precoBase && (
                 <Row label="Desconto inscrito" value={`−${formatBRL(breakdown.precoBase - breakdown.precoAposCombo)}`} highlight="violet" />
@@ -643,9 +643,9 @@ const CheckoutWorkshopPass: React.FC = () => {
                   </>
                 );
               })()}
-              <div className="border-t border-white/10 pt-2 flex items-center justify-between">
+              <div className="border-t border-slate-200 pt-2 flex items-center justify-between">
                 <span className="text-sm font-black uppercase tracking-widest">Total</span>
-                <span className="text-2xl font-black text-white">{formatBRL(breakdown.charged)}</span>
+                <span className="text-2xl font-black text-slate-900">{formatBRL(breakdown.charged)}</span>
               </div>
             </div>
           )}
@@ -653,7 +653,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           <CheckoutLegalNotice
             accepted={refundAccepted}
             onAcceptedChange={setRefundAccepted}
-            theme="dark"
+            theme="light"
           />
 
           <button
@@ -664,7 +664,7 @@ const CheckoutWorkshopPass: React.FC = () => {
                 : !refundAccepted ? 'Aceite a política de reembolso para prosseguir'
                 : undefined
             }
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary-strong px-4 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             {(paying || comboLoading) && <Loader2 size={16} className="animate-spin" />}
             {comboLoading ? 'Verificando...'
@@ -677,7 +677,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           </div>
 
           <div className="flex justify-center pt-2">
-            <AsaasBadge variant="compact" theme="negative" width={100} height={30} />
+            <AsaasBadge variant="compact" theme="positive" width={100} height={30} />
           </div>
         </form>
       </div>
@@ -687,7 +687,7 @@ const CheckoutWorkshopPass: React.FC = () => {
 
 const FieldLabel: React.FC<{ icon: any; label: string; children: React.ReactNode }> = ({ icon: Icon, label, children }) => (
   <label className="block">
-    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 inline-flex items-center gap-1.5">
+    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1 inline-flex items-center gap-1.5">
       <Icon size={10} />{label}
     </span>
     {children}
@@ -696,11 +696,11 @@ const FieldLabel: React.FC<{ icon: any; label: string; children: React.ReactNode
 
 const Row: React.FC<{ label: string; value: string; highlight?: 'violet' | 'emerald' }> = ({ label, value, highlight }) => (
   <div className="flex items-center justify-between text-sm">
-    <span className="text-slate-400">{label}</span>
-    <span className={`font-bold ${highlight === 'violet' ? 'text-violet-300' : highlight === 'emerald' ? 'text-emerald-300' : 'text-white'}`}>{value}</span>
+    <span className="text-slate-600">{label}</span>
+    <span className={`font-bold ${highlight === 'violet' ? 'text-violet-700' : highlight === 'emerald' ? 'text-emerald-700' : 'text-slate-900'}`}>{value}</span>
   </div>
 );
 
-const inputCls = 'w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40';
+const inputCls = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40';
 
 export default CheckoutWorkshopPass;

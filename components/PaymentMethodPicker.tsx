@@ -30,7 +30,8 @@ interface Props {
   /** Texto de reembolso: "o valor do ingresso" / "o valor da inscrição". */
   refundTarget: string;
   formatBRL: (n: number) => string;
-  theme?: 'dark' | 'adaptive';
+  /** dark: card escuro (padrão antigo); adaptive: sem card, segue .dark; light: card claro das páginas públicas. */
+  theme?: 'dark' | 'adaptive' | 'light';
   /** Esconde o texto explicativo (quando o card já o mostra). */
   hideNote?: boolean;
   /** Máximo de parcelas oferecidas neste pedido (o checkout calcula; padrão = config de produção). */

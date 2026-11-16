@@ -85,18 +85,18 @@ const ProducerPublicPage: React.FC = () => {
 
   if (producer === undefined) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <Loader2 className="text-[#ff0068] animate-spin" size={48} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="text-brand-primary-ink animate-spin" size={48} />
       </div>
     );
   }
 
   if (producer === null) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center gap-6 p-8">
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center justify-center gap-6 p-8">
         <User size={64} className="text-slate-700" />
         <h1 className="text-3xl font-black uppercase tracking-tighter">Página não encontrada</h1>
-        <button onClick={() => navigate('/festivais')} className="flex items-center gap-2 text-[#ff0068] font-black uppercase text-sm">
+        <button onClick={() => navigate('/festivais')} className="flex items-center gap-2 text-brand-primary-ink font-black uppercase text-sm">
           <ArrowLeft size={16} /> Ver festivais
         </button>
       </div>
@@ -112,10 +112,10 @@ const ProducerPublicPage: React.FC = () => {
   const displayed = showPast ? passados : proximos;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      <nav aria-label="Breadcrumb" className="bg-black/40 backdrop-blur-sm border-b border-white/5">
-        <div className="max-w-5xl mx-auto px-8 py-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          <Link to="/festivais" className="hover:text-[#ff0068] transition-colors flex items-center gap-1.5">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <nav aria-label="Breadcrumb" className="bg-white/80 backdrop-blur-sm border-b border-slate-100">
+        <div className="max-w-5xl mx-auto px-8 py-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+          <Link to="/festivais" className="hover:text-brand-primary-ink transition-colors flex items-center gap-1.5">
             <ArrowLeft size={12} /> Vitrine de festivais
           </Link>
         </div>
@@ -131,7 +131,7 @@ const ProducerPublicPage: React.FC = () => {
           <div className="min-w-0">
             <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tighter italic">{producer.full_name}</h1>
             {producer.bio && (
-              <p className="text-slate-400 text-sm leading-relaxed mt-2 max-w-2xl">{producer.bio}</p>
+              <p className="text-slate-600 text-sm leading-relaxed mt-2 max-w-2xl">{producer.bio}</p>
             )}
             {socialLinks.length > 0 && (
               <div className="flex items-center gap-2 mt-4">
@@ -142,7 +142,7 @@ const ProducerPublicPage: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={label}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 transition-colors"
                   >
                     <Icon size={15} />
                   </a>
@@ -154,11 +154,11 @@ const ProducerPublicPage: React.FC = () => {
       </header>
 
       <section className="max-w-5xl mx-auto px-8 lg:px-16 pb-24">
-        <div className="flex items-center gap-2 mb-6 border-b border-white/10">
+        <div className="flex items-center gap-2 mb-6 border-b border-slate-200">
           <button
             onClick={() => setShowPast(false)}
             className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-colors ${
-              !showPast ? 'border-[#ff0068] text-white' : 'border-transparent text-slate-500 hover:text-slate-300'
+              !showPast ? 'border-[#ff0068] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             Próximos ({proximos.length})
@@ -166,7 +166,7 @@ const ProducerPublicPage: React.FC = () => {
           <button
             onClick={() => setShowPast(true)}
             className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-colors ${
-              showPast ? 'border-[#ff0068] text-white' : 'border-transparent text-slate-500 hover:text-slate-300'
+              showPast ? 'border-[#ff0068] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             Edições passadas ({passados.length})
@@ -183,7 +183,7 @@ const ProducerPublicPage: React.FC = () => {
               <Link
                 key={event.id}
                 to={`/evento/${event.slug ?? event.id}`}
-                className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 hover:border-[#ff0068]/40 transition-all flex flex-col ${showPast ? 'opacity-70 hover:opacity-100' : ''}`}
+                className={`group relative overflow-hidden rounded-3xl border border-slate-200 bg-white hover:border-[#ff0068]/40 transition-all flex flex-col ${showPast ? 'opacity-70 hover:opacity-100' : ''}`}
               >
                 <div className="relative aspect-[1200/630] overflow-hidden bg-slate-900">
                   {event.cover_url ? (
@@ -195,19 +195,19 @@ const ProducerPublicPage: React.FC = () => {
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                   <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff0068]/90 backdrop-blur rounded-full">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff0068]/90 backdrop-blur rounded-full text-white">
                       <Calendar size={12} />
                       <span className="text-[10px] font-black uppercase tracking-widest">{formatDateRange(event.start_date, event.end_date)}</span>
                     </div>
                   </div>
                 </div>
                 <div className="p-5 flex-1 flex flex-col">
-                  <h3 className="text-base font-black uppercase tracking-tighter line-clamp-2 mb-2 group-hover:text-[#ff0068] transition-colors">
+                  <h3 className="text-base font-black uppercase tracking-tighter line-clamp-2 mb-2 group-hover:text-brand-primary-ink transition-colors">
                     {event.name}
                   </h3>
                   {(event.city || (event as any).location) && (
-                    <div className="flex items-center gap-2 text-slate-400 text-xs">
-                      <MapPin size={12} className="text-[#ff0068] shrink-0" />
+                    <div className="flex items-center gap-2 text-slate-600 text-xs">
+                      <MapPin size={12} className="text-brand-primary-ink shrink-0" />
                       <span className="truncate">{[event.city, event.state].filter(Boolean).join(' / ') || (event as any).location}</span>
                     </div>
                   )}

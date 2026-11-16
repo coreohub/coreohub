@@ -263,19 +263,19 @@ const Festivais = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Header simples */}
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-[#050505]/80 border-b border-white/5">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
             <BrandIcon size={32} />
             <span className="text-sm font-black uppercase tracking-tighter italic">
-              Coreo<span className="text-[#ff0068]">Hub</span>
+              Coreo<span className="text-brand-primary-ink">Hub</span>
             </span>
           </Link>
           <button
             onClick={() => navigate('/login')}
-            className="px-5 py-2.5 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+            className="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
           >
             Entrar
           </button>
@@ -283,7 +283,7 @@ const Festivais = () => {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden border-b border-white/5">
+      <section className="relative overflow-hidden border-b border-slate-100">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,#ff0068,transparent)] opacity-10" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_30%,#3b0764,transparent)] opacity-30" />
         <div className="relative max-w-7xl mx-auto px-6 py-20 lg:py-28">
@@ -292,15 +292,15 @@ const Festivais = () => {
             animate={{ opacity: 1, y: 0 }}
             className="max-w-3xl"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full backdrop-blur-xl mb-8">
-              <Sparkles size={12} className="text-[#e3ff0a]" />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#e3ff0a]">Vitrine de Festivais</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full backdrop-blur-xl mb-8">
+              <Sparkles size={12} className="text-brand-lime-ink" />
+              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-lime-ink">Vitrine de Festivais</span>
             </div>
             <h1 className="text-5xl lg:text-7xl font-black uppercase tracking-tighter italic leading-[0.9] mb-6">
               Encontre o<br />
-              <span className="inline-block pr-4 text-[#ff0068]">próximo palco</span>
+              <span className="inline-block pr-4 text-brand-primary-ink">próximo palco</span>
             </h1>
-            <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
+            <p className="text-slate-600 text-lg max-w-xl leading-relaxed">
               Festivais, mostras e camps de dança em todo o Brasil. Filtre por estado e mês, encontre o seu e inscreva-se em segundos.
             </p>
           </motion.div>
@@ -317,20 +317,20 @@ const Festivais = () => {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por nome do festival..."
-              className="w-full pl-14 pr-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-medium outline-none focus:ring-2 focus:ring-[#ff0068] transition-all"
+              className="w-full pl-14 pr-5 py-4 bg-white border border-slate-200 rounded-2xl text-slate-900 font-medium outline-none focus:ring-2 focus:ring-[#ff0068] transition-all"
             />
           </div>
           <button
             onClick={() => setShowFilters(s => !s)}
             className={`px-5 py-4 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${
               showFilters || stateFilter || monthFilter !== null
-                ? 'bg-[#ff0068]/10 border-[#ff0068] text-[#ff0068]'
-                : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/20'
+                ? 'bg-[#ff0068]/10 border-[#ff0068] text-brand-primary-ink'
+                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
             }`}
           >
             <Filter size={14} /> Filtros
             {(stateFilter ? 1 : 0) + (monthFilter !== null ? 1 : 0) > 0 && (
-              <span className="ml-1 w-5 h-5 rounded-full bg-[#ff0068] text-white text-[9px] flex items-center justify-center">
+              <span className="ml-1 w-5 h-5 rounded-full bg-brand-primary-strong text-white text-[9px] flex items-center justify-center">
                 {(stateFilter ? 1 : 0) + (monthFilter !== null ? 1 : 0)}
               </span>
             )}
@@ -338,7 +338,7 @@ const Festivais = () => {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="px-5 py-4 rounded-2xl border border-white/10 bg-white/5 text-slate-400 hover:text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all"
+              className="px-5 py-4 rounded-2xl border border-slate-200 bg-white text-slate-600 hover:text-slate-900 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all"
             >
               <X size={14} /> Limpar
             </button>
@@ -349,14 +349,14 @@ const Festivais = () => {
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-white/5 border border-white/10 rounded-3xl"
+            className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-white border border-slate-200 rounded-3xl"
           >
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Estado (UF)</label>
               <select
                 value={stateFilter}
                 onChange={e => setStateFilter(e.target.value)}
-                className="w-full p-4 bg-slate-950 border border-white/10 rounded-2xl text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]"
+                className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-slate-900 font-bold outline-none focus:ring-2 focus:ring-[#ff0068]"
               >
                 <option value="">Todos</option>
                 {UFS.map(uf => (<option key={uf} value={uf}>{uf}</option>))}
@@ -367,7 +367,7 @@ const Festivais = () => {
               <select
                 value={monthFilter ?? ''}
                 onChange={e => setMonthFilter(e.target.value === '' ? null : Number(e.target.value))}
-                className="w-full p-4 bg-slate-950 border border-white/10 rounded-2xl text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]"
+                className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-slate-900 font-bold outline-none focus:ring-2 focus:ring-[#ff0068]"
               >
                 <option value="">Qualquer mês</option>
                 {MESES.map((m, i) => (<option key={i} value={i}>{m}</option>))}
@@ -381,11 +381,11 @@ const Festivais = () => {
       <section className="max-w-7xl mx-auto px-6 pb-24">
         {loading ? (
           <div className="flex items-center justify-center py-32">
-            <Loader2 className="text-[#ff0068] animate-spin" size={36} />
+            <Loader2 className="text-brand-primary-ink animate-spin" size={36} />
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-24 space-y-4">
-            <div className="inline-flex w-16 h-16 rounded-3xl bg-white/5 items-center justify-center">
+            <div className="inline-flex w-16 h-16 rounded-3xl bg-white items-center justify-center">
               <Search size={28} className="text-slate-600" />
             </div>
             <h3 className="text-2xl font-black uppercase tracking-tighter">Nenhum festival encontrado</h3>
@@ -397,7 +397,7 @@ const Festivais = () => {
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="mt-4 px-6 py-3 bg-[#ff0068] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
+                className="mt-4 px-6 py-3 bg-brand-primary-strong text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
               >
                 Limpar filtros
               </button>
@@ -409,7 +409,7 @@ const Festivais = () => {
               <div className="space-y-6">
                 <div className="flex items-end justify-between">
                   <h2 className="text-3xl font-black uppercase tracking-tighter">
-                    Próximos <span className="text-[#ff0068]">eventos</span>
+                    Próximos <span className="text-brand-primary-ink">eventos</span>
                   </h2>
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{proximos.length} {proximos.length === 1 ? 'festival' : 'festivais'}</span>
                 </div>
@@ -424,7 +424,7 @@ const Festivais = () => {
             {passados.length > 0 && (
               <div className="space-y-6">
                 <div className="flex items-end justify-between">
-                  <h2 className="text-3xl font-black uppercase tracking-tighter text-slate-400">
+                  <h2 className="text-3xl font-black uppercase tracking-tighter text-slate-600">
                     Edições <span className="text-slate-600">passadas</span>
                   </h2>
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{passados.length}</span>
@@ -441,14 +441,14 @@ const Festivais = () => {
       </section>
 
       {/* CTA inferior pra produtores */}
-      <section className="border-t border-white/5">
+      <section className="border-t border-slate-100">
         <div className="max-w-7xl mx-auto px-6 py-16">
-          <div className="bg-gradient-to-r from-[#ff0068]/10 via-transparent to-[#e3ff0a]/5 border border-white/10 rounded-[3rem] p-10 lg:p-14 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+          <div className="bg-gradient-to-r from-[#ff0068]/10 via-transparent to-[#e3ff0a]/5 border border-slate-200 rounded-[3rem] p-10 lg:p-14 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
             <div className="max-w-xl">
               <h3 className="text-3xl lg:text-4xl font-black uppercase tracking-tighter italic mb-3">
                 Você produz festivais?
               </h3>
-              <p className="text-slate-400 leading-relaxed">
+              <p className="text-slate-600 leading-relaxed">
                 Configure seu festival em 30 segundos a partir do regulamento. Inscrições, júri, cronograma e certificados — tudo automatizado, sem mensalidade.
               </p>
             </div>
@@ -456,7 +456,7 @@ const Festivais = () => {
               href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20CoreoHub"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 text-center"
+              className="px-8 py-5 bg-brand-primary-strong text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 text-center"
             >
               Cadastrar meu festival <ArrowRight size={16} />
             </a>
@@ -487,7 +487,7 @@ const EventCard: React.FC<{
   return (
     <Link
       to={target}
-      className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 hover:border-[#ff0068]/40 transition-all flex flex-col ${muted ? 'opacity-70 hover:opacity-100' : ''}`}
+      className={`group relative overflow-hidden rounded-3xl border border-slate-200 bg-white hover:border-[#ff0068]/40 transition-all flex flex-col ${muted ? 'opacity-70 hover:opacity-100' : ''}`}
     >
       <div className="relative aspect-[1200/630] overflow-hidden bg-slate-900">
         {event.cover_url ? (
@@ -505,19 +505,19 @@ const EventCard: React.FC<{
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
         <div className="absolute top-4 left-4 flex gap-2">
           {event.edition_year && (
-            <span className="px-3 py-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-[9px] font-black uppercase tracking-widest">
+            <span className="px-3 py-1.5 bg-black/60 backdrop-blur-md border border-white/20 rounded-full text-[9px] text-white font-black uppercase tracking-widest">
               Edição {event.edition_year}
             </span>
           )}
         </div>
         <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff0068]/90 backdrop-blur rounded-full">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff0068]/90 backdrop-blur rounded-full text-white">
               <Calendar size={12} />
               <span className="text-[10px] font-black uppercase tracking-widest">{dateLabel}</span>
             </div>
             {sessionsLabel && (
-              <span className="px-3 py-1.5 bg-black/70 backdrop-blur border border-white/20 rounded-full text-[10px] font-black uppercase tracking-widest">
+              <span className="px-3 py-1.5 bg-black/70 backdrop-blur border border-white/20 rounded-full text-[10px] text-white font-black uppercase tracking-widest">
                 {sessionsLabel}
               </span>
             )}
@@ -525,16 +525,16 @@ const EventCard: React.FC<{
         </div>
       </div>
       <div className="p-6 flex-1 flex flex-col">
-        <h3 className="text-lg font-black uppercase tracking-tighter line-clamp-2 mb-2 group-hover:text-[#ff0068] transition-colors">
+        <h3 className="text-lg font-black uppercase tracking-tighter line-clamp-2 mb-2 group-hover:text-brand-primary-ink transition-colors">
           {event.name}
         </h3>
         {localizacao && (
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-4">
-            <MapPin size={12} className="text-[#ff0068] shrink-0" />
+          <div className="flex items-center gap-2 text-slate-600 text-xs mb-4">
+            <MapPin size={12} className="text-brand-primary-ink shrink-0" />
             <span className="truncate">{localizacao}</span>
           </div>
         )}
-        <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/5">
+        <div className="mt-auto flex items-center justify-between pt-4 border-t border-slate-100">
           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
             {/* Só ingresso (sem formações): mostra o preço do ingresso; com formações, inscrição vale. */}
             {minPrice === null && ticketLabel
@@ -545,7 +545,7 @@ const EventCard: React.FC<{
               ? 'Inscrição gratuita'
               : `A partir de R$ ${minPrice.toFixed(2)}`}
           </span>
-          <ChevronRight size={16} className="text-[#ff0068] group-hover:translate-x-1 transition-transform" />
+          <ChevronRight size={16} className="text-brand-primary-ink group-hover:translate-x-1 transition-transform" />
         </div>
       </div>
     </Link>
