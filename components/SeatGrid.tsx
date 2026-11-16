@@ -43,7 +43,7 @@ interface SeatGridProps {
   fullscreenable?: boolean;
   /** Dentro da tela cheia: a área do mapa ocupa a altura toda. */
   tall?: boolean;
-  /** Checkout público: rótulos grandes "Palco / Frente" e "Fundo · longe do palco" e letra da fileira maior. */
+  /** Checkout público: rótulos grandes "Palco / Frente" e "Fundo" e letra da fileira maior. */
   showOrientation?: boolean;
 }
 
@@ -265,7 +265,7 @@ export default function SeatGrid(props: SeatGridProps) {
       style={canZoom ? { transform: `scale(${scale})`, transformOrigin: '0 0' } : undefined}>
       {orient && (
         <div className={`mx-auto mb-3 h-7 w-2/3 rounded-t-3xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap ${barTone}`}>
-          Fundo · longe do palco
+          Fundo
         </div>
       )}
       {rowsConfig.map(row => (

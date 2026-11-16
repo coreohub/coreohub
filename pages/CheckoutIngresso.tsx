@@ -1050,7 +1050,7 @@ export default function CheckoutIngresso() {
                 {seatDepth.allFundo && (
                   <p role="note" className="flex items-start gap-2 text-[11px] text-amber-200 bg-amber-500/10 ring-1 ring-amber-400/40 rounded-lg px-3 py-2">
                     <AlertCircle size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
-                    <span>Esses lugares ficam no fundo da sala, longe do palco. O palco fica embaixo no mapa, perto da fileira A. Quer ficar mais perto? Toque no lugar para desmarcar e escolha outro.</span>
+                    <span>Esses lugares ficam no fundo da sala. O palco fica embaixo no mapa, perto da fileira A. Quer ficar mais perto? Toque no lugar para desmarcar e escolha outro.</span>
                   </p>
                 )}
               </div>
