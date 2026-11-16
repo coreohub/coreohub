@@ -1,6 +1,6 @@
 # Playwright screenshot runner
 
-Workflow obrigatório do CoreoHub: depois de qualquer mudança visual estrutural (componente novo, layout, página inteira), rodar este runner em 1440×900 e 375×812 e auditar.
+Workflow obrigatório da CoreoHub: depois de qualquer mudança visual estrutural (componente novo, layout, página inteira), rodar este runner em 1440×900 e 375×812 e auditar.
 
 ## Setup inicial (1x por conta)
 

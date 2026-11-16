@@ -858,7 +858,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       instagram_event: 'demofestival',
       tiktok_event: 'demofestival',
       youtube_event: 'https://youtube.com/@demofestival',
-      // Site oficial: aponta pra propria vitrine pública do CoreoHub.
+      // Site oficial: aponta pra propria vitrine pública da CoreoHub.
       // Demonstra como produtor pode usar a página gerada como site oficial
       // (smart default — mesmo padrão do chip "Usar página da vitrine" em
       // AccountSettings).
@@ -869,7 +869,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       // Politica de ingressos + lista
       politica_ingressos: 'INTERNO',
       ingressos_config: DEMO_INGRESSOS,
-      // Tier 1: ativa "Vender pelo CoreoHub" no demo pra produtor ver o
+      // Tier 1: ativa "Vender pela CoreoHub" no demo pra produtor ver o
       // botão "Comprar" funcionando. Defaults sandbox-friendly.
       audience_sales_enabled: true,
       audience_commission_percent: 10,
