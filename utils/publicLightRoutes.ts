@@ -18,6 +18,9 @@ const PUBLIC_LIGHT_PREFIXES = [
   '/checkout-workshop-pass/',
   '/meu-workshop/',
   '/validar-certificado',
+  '/termos',
+  '/privacidade',
+  '/entrar-juri',
 ];
 
 const LEADERBOARD = /^\/festival\/[^/]+\/leaderboard\/?$/;
