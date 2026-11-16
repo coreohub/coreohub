@@ -31,6 +31,7 @@ import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
 import SeatZoneLegend from '../components/SeatZoneLegend';
 import SeatZoneSelection from '../components/SeatZoneSelection';
+import { describeSeatDepth, DEPTH_LABEL } from '../utils/seatPosition';
 import { applyZonePricing, priceForZone, priceRangeForType, resolveSeatAssignments, zonePricingActive, DEFAULT_ZONE_KEY, type SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { companionBySpecial, isSpecialTipo, seatsSatisfyRules, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
@@ -690,6 +691,7 @@ export default function CheckoutIngresso() {
   // ─── Submit ────────────────────────────────────────────────────────────────
   const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
   const specialSelected = selectedSeats.filter(id => isSpecialTipo(tipoOfSeat(id))).length;
+  const seatDepth = describeSeatDepth(rowsConfig, selectedSeats);
   const compSelected = selectedSeats.filter(id => tipoOfSeat(id) === 'acompanhante').length;
   const largoSelected = selectedSeats.filter(id => tipoOfSeat(id) === 'pcd_largo').length;
   const seatsReady = !seatMapEnabled || (selectedSeats.length === totalQty && seatsSatisfyRules(specialSelected, compSelected, pcdQty, compQty, largoSelected, obesoQty));
@@ -1004,21 +1006,6 @@ export default function CheckoutIngresso() {
               </p>
             )}
 
-            <SeatGrid
-              rowsConfig={rowsConfig}
-              seatStatuses={seatStatuses}
-              selectedSeats={selectedSeats}
-              onToggle={toggleSeat}
-              size="md"
-              variant="dark"
-              pcdQty={pcdQty}
-              obesoQty={obesoQty}
-              compQty={compQty}
-              comumQty={comumQty}
-              onBlocked={setSeatLostNotice}
-              seatZoneColors={zonePriced ? Object.fromEntries(Object.entries(zoneBySeat).flatMap(([id, k]) => { const c = seatZones.find(z => z.key === k)?.cor; return c ? [[id, c]] : []; })) : undefined}
-            />
-
             {zonePriced && (
               <SeatZoneLegend
                 zones={seatZones}
@@ -1036,6 +1023,37 @@ export default function CheckoutIngresso() {
                   return acc;
                 }, {})}
               />
+            )}
+
+            <SeatGrid
+              rowsConfig={rowsConfig}
+              seatStatuses={seatStatuses}
+              selectedSeats={selectedSeats}
+              onToggle={toggleSeat}
+              size="md"
+              variant="dark"
+              pcdQty={pcdQty}
+              obesoQty={obesoQty}
+              compQty={compQty}
+              comumQty={comumQty}
+              onBlocked={setSeatLostNotice}
+              showOrientation
+              seatZoneColors={zonePriced ? Object.fromEntries(Object.entries(zoneBySeat).flatMap(([id, k]) => { const c = seatZones.find(z => z.key === k)?.cor; return c ? [[id, c]] : []; })) : undefined}
+            />
+
+            {seatDepth && (
+              <div className="mt-3 space-y-2" aria-live="polite">
+                <p className="text-[11px] text-slate-300">
+                  <strong className="text-white">Seus lugares:</strong>{' '}
+                  {seatDepth.rows.map(r => `fileira ${r.codigo}, ${r.rank}ª de ${r.total} a partir do palco (${DEPTH_LABEL[r.depth]})`).join(' · ')}
+                </p>
+                {seatDepth.allFundo && (
+                  <p role="note" className="flex items-start gap-2 text-[11px] text-amber-200 bg-amber-500/10 ring-1 ring-amber-400/40 rounded-lg px-3 py-2">
+                    <AlertCircle size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
+                    <span>Esses lugares ficam no fundo da sala, longe do palco. O palco fica embaixo no mapa, perto da fileira A. Quer ficar mais perto? Toque no lugar para desmarcar e escolha outro.</span>
+                  </p>
+                )}
+              </div>
             )}
 
             {zonePriced && selectedSeats.length > 0 && (

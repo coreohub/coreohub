@@ -43,6 +43,8 @@ interface SeatGridProps {
   fullscreenable?: boolean;
   /** Dentro da tela cheia: a área do mapa ocupa a altura toda. */
   tall?: boolean;
+  /** Checkout público: rótulos grandes "Palco / Frente" e "Fundo · longe do palco" e letra da fileira maior. */
+  showOrientation?: boolean;
 }
 
 const SIZES = {
@@ -69,7 +71,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * 2 passos do Seats.io no mobile).
  */
 export default function SeatGrid(props: SeatGridProps) {
-  const { rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors, maxFit = 1, fullscreenable = false, tall = false } = props;
+  const { rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors, maxFit = 1, fullscreenable = false, tall = false, showOrientation = false } = props;
   const [full, setFull] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -232,7 +234,11 @@ export default function SeatGrid(props: SeatGridProps) {
     );
   }
 
-  const selectedClass = 'bg-[#ff0068] text-white';
+  // Com cor de zona no checkout, o selecionado ganha anel branco (a zona "Frente" também pode ser magenta).
+  const selectedClass = showOrientation && seatZoneColors ? 'bg-[#ff0068] text-white ring-2 ring-white' : 'bg-[#ff0068] text-white';
+  const palcoLast = !!rowsConfig[rowsConfig.length - 1]?.palco_apos;
+  const orient = showOrientation && palcoLast;
+  const barTone = variant === 'dark' ? 'bg-white/10 text-slate-300' : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300';
   const takenClass = variant === 'dark'
     ? 'bg-white/5 text-slate-700 cursor-not-allowed'
     : 'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-slate-700 cursor-not-allowed';
@@ -257,6 +263,11 @@ export default function SeatGrid(props: SeatGridProps) {
   const grid = (
     <div ref={contentRef} className={`space-y-1.5 w-max ${canZoom ? '' : 'min-w-full mx-auto'} ${s.pad}`}
       style={canZoom ? { transform: `scale(${scale})`, transformOrigin: '0 0' } : undefined}>
+      {orient && (
+        <div className={`mx-auto mb-3 h-7 w-2/3 rounded-t-3xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap ${barTone}`}>
+          Fundo · longe do palco
+        </div>
+      )}
       {rowsConfig.map(row => (
         <div key={row.codigo} className={`relative flex items-center ${row.alinhamento === 'esquerda' ? 'justify-start' : 'justify-center'} min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
           {(mode === 'block' || mode === 'zone') && onToggleRow ? (
@@ -270,7 +281,7 @@ export default function SeatGrid(props: SeatGridProps) {
               {row.codigo}
             </button>
           ) : (
-            <span className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500`}>{row.codigo}</span>
+            <span className={`absolute ${s.labelPos} font-black ${orient ? 'text-xs text-slate-300' : `${s.codeText} text-slate-500`}`}>{row.codigo}</span>
           )}
           <div className="flex items-center gap-1">
             {displayOrder(row).map((n, i, order) => {
@@ -326,9 +337,15 @@ export default function SeatGrid(props: SeatGridProps) {
         </div>
       ))}
       {rowsConfig.some(r => r.palco_apos) && (
+        orient ? (
+          <div className={`mx-auto mt-4 h-8 w-2/3 rounded-b-3xl flex items-center justify-center text-xs font-black uppercase tracking-[0.25em] whitespace-nowrap ring-1 ${variant === 'dark' ? 'bg-white/20 text-white ring-white/40' : 'bg-slate-300 dark:bg-white/20 text-slate-800 dark:text-white ring-slate-400/50 dark:ring-white/40'}`}>
+            Palco / Frente
+          </div>
+        ) : (
         <div className={`mx-auto mt-4 h-6 w-2/3 rounded-b-3xl flex items-center justify-center text-[9px] font-black uppercase tracking-[0.4em] ${variant === 'dark' ? 'bg-white/10 text-slate-400' : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
           Palco
         </div>
+        )
       )}
     </div>
   );
@@ -348,7 +365,7 @@ export default function SeatGrid(props: SeatGridProps) {
   const totalSel = parts.reduce((a, p) => a + Math.min(p.sel, p.qty), 0);
   const complete = totalQty > 0 && totalSel >= totalQty;
   const statusBar = mode === 'sell' && totalQty > 0 ? (
-    <div className="mb-2 space-y-1.5">
+    <div className={`mb-2 space-y-1.5 ${showOrientation ? "mt-3" : ""}`}>
       <p role="status" aria-live="polite" className={`flex items-center gap-1.5 text-[11px] font-bold ${complete ? (variant === 'dark' ? 'text-emerald-400' : 'text-emerald-600 dark:text-emerald-400') : variant === 'dark' ? 'text-slate-300' : 'text-slate-600 dark:text-slate-300'}`}>
         {complete && <Check size={13} aria-hidden="true" />}
         <span>
