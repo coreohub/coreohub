@@ -48,6 +48,38 @@ export function displayOrder(row: Pick<RowLayout, 'assentos' | 'espelhado'>): nu
   return row.espelhado ? nums.reverse() : nums;
 }
 
+/** Parte da fileira que o giro do mapa (palco no topo) mexe. */
+interface StageTurnRow {
+  espelhado?: boolean;
+  alinhamento?: 'esquerda';
+  espaco_antes?: boolean;
+  palco_apos?: boolean;
+}
+export type StageTopRow<T> = Omit<T, 'alinhamento'> & { alinhamento?: 'esquerda' | 'direita' };
+
+/**
+ * Como o comprador vê o mapa: palco no TOPO, fileira mais perto do palco primeiro.
+ * Os dados ficam como a planta impressa (última fileira = junto do palco, `palco_apos`);
+ * só o desenho gira 180 graus: inverte as fileiras e o lado de cada uma (esquerda e direita
+ * seguem a visão do público olhando para o palco). Número do lugar e corredores não mudam.
+ * Sem `palco_apos` na última fileira devolve a lista como está.
+ */
+export function stageOnTop<T extends StageTurnRow>(rows: T[]): StageTopRow<T>[] {
+  if (rows.length === 0 || !rows[rows.length - 1].palco_apos) return rows as StageTopRow<T>[];
+  const rev = [...rows].reverse();
+  return rev.map((r, i) => {
+    const { espelhado, alinhamento, espaco_antes, palco_apos: _p, ...rest } = r;
+    return {
+      ...rest,
+      // o espaço entre blocos fica entre as mesmas duas fileiras, agora do outro lado
+      ...(i > 0 && rev[i - 1].espaco_antes ? { espaco_antes: true } : {}),
+      ...(espelhado ? {} : { espelhado: true }),
+      ...(alinhamento === 'esquerda' ? { alinhamento: 'direita' as const } : {}),
+      ...(i === 0 ? { palco_apos: true } : {}),
+    } as unknown as StageTopRow<T>;
+  });
+}
+
 /** Lê "6, 18" (vírgula, ponto e vírgula ou espaço) em lista de corredores válidos. */
 export function parseCorredores(text: string): number[] {
   return [...new Set(text.split(/[,;\s]+/).map(Number).filter(n => Number.isInteger(n) && n >= 1))].sort((a, b) => a - b);

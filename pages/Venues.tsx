@@ -269,14 +269,6 @@ const VenueFormModal: React.FC<{
     setRows(prev => prev.map(r => ({ ...r, espelhado: todasEspelhadas ? undefined : true })));
   };
 
-  const handleInverterOrdem = () => {
-    setRows(prev => {
-      const palco = prev.some(r => r.palco_apos);
-      const rev = prev.map(r => ({ ...r, palco_apos: undefined })).reverse();
-      return palco ? rev.map((r, i) => (i === rev.length - 1 ? { ...r, palco_apos: true } : r)) : rev;
-    });
-  };
-
   const handleToggleBloco = (rowIdx: number) => {
     setRows(prev => prev.map((r, i) => (i === rowIdx ? { ...r, espaco_antes: r.espaco_antes ? undefined : true } : r)));
   };
@@ -472,13 +464,11 @@ const VenueFormModal: React.FC<{
               <input type="checkbox" checked={todasEspelhadas} onChange={handleToggleEspelhado} className="accent-[#ff0068]" />
               Numeração da direita para a esquerda (só o desenho; o número do lugar não muda)
             </label>
-            <button type="button" onClick={handleInverterOrdem} className="px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide bg-white dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/50 cursor-pointer">
-              Inverter ordem das fileiras (palco embaixo da última)
-            </button>
             <label className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
               <input type="checkbox" checked={temPalco} onChange={handleTogglePalco} className="accent-[#ff0068]" />
-              Desenhar o palco abaixo da última fileira
+              O palco fica depois da última fileira da lista
             </label>
+            <p className="px-1 text-[10px] text-slate-500">Cadastre as fileiras na ordem da planta. No site, o comprador vê o mapa com o palco no topo.</p>
           </div>
         )}
 

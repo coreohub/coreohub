@@ -1,8 +1,8 @@
 /**
  * Posição das fileiras em relação ao palco, em palavras (checkout público).
- * Premissa do mapa da CoreoHub: a grade termina na fileira do palco (a última
- * fileira da lista, marcada com `palco_apos`) e o palco é desenhado embaixo. Logo,
- * o TOPO da tela são as fileiras do fundo. Sem `palco_apos` na última fileira a
+ * Premissa dos dados da CoreoHub: a lista termina na fileira do palco (a última
+ * fileira, marcada com `palco_apos`). No desenho o palco fica no TOPO e essa fileira vem primeiro,
+ * então o FUNDO da sala fica embaixo. Sem `palco_apos` na última fileira a
  * orientação é desconhecida e nada é dito (melhor calar do que errar).
  */
 export type SeatDepth = 'frente' | 'meio' | 'fundo';

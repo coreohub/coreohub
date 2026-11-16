@@ -139,3 +139,31 @@ describe('corredores múltiplos', () => {
     expect(parseCorredores('abc, 0, -2, 3.5')).toEqual([])
   })
 })
+
+import { stageOnTop } from '../utils/venueRows'
+describe('stageOnTop (palco no topo)', () => {
+  const rows = [
+    { codigo: 'C', assentos: 4, espelhado: true as const },
+    { codigo: 'B', assentos: 4, espaco_antes: true, alinhamento: 'esquerda' as const },
+    { codigo: 'A', assentos: 4, palco_apos: true },
+  ]
+  it('fileira junto do palco vem primeiro e o palco marca a primeira', () => {
+    const v = stageOnTop(rows)
+    expect(v.map(r => r.codigo)).toEqual(['A', 'B', 'C'])
+    expect(v[0].palco_apos).toBe(true)
+    expect(v.slice(1).some(r => r.palco_apos)).toBe(false)
+  })
+  it('gira 180 graus: espelhado alterna e alinhamento troca de lado', () => {
+    const v = stageOnTop(rows)
+    expect(v.map(r => !!r.espelhado)).toEqual([true, true, false])
+    expect(v[1].alinhamento).toBe('direita')
+  })
+  it('o espaço entre blocos fica entre as mesmas duas fileiras', () => {
+    // original: B tem espaço antes (entre C e B). Girado: C vem depois de B, o espaço fica antes de C.
+    expect(stageOnTop(rows).map(r => !!r.espaco_antes)).toEqual([false, false, true])
+  })
+  it('sem palco na última fileira não mexe', () => {
+    const sem = rows.map(r => ({ ...r, palco_apos: undefined }))
+    expect(stageOnTop(sem).map(r => r.codigo)).toEqual(['C', 'B', 'A'])
+  })
+})
