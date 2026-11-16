@@ -7,7 +7,7 @@
  * RLS já filtra: producer só lê tickets do seu próprio evento.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { todayBR } from '../supabase/functions/_shared/today-br';
 import { createPortal } from 'react-dom';
 import { edgeErrorMessage } from '../utils/edgeError';
@@ -148,6 +148,7 @@ const VendasIngressos: React.FC = () => {
   const [detailRow, setDetailRow] = useState<Row | null>(null);
   // Troca de lugar de ingresso já pago (dono do evento / super admin).
   const [swapTarget, setSwapTarget] = useState<Row | null>(null);
+  const swapDirty = useRef(false);
   // Histórico de titulares do ingresso aberto no drawer (Decreto 13.108/2026, art. 17 §1º)
   const [transferHistory, setTransferHistory] = useState<TransferHistoryRow[] | null>(null);
   useEffect(() => {
@@ -2278,13 +2279,18 @@ const VendasIngressos: React.FC = () => {
           orderMates={rows
             .filter(r => swapTarget.group_id && r.group_id === swapTarget.group_id && r.id !== swapTarget.id && r.status_pagamento === 'APROVADO' && !r.refunded_at && r.check_in_status === 'PENDENTE' && r.seat_id && seatTipoFromLayout(rowsConfig, r.seat_id) === 'comum')
             .map(r => ({ id: r.id, seat_id: r.seat_id as string, ticket_type_nome: r.ticket_type_nome }))}
-          onClose={() => setSwapTarget(null)}
-          onDone={r => {
-            refreshSeats();
-            if (selectedEventId) void load(selectedEventId);
-            setDetailRow(prev => (prev && prev.id === swapTarget.id ? { ...prev, seat_id: r.new_seat_id } : prev));
-            setSwapTarget(prev => (prev ? { ...prev, seat_id: r.new_seat_id } : prev));
+          onClose={() => {
+            // A lista so recarrega ao fechar: load() troca a pagina por um spinner e
+            // desmontaria o modal antes de a operadora ler o resultado da troca.
+            setSwapTarget(null);
+            if (swapDirty.current) {
+              swapDirty.current = false;
+              setDetailRow(null);
+              refreshSeats();
+              if (selectedEventId) void load(selectedEventId);
+            }
           }}
+          onDone={() => { swapDirty.current = true; }}
         />
       )}
     </div>
