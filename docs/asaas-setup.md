@@ -1,4 +1,4 @@
-# Setup do Asaas no CoreoHub
+# Setup do Asaas na CoreoHub
 
 Este documento é o guia operacional pra ativar a integração Asaas em produção.
 Use quando o suporte Asaas liberar o acesso e você quiser ir do "código pronto"

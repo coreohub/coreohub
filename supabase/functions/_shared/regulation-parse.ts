@@ -558,7 +558,7 @@ O mercado BR de festivais de dança NÃO tem consenso de nomenclatura. Cada regu
 
 → NÍVEL TÉCNICO (NÃO é categoria! = "Classe Técnica", "Faixa Técnica", "Divisão Técnica", "Categoria de Nível", "Nível de Domínio", "Habilidade Técnica", "Classe A/B/C"):
    gradação por experiência/habilidade. Ex: Iniciante, Intermediário, Avançado, Profissional, Master. NÃO é faixa etária.
-   → NÃO use 'categories[]' pra isso. Em vez disso, defina 'nivel_tecnico_enabled: true'. Hoje o CoreoHub não persiste os níveis como entidades separadas — só sinaliza que o festival tem essa dimensão extra.
+   → NÃO use 'categories[]' pra isso. Em vez disso, defina 'nivel_tecnico_enabled: true'. Hoje a CoreoHub não persiste os níveis como entidades separadas — só sinaliza que o festival tem essa dimensão extra.
 
 ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 - Se o regulamento usa a palavra "Modalidade" pra listar "Ballet, Jazz, Hip Hop" — NÃO é modalidade no nosso schema. Isso é GÊNERO. Vai pra 'genres' + 'event_styles_structured'.
@@ -642,7 +642,7 @@ O mercado BR de festivais de dança NÃO tem consenso de nomenclatura. Cada regu
 
 → NÍVEL TÉCNICO (NÃO é categoria! = "Classe Técnica", "Faixa Técnica", "Divisão Técnica", "Categoria de Nível", "Nível de Domínio", "Habilidade Técnica", "Classe A/B/C"):
    gradação por experiência/habilidade. Ex: Iniciante, Intermediário, Avançado, Profissional, Master. NÃO é faixa etária.
-   → NÃO use 'categories[]' pra isso. Em vez disso, defina 'nivel_tecnico_enabled: true'. Hoje o CoreoHub não persiste os níveis como entidades separadas — só sinaliza que o festival tem essa dimensão extra.
+   → NÃO use 'categories[]' pra isso. Em vez disso, defina 'nivel_tecnico_enabled: true'. Hoje a CoreoHub não persiste os níveis como entidades separadas — só sinaliza que o festival tem essa dimensão extra.
 
 ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 - Se o regulamento usa a palavra "Modalidade" pra listar "Ballet, Jazz, Hip Hop" — NÃO é modalidade no nosso schema. Isso é GÊNERO. Vai pra 'genres' + 'event_styles_structured'.

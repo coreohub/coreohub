@@ -60,7 +60,7 @@ function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ou
   return 'classico'
 }
 
-// Preset 'oficial-dourado' — moldura pronta fornecida pelo CoreoHub (não é
+// Preset 'oficial-dourado' — moldura pronta fornecida pela CoreoHub (não é
 // código desenhando forma nenhuma, é uma imagem full-bleed). v2 (2026-07-18,
 // substitui a v1 de 2026-07-17): moldura dourada concentrada nas bordas e
 // cantos (florão ornamental em cada canto) em vez de blocos grandes, faixa
@@ -468,7 +468,7 @@ async function generatePdf(ctx: {
   const MODERNO_GOLD_RGB = rgb(...hexToRgb(MODERNO_GOLD))
   const PRESTIGIO_INK_RGB = rgb(...hexToRgb(PRESTIGIO_DEFAULT_PRIMARY))
 
-  // Fundo: imagem custom do produtor, OU a moldura oficial do CoreoHub
+  // Fundo: imagem custom do produtor, OU a moldura oficial da CoreoHub
   // (fixa, hospedada como asset estático — 'oficial-dourado' ignora
   // qualquer background_url salvo, a arte é sempre a mesma pra todo mundo),
   // OU cor sólida do preset. Preset 'custom' com imagem enviada = "moldura

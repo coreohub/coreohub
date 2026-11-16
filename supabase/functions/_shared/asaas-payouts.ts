@@ -138,7 +138,7 @@ export interface SweepResult {
  *  Se `amount` for passado, saca apenas esse valor específico (clampado
  *  ao saldo disponível). Sem `amount`, saca o saldo inteiro — modo legado
  *  que arrasta toda grana da subconta, incluindo possíveis recebimentos
- *  de fora do CoreoHub. Webhook agora sempre passa o producer_amount
+ *  de fora da CoreoHub. Webhook agora sempre passa o producer_amount
  *  conhecido do split pra evitar surpresa.
  */
 export async function sweepProducerBalance(opts: {

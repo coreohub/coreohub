@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
     // 3) Repasse planejado: escolhe as linhas que cabem no saldo real da subconta
     //    ANTES de sacar e saca exatamente a soma delas (nada de dinheiro pago sem
     //    linha marcada, nem linha paga duas vezes). Também não arrasta dinheiro
-    //    de fora do CoreoHub.
+    //    de fora da CoreoHub.
     const run = await runPlannedPayout({
       supabase:         admin,
       items:            pending.map(c => ({ id: c.id as string, net: parseFloat(netOf(c).toFixed(2)) })).filter(i => i.net > 0),
