@@ -2,14 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { checkPaymentExpectation, paymentCheckMode } from '../supabase/functions/_shared/payment-check'
 
 // Banco de mentira: payment_expectations e registrations devolvem os arrays dados.
-function fake(exp: any[], regs: any[], opts: { expErr?: any; regErr?: any } = {}) {
+function fake(exp: any[], regs: any[], opts: { expErr?: any; regErr?: any; events?: any[] } = {}) {
   return {
     from(t: string) {
       const isExp = t === 'payment_expectations'
+      const isEv = t === 'events'
       const q: any = {
         select() { return q }, eq() { return q }, in() { return q },
         then(res: any) {
           const error = isExp ? (opts.expErr ?? null) : (opts.regErr ?? null)
+          if (isEv) return res({ data: opts.events ?? [], error: null })
           return res({ data: error ? null : (isExp ? exp : regs), error })
         },
       }
@@ -132,5 +134,33 @@ describe('checkPaymentExpectation, agregado', () => {
   it('grupo sem nenhuma inscrição encontrada: ok com registration_missing', async () => {
     const v = await run(exp, [], { id: 'p1', value: 100.5 }, {}, 'AGG')
     expect(v.ok).toBe(true)
+  })
+})
+
+describe('falsos positivos corrigidos (auditoria 2026-11-15, code-review)', () => {
+  const ev = (pricing_type?: string) => [{ id: EV, formacoes_config: [{ name: 'Grupo', ...(pricing_type ? { pricing_type } : {}) }] }]
+  const grew = [reg({ bailarinos_detalhes: [{}, {}, {}] })]
+  it('elenco cresceu com preço FIXO por formação: ok, só registra', async () => {
+    const v = await run([row({ formato: 'Grupo' })], grew, { id: 'p1', value: 100 }, { events: ev() })
+    expect(v.ok).toBe(true); expect(v.reasons).toContain('roster_grew_price_fixed'); expect(v.reasons).not.toContain('roster_grew')
+  })
+  it('elenco cresceu com preço PER_MEMBER ou PROGRESSIVE: divergência', async () => {
+    for (const pt of ['PER_MEMBER', 'PROGRESSIVE_PER_DANCER']) {
+      const v = await run([row({ formato: 'Grupo' })], grew, { id: 'p1', value: 100 }, { events: ev(pt) })
+      expect(v.ok).toBe(false); expect(v.reasons).toContain('roster_grew')
+    }
+  })
+  it('formação não encontrada ou sem formato: conservador (divergência)', async () => {
+    expect((await run([row({ formato: 'Trio' })], grew, { id: 'p1', value: 100 }, { events: ev() })).ok).toBe(false)
+    expect((await run([row()], grew, { id: 'p1', value: 100 }, { events: ev() })).ok).toBe(false)
+  })
+  it('parcela da Asaas sem installmentCount (installment/installmentNumber): pula o valor', async () => {
+    const a = await run([row({ expected_value: 300 })], [reg()], { id: 'p1', value: 100, installment: 'ins_1', installmentNumber: 1 })
+    expect(a.ok).toBe(true); expect(a.reasons).toContain('value_check_skipped_installments')
+    const b = await run([row({ expected_value: 300 })], [reg()], { id: 'p1', value: 100, installmentNumber: 2 })
+    expect(b.ok).toBe(true)
+  })
+  it('pagamento à vista com valor baixo continua divergência', async () => {
+    expect((await run([row({ expected_value: 300 })], [reg()], { id: 'p1', value: 100 })).ok).toBe(false)
   })
 })
