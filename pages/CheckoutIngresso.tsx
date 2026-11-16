@@ -750,20 +750,20 @@ export default function CheckoutIngresso() {
   // ─── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#ff0068]" size={32} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-primary-ink" size={32} />
       </div>
     );
   }
 
   if (error && !event) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white/5 border border-red-500/30 rounded-2xl p-6 text-center">
-          <AlertCircle className="text-red-400 mx-auto mb-3" size={32} />
-          <p className="text-white font-bold mb-2">Não foi possível carregar</p>
-          <p className="text-sm text-slate-400 mb-4">{error}</p>
-          <button onClick={() => navigate(-1)} className="text-xs font-black text-[#ff0068] uppercase tracking-widest">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white border border-red-500/30 rounded-2xl p-6 text-center">
+          <AlertCircle className="text-red-700 mx-auto mb-3" size={32} />
+          <p className="text-slate-900 font-bold mb-2">Não foi possível carregar</p>
+          <p className="text-sm text-slate-600 mb-4">{error}</p>
+          <button onClick={() => navigate(-1)} className="text-xs font-black text-brand-primary-ink uppercase tracking-widest">
             ← Voltar
           </button>
         </div>
@@ -774,14 +774,14 @@ export default function CheckoutIngresso() {
   // Carrinho vazio (refresh sem state, ou removeu tudo) → volta pro evento.
   if (event && lines.length === 0) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 text-center">
           <Ticket className="text-slate-500 mx-auto mb-3" size={32} />
-          <p className="text-white font-bold mb-2">Seu carrinho está vazio</p>
-          <p className="text-sm text-slate-400 mb-4">Escolha os ingressos na página do evento.</p>
+          <p className="text-slate-900 font-bold mb-2">Seu carrinho está vazio</p>
+          <p className="text-sm text-slate-600 mb-4">Escolha os ingressos na página do evento.</p>
           <button
             onClick={() => navigate(backPath ?? `/evento/${idOrSlug}`)}
-            className="inline-flex items-center gap-2 text-xs font-black text-[#ff0068] uppercase tracking-widest"
+            className="inline-flex items-center gap-2 text-xs font-black text-brand-primary-ink uppercase tracking-widest"
           >
             <ArrowLeft size={14} /> Ver ingressos
           </button>
@@ -791,7 +791,7 @@ export default function CheckoutIngresso() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Página transacional/pessoal: fora do índice de busca (também via X-Robots-Tag no vercel.json). */}
       <meta name="robots" content="noindex, nofollow" />
       {(event as any)?.payment_sandbox && <SandboxBanner />}
@@ -804,7 +804,7 @@ export default function CheckoutIngresso() {
       <div className="max-w-2xl mx-auto px-4 py-6 relative">
         <button
           onClick={() => navigate(backPath ?? `/evento/${idOrSlug}`)}
-          className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-6"
+          className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink mb-6"
         >
           <ArrowLeft size={14} /> Voltar pro evento
         </button>
@@ -816,9 +816,9 @@ export default function CheckoutIngresso() {
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter mb-1">
           Seu carrinho
         </h1>
-        <p className="text-sm text-slate-400">{event.name}</p>
+        <p className="text-sm text-slate-600">{event.name}</p>
         {event.start_date && (
-          <p className="text-sm font-bold text-slate-200 mb-6">
+          <p className="text-sm font-bold text-slate-800 mb-6">
             Sessão: {(() => {
               const dt = new Date(`${String(event.start_date).slice(0, 10)}T12:00:00`);
               const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(dt).replace('.', '');
@@ -835,7 +835,7 @@ export default function CheckoutIngresso() {
             role="timer"
             aria-live="off"
             className={`mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black tabular-nums ${
-              quoteRemainingSec <= 60 ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              quoteRemainingSec <= 60 ? 'bg-rose-500/10 border-rose-500/30 text-rose-700' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
             }`}
           >
             <Clock size={12} aria-hidden="true" />
@@ -843,18 +843,18 @@ export default function CheckoutIngresso() {
           </p>
         )}
         {quoteNotice && (
-          <div role="alert" aria-live="polite" className="mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200">
+          <div role="alert" aria-live="polite" className="mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-700">
             <AlertCircle size={14} className="shrink-0 mt-0.5" />
             <span className="flex-1">{quoteNotice}</span>
-            <button type="button" aria-label="Fechar aviso" onClick={() => setQuoteNotice(null)} className="text-amber-300/70 hover:text-amber-200 cursor-pointer">
+            <button type="button" aria-label="Fechar aviso" onClick={() => setQuoteNotice(null)} className="text-amber-700 hover:text-amber-700 cursor-pointer">
               <X size={14} />
             </button>
           </div>
         )}
 
         {/* Resumo editável do carrinho */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
-          <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Ingressos</p>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 space-y-3">
+          <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Ingressos</p>
           {lines.map(l => {
             const remaining = stockByIdx[String(l.idx)]?.remaining ?? Infinity;
             const isMeia = l.kind === 'meia';
@@ -862,25 +862,25 @@ export default function CheckoutIngresso() {
             const atGlobalMax = totalQty >= maxPurchase;
             const soldOut = stockByIdx[String(l.idx)]?.sold_out === true;
             return (
-              <div key={l.idx} className="flex items-center justify-between gap-3 border-t border-white/5 pt-3 first:border-t-0 first:pt-0">
+              <div key={l.idx} className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 first:border-t-0 first:pt-0">
                 <div className="min-w-0">
-                  <p className="text-sm font-black uppercase tracking-tight text-white truncate">{l.nome}</p>
+                  <p className="text-sm font-black uppercase tracking-tight text-slate-900 truncate">{l.nome}</p>
                   {l.loteNome && (
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{l.loteNome}</p>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600">{l.loteNome}</p>
                   )}
                   {zonePriced ? (() => {
                     const range = priceRangeForType(zoneIngressos[l.idx] ?? {}, l.idx, seatZones, todayISO(), { includeBase: true, quotePrices: quote?.prices ?? null });
                     return (
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-600 mt-0.5">
                         {range.min === range.max ? `${formatBRL(range.min)} cada` : `${formatBRL(range.min)} a ${formatBRL(range.max)} (conforme o lugar)`}
                       </p>
                     );
                   })() : (
-                    <p className="text-xs text-slate-400 mt-0.5">{formatBRL(l.precoUnit)} cada</p>
+                    <p className="text-xs text-slate-600 mt-0.5">{formatBRL(l.precoUnit)} cada</p>
                   )}
-                  {soldOut && <p className="text-[10px] font-bold text-rose-300 mt-0.5">Esgotado</p>}
+                  {soldOut && <p className="text-[10px] font-bold text-rose-700 mt-0.5">Esgotado</p>}
                   {!soldOut && remaining !== Infinity && remaining <= 10 && (
-                    <p className="text-[10px] font-bold text-amber-300 mt-0.5">Últimos {remaining}</p>
+                    <p className="text-[10px] font-bold text-amber-700 mt-0.5">Últimos {remaining}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -888,7 +888,7 @@ export default function CheckoutIngresso() {
                     type="button"
                     aria-label={l.qty <= 1 ? `Remover ${l.nome} do carrinho` : `Diminuir quantidade de ${l.nome}`}
                     onClick={() => setLineQty(l.idx, l.qty - 1)}
-                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
+                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
                   >
                     {l.qty <= 1 ? <Trash2 size={14} /> : <Minus size={14} />}
                   </button>
@@ -899,7 +899,7 @@ export default function CheckoutIngresso() {
                     disabled={l.qty >= typeCap || atGlobalMax}
                     title={atGlobalMax ? `Máximo de ${maxPurchase} ingressos por compra` : (l.qty >= typeCap ? 'Limite deste tipo atingido' : undefined)}
                     onClick={() => setLineQty(l.idx, l.qty + 1)}
-                    className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
+                    className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-brand-primary-strong disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
                   >
                     <Plus size={14} />
                   </button>
@@ -911,7 +911,7 @@ export default function CheckoutIngresso() {
             <p className="text-[10px] text-slate-500 text-right pt-1">Máx. {maxPurchase} ingressos por compra.</p>
           )}
           {lines.some(l => l.kind === 'meia') && (
-            <p className="text-[10px] text-amber-300/80 pt-1 flex items-start gap-1.5">
+            <p className="text-[10px] text-amber-700 pt-1 flex items-start gap-1.5">
               <AlertCircle size={11} className="mt-0.5 shrink-0" />
               <span><strong>Lei 12.933:</strong> meia-entrada é nominativa e limitada a 1 por CPF. Apresente o documento que comprove o benefício na entrada.</span>
             </p>
@@ -924,20 +924,20 @@ export default function CheckoutIngresso() {
         </div>
 
         {/* Cupom de desconto */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-          <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-            <Tag size={12} className="text-[#ff0068]" /> Cupom de desconto
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4">
+          <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Tag size={12} className="text-brand-primary-ink" /> Cupom de desconto
           </p>
           {appliedCouponCode ? (
             <div className="flex items-center justify-between gap-3 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
               <div className="flex items-center gap-2 min-w-0">
-                <Check size={14} className="text-emerald-400 shrink-0" />
+                <Check size={14} className="text-emerald-700 shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-widest text-emerald-300 truncate">{appliedCouponCode}</p>
-                  <p className="text-[10px] text-emerald-200">−{formatBRL(couponDiscount)} no total</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-emerald-700 truncate">{appliedCouponCode}</p>
+                  <p className="text-[10px] text-emerald-700">−{formatBRL(couponDiscount)} no total</p>
                 </div>
               </div>
-              <button type="button" onClick={handleRemoveCoupon} className="p-1 rounded-lg text-slate-400 hover:text-rose-400" aria-label="Remover cupom">
+              <button type="button" onClick={handleRemoveCoupon} className="p-1 rounded-lg text-slate-600 hover:text-rose-700" aria-label="Remover cupom">
                 <X size={14} />
               </button>
             </div>
@@ -948,20 +948,20 @@ export default function CheckoutIngresso() {
                 value={couponInput}
                 onChange={e => { setCouponInput(e.target.value.toUpperCase()); if (couponError) setCouponError(null); }}
                 placeholder="EX: FAMILIA5"
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono font-bold uppercase outline-none focus:border-[#ff0068]/50"
+                className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono font-bold uppercase outline-none focus:border-[#ff0068]/50"
               />
               <button
                 type="button"
                 onClick={handleApplyCoupon}
                 disabled={!couponInput.trim() || couponLoading}
-                className="px-4 py-2.5 bg-[#ff0068]/20 hover:bg-[#ff0068]/30 disabled:opacity-30 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest"
+                className="px-4 py-2.5 bg-[#ff0068]/20 hover:bg-[#ff0068]/30 disabled:opacity-30 text-brand-primary-ink rounded-xl text-[10px] font-black uppercase tracking-widest"
               >
                 {couponLoading ? <Loader2 className="animate-spin" size={14} /> : 'Aplicar'}
               </button>
             </div>
           )}
           {couponError && (
-            <p className="mt-2 text-[10px] text-rose-300 flex items-center gap-1">
+            <p className="mt-2 text-[10px] text-rose-700 flex items-center gap-1">
               <AlertCircle size={10} /> {couponError}
             </p>
           )}
@@ -969,9 +969,9 @@ export default function CheckoutIngresso() {
 
         {/* Escolher lugar (Fase 2 — assento numerado, só quando o evento liga o mapa) */}
         {seatMapEnabled && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 lg:w-[min(1100px,calc(100vw-2rem))] lg:relative lg:left-1/2 lg:-translate-x-1/2">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 lg:w-[min(1100px,calc(100vw-2rem))] lg:relative lg:left-1/2 lg:-translate-x-1/2">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+              <p className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
                 <Armchair size={14} /> Escolher lugar
               </p>
               <p className="text-[10px] text-slate-500">
@@ -980,10 +980,10 @@ export default function CheckoutIngresso() {
             </div>
 
             {seatLostNotice && (
-              <div role="alert" aria-live="polite" className="mb-3 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200">
+              <div role="alert" aria-live="polite" className="mb-3 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-700">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <span className="flex-1">{seatLostNotice}</span>
-                <button type="button" aria-label="Fechar aviso" onClick={() => setSeatLostNotice(null)} className="text-amber-300/70 hover:text-amber-200 cursor-pointer">
+                <button type="button" aria-label="Fechar aviso" onClick={() => setSeatLostNotice(null)} className="text-amber-700 hover:text-amber-700 cursor-pointer">
                   <X size={14} />
                 </button>
               </div>
@@ -994,7 +994,7 @@ export default function CheckoutIngresso() {
                 role="timer"
                 aria-live="off"
                 className={`mb-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black tabular-nums ${
-                  holdRemainingSec <= 60 ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  holdRemainingSec <= 60 ? 'bg-rose-500/10 border-rose-500/30 text-rose-700' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
                 }`}
               >
                 <Clock size={12} aria-hidden="true" />
@@ -1008,6 +1008,7 @@ export default function CheckoutIngresso() {
 
             {zonePriced && (
               <SeatZoneLegend
+                variant="auto"
                 zones={seatZones}
                 types={lines.map(l => ({
                   idx: l.idx,
@@ -1031,7 +1032,7 @@ export default function CheckoutIngresso() {
               selectedSeats={selectedSeats}
               onToggle={toggleSeat}
               size="md"
-              variant="dark"
+              variant="light"
               pcdQty={pcdQty}
               obesoQty={obesoQty}
               compQty={compQty}
@@ -1043,12 +1044,12 @@ export default function CheckoutIngresso() {
 
             {seatDepth && (
               <div className="mt-3 space-y-2" aria-live="polite">
-                <p className="text-[11px] text-slate-300">
-                  <strong className="text-white">Seus lugares:</strong>{' '}
+                <p className="text-[11px] text-slate-700">
+                  <strong className="text-slate-900">Seus lugares:</strong>{' '}
                   {seatDepth.rows.map(r => `fileira ${r.codigo}, ${r.rank}ª de ${r.total} a partir do palco (${DEPTH_LABEL[r.depth]})`).join(' · ')}
                 </p>
                 {seatDepth.allFundo && (
-                  <p role="note" className="flex items-start gap-2 text-[11px] text-amber-200 bg-amber-500/10 ring-1 ring-amber-400/40 rounded-lg px-3 py-2">
+                  <p role="note" className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-500/10 ring-1 ring-amber-400/40 rounded-lg px-3 py-2">
                     <AlertCircle size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
                     <span>Esses lugares ficam no fundo da sala. O palco fica no topo do mapa, perto da fileira A. Quer ficar mais perto? Toque no lugar para desmarcar e escolha outro.</span>
                   </p>
@@ -1058,6 +1059,7 @@ export default function CheckoutIngresso() {
 
             {zonePriced && selectedSeats.length > 0 && (
               <SeatZoneSelection
+              variant="auto"
                 zones={seatZones}
                 rows={selectedSeats.map(id => {
                   const a = seatAssignments?.find(x => x.seat_id === id);
@@ -1072,7 +1074,7 @@ export default function CheckoutIngresso() {
             )}
 
             {companionOffer && (
-              <div className="mt-3 flex items-center gap-3 bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 text-xs text-sky-200">
+              <div className="mt-3 flex items-center gap-3 bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 text-xs text-sky-700">
                 <Users size={16} className="shrink-0" aria-hidden="true" />
                 <p className="flex-1">
                   <strong>Vai com acompanhante?</strong> O lugar {companionOffer.comp}, ao lado do {companionOffer.special}, está reservado para ele.
@@ -1085,40 +1087,40 @@ export default function CheckoutIngresso() {
             )}
 
             {pcdQty > 0 && specialSelected < pcdQty && (
-              <p className="mt-3 text-[11px] text-sky-300">Escolha {pcdQty - specialSelected} lugar{pcdQty - specialSelected === 1 ? '' : 'es'} {obesoQty > 0 ? (obesoQty === pcdQty ? 'largo' : 'PCD ou largo') : 'PCD'} (azul) para o seu pedido.</p>
+              <p className="mt-3 text-[11px] text-sky-700">Escolha {pcdQty - specialSelected} lugar{pcdQty - specialSelected === 1 ? '' : 'es'} {obesoQty > 0 ? (obesoQty === pcdQty ? 'largo' : 'PCD ou largo') : 'PCD'} (azul) para o seu pedido.</p>
             )}
             {compQty > 0 && compSelected < compQty && (
-              <p className="mt-2 text-[11px] text-sky-300">Escolha o lugar do acompanhante, ao lado do lugar especial.</p>
+              <p className="mt-2 text-[11px] text-sky-700">Escolha o lugar do acompanhante, ao lado do lugar especial.</p>
             )}
 
-            <SeatLegend rowsConfig={rowsConfig} variant="dark" />
+            <SeatLegend rowsConfig={rowsConfig} variant="auto" />
           </div>
         )}
 
         {/* Form do comprador */}
         <form onSubmit={handlePay} noValidate>
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
-          <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-2">Dados do comprador</p>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 space-y-3">
+          <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Dados do comprador</p>
 
           <Field label="Nome completo" icon={<UserIcon size={14} />} htmlFor="buyer-name">
             <input id="buyer-name" name="name" value={name} onChange={e => setName(e.target.value)}
               placeholder="Seu nome" autoComplete="name" required
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600" />
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-400" />
           </Field>
 
           <Field label="Email" icon={<Mail size={14} />} htmlFor="buyer-email">
             <input id="buyer-email" name="email" type="email" value={email} onChange={e => setEmail(e.target.value)}
               placeholder="seu@email.com" autoComplete="email" required
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600" />
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-400" />
           </Field>
 
           <Field label="CPF" icon={<FileText size={14} />} hint="Obrigatório por lei" htmlFor="buyer-cpf">
             <input id="buyer-cpf" name="cpf" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))}
               inputMode="numeric" placeholder="000.000.000-00" autoComplete="off" required
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide" />
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-400 font-mono tracking-wide" />
           </Field>
           {cpf.replace(/\D/g, '').length === 11 && !isValidCpf(cpf) && (
-            <p className="text-[10px] text-rose-300 -mt-2 flex items-center gap-1">
+            <p className="text-[10px] text-rose-700 -mt-2 flex items-center gap-1">
               <AlertCircle size={10} /> CPF inválido — verifique se digitou corretamente
             </p>
           )}
@@ -1126,13 +1128,15 @@ export default function CheckoutIngresso() {
           <Field label="Telefone (opcional)" icon={<Phone size={14} />} htmlFor="buyer-phone">
             <input id="buyer-phone" name="phone" value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
               inputMode="tel" type="tel" placeholder="(00) 00000-0000" autoComplete="tel"
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide" />
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-400 font-mono tracking-wide" />
           </Field>
         </div>
 
         {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}
         {feeEnabled && payOptions && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4">
           <PaymentMethodPicker
+            theme="adaptive"
             options={payOptions}
             method={payMethod}
             installments={installments}
@@ -1142,11 +1146,12 @@ export default function CheckoutIngresso() {
             refundTarget="o valor do ingresso"
             formatBRL={formatBRL}
           />
+          </div>
         )}
 
         {/* Resumo de valores */}
         {breakdown && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-2">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 space-y-2">
             {pricedLines.map(l => (
               <Row key={`${l.idx}:${l.zoneKey ?? ''}`} label={`${l.qty}× ${l.nome}${l.zoneKey ? ` · ${seatZones.find(z => z.key === l.zoneKey)?.nome ?? 'Sem zona'}` : ''}`} value={formatBRL(l.precoUnit * l.qty)} />
             ))}
@@ -1173,12 +1178,12 @@ export default function CheckoutIngresso() {
                 </>
               );
             })()}
-            <div className="border-t border-white/10 pt-2 mt-2 flex items-baseline justify-between">
+            <div className="border-t border-slate-200 pt-2 mt-2 flex items-baseline justify-between">
               <p className="font-black uppercase text-sm">Total</p>
-              <p className="text-2xl font-black text-[#ff0068]">{formatBRL(breakdown.totalCharged)}</p>
+              <p className="text-2xl font-black text-brand-primary-ink">{formatBRL(breakdown.totalCharged)}</p>
             </div>
             {feeEnabled && payMethod === 'card' && installments > 1 && (
-              <p className="text-[11px] text-slate-400 mt-1 tabular-nums">{installments}x de {formatBRL(breakdown.totalCharged / installments)}</p>
+              <p className="text-[11px] text-slate-600 mt-1 tabular-nums">{installments}x de {formatBRL(breakdown.totalCharged / installments)}</p>
             )}
             {breakdown.feeMode === 'absorver' && (
               <p className="text-[10px] text-slate-500 mt-1">A taxa de serviço é absorvida pelo organizador.</p>
@@ -1190,14 +1195,14 @@ export default function CheckoutIngresso() {
         )}
 
         {error && (
-          <div role="alert" aria-live="polite" className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-sm text-red-300 flex items-start gap-2">
+          <div role="alert" aria-live="polite" className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-sm text-red-700 flex items-start gap-2">
             <AlertCircle size={16} className="shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         <div className="mb-4">
-          <CheckoutLegalNotice accepted={refundAccepted} onAcceptedChange={setRefundAccepted} theme="dark" variant="ingresso" />
+          <CheckoutLegalNotice accepted={refundAccepted} onAcceptedChange={setRefundAccepted} theme="light" variant="ingresso" />
         </div>
 
         <button
@@ -1208,7 +1213,7 @@ export default function CheckoutIngresso() {
               : !refundAccepted ? 'Aceite a política de reembolso para prosseguir'
               : undefined
           }
-          className="w-full py-4 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#ff0068]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
+          className="w-full py-4 bg-brand-primary-strong hover:bg-[#ff0068]/90 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#ff0068]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
         >
           {paying ? <Loader2 className="animate-spin" size={16} /> : <Ticket size={16} />}
           {paying ? 'Gerando pagamento...' : 'Continuar pro pagamento'}
@@ -1220,9 +1225,9 @@ export default function CheckoutIngresso() {
         </p>
 
         <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-500">
-          <ShieldCheck size={12} className="text-emerald-400" />
+          <ShieldCheck size={12} className="text-emerald-700" />
           Pagamento seguro processado por
-          <AsaasBadge variant="compact" theme="negative" width={100} height={30} />
+          <AsaasBadge variant="compact" theme="positive" width={100} height={30} />
         </div>
 
         <p className="text-[10px] text-slate-500 text-center mt-3 leading-relaxed">
@@ -1237,10 +1242,10 @@ function Field({ label, icon, hint, htmlFor, children }: { label: string; icon: 
   return (
     <label className="block" htmlFor={htmlFor}>
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{label}</p>
         {hint && <p className="text-[9px] text-slate-500">{hint}</p>}
       </div>
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus-within:border-[#ff0068]/50 transition-colors">
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus-within:border-[#ff0068]/50 transition-colors">
         <span className="text-slate-500">{icon}</span>
         {children}
       </div>
@@ -1252,7 +1257,7 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
   return (
     <div>
       <div className="flex items-baseline justify-between text-sm">
-        <span className="text-slate-300">{label}</span>
+        <span className="text-slate-700">{label}</span>
         <span className="font-bold tabular-nums">{value}</span>
       </div>
       {hint && <p className="text-[10px] text-slate-500 mt-0.5">{hint}</p>}

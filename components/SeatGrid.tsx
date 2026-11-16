@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { readableOnLight } from '../utils/zoneColor';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2, Accessibility, Minus, Plus, Maximize2, X, RotateCcw, ArrowLeftRight, Users, Ban, Check } from 'lucide-react';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
@@ -13,7 +14,8 @@ interface SeatGridProps {
   /** md = checkout público (assento maior). sm = PDV/painel do produtor (mais compacto). */
   size?: 'md' | 'sm';
   /** dark = sempre escuro (checkout público, que não segue o toggle de tema). auto = acompanha light/dark (painel do produtor). */
-  variant?: 'dark' | 'auto';
+  /** dark: fundo escuro fixo; auto: segue .dark (painel); light: sempre claro (páginas públicas). */
+  variant?: 'dark' | 'auto' | 'light';
   /** Zoom (botões + pinça) e ajuste à largura. Padrão: ligado só no checkout público (size md). */
   zoomable?: boolean;
   /** Ingressos PCD / de acompanhante / comuns no pedido (regras de seleção da Fase 3). */
@@ -293,7 +295,7 @@ export default function SeatGrid(props: SeatGridProps) {
               {row.codigo}
             </button>
           ) : (
-            <span className={`absolute ${s.labelPos} font-black ${orient ? 'text-xs text-slate-300' : `${s.codeText} text-slate-500`}`}>{row.codigo}</span>
+            <span className={`absolute ${s.labelPos} font-black ${orient ? (variant === 'dark' ? 'text-xs text-slate-300' : 'text-xs text-slate-600') : `${s.codeText} text-slate-500`}`}>{row.codigo}</span>
           )}
           <div className="flex items-center gap-1">
             {displayOrder(row).map((n, i, order) => {
@@ -338,7 +340,7 @@ export default function SeatGrid(props: SeatGridProps) {
                     aria-disabled={locked || undefined}
                     className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors${markedSeats?.includes(seatId) ? ' ring-2 ring-[#E3FF0A] ring-offset-1 ring-offset-black' : ''}
                       ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : zoneStyled ? 'hover:brightness-125' : special ? specialFree : freeClass}`}
-                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 } : zoneStyled ? { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` } : undefined) : undefined}
+                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 } : zoneStyled ? (variant === 'light' ? { backgroundColor: `${zc}33`, color: readableOnLight(zc), boxShadow: `inset 0 0 0 1px ${zc}` } : { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` }) : undefined) : undefined}
                   >
                     {Icon ? <Icon size={s.icon} /> : n}
                   </button>
