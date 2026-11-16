@@ -73,14 +73,14 @@ const EntrarJuri: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-6 py-12">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="p-4 bg-[#ff0068]/10 rounded-2xl text-[#ff0068] mb-4">
+          <div className="p-4 bg-[#ff0068]/10 rounded-2xl text-brand-primary-ink mb-4">
             <Gavel size={28} />
           </div>
-          <h1 className="text-2xl font-black uppercase tracking-tighter italic text-white">Entrar como Jurado</h1>
-          <p className="text-xs text-slate-400 mt-2">
+          <h1 className="text-2xl font-black uppercase tracking-tighter italic text-slate-900">Entrar como Jurado</h1>
+          <p className="text-xs text-slate-600 mt-2">
             Digite o código de 6 caracteres que o produtor mostrou pra você.
           </p>
         </div>
@@ -96,11 +96,11 @@ const EntrarJuri: React.FC = () => {
             autoCapitalize="characters"
             spellCheck={false}
             aria-label="Código de acesso do jurado"
-            className="w-full text-center text-3xl font-black tracking-[0.3em] uppercase bg-white/5 border border-white/10 focus:border-[#ff0068] rounded-2xl py-5 text-white placeholder:text-slate-700 outline-none transition-colors"
+            className="w-full text-center text-3xl font-black tracking-[0.3em] uppercase bg-white border border-slate-200 focus:border-[#ff0068] rounded-2xl py-5 text-slate-900 placeholder:text-slate-700 outline-none transition-colors"
           />
 
           {error && (
-            <p role="alert" className="flex items-center gap-2 text-xs font-bold text-rose-400">
+            <p role="alert" className="flex items-center gap-2 text-xs font-bold text-rose-700">
               <AlertCircle size={14} className="shrink-0" /> {error}
             </p>
           )}
@@ -108,7 +108,7 @@ const EntrarJuri: React.FC = () => {
           <button
             type="submit"
             disabled={loading || code.trim().length < 4}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#ff1a7d] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-4 bg-brand-primary-strong hover:bg-[#ff1a7d] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-colors"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <>Entrar <ArrowRight size={14} /></>}
           </button>

@@ -16,6 +16,7 @@ describe('isPublicLightPath', () => {
       '/meu-workshop/tok',
       '/validar-certificado',
       '/validar-certificado/hash',
+      '/termos', '/privacidade', '/entrar-juri',
       '/festival/meu-festival/leaderboard',
     ]) {
       expect(isPublicLightPath(p), p).toBe(true);
@@ -24,7 +25,7 @@ describe('isPublicLightPath', () => {
 
   it('painel, landings e palco seguem o tema salvo', () => {
     for (const p of [
-      '/', '/lp', '/governo', '/planos', '/dashboard', '/qg-organizador',
+      '/', '/lp', '/governo', '/governo/proposta', '/planos', '/dashboard', '/qg-organizador',
       '/telao', '/telao/ABC123', '/festival/meu-festival/inscrever',
       '/festival/meu-festival/checkout', '/vendas-ingressos', '/evento',
     ]) {

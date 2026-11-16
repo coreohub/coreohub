@@ -30,15 +30,15 @@ const PoliticaDePrivacidade: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-black/90 backdrop-blur border-b border-white/8 px-6 py-4">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 font-black text-xl uppercase tracking-wide">
             <span className="w-2.5 h-2.5 rounded-full bg-[#FF0068] shrink-0" />
             CoreoHub
           </Link>
-          <Link to="/" className="text-sm font-semibold text-white/70 hover:text-white transition-colors">
+          <Link to="/" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors">
             ← Voltar ao site
           </Link>
         </div>
@@ -46,32 +46,32 @@ const PoliticaDePrivacidade: React.FC = () => {
 
       <main className="max-w-3xl mx-auto px-6 pb-24">
         {/* Hero */}
-        <div className="py-16 border-b border-white/8">
-          <span className="inline-block text-[10px] font-bold tracking-[0.18em] uppercase text-[#FF0068] px-3 py-1.5 bg-[#FF0068]/10 border border-[#FF0068]/30 rounded mb-4">
+        <div className="py-16 border-b border-slate-200">
+          <span className="inline-block text-[10px] font-bold tracking-[0.18em] uppercase text-brand-primary-ink px-3 py-1.5 bg-[#FF0068]/5 border border-[#FF0068]/30 rounded mb-4">
             Legal
           </span>
           <h1 className="font-black text-4xl md:text-5xl uppercase tracking-tight mb-3">
             Política de Privacidade
           </h1>
-          <p className="text-sm text-white/40">
+          <p className="text-sm text-slate-500">
             Última atualização: 26 de setembro de 2026 · Em conformidade com a LGPD (Lei nº 13.709/2018)
           </p>
         </div>
 
         {/* Body */}
-        <div className="py-12 space-y-10 text-white/70 leading-relaxed">
+        <div className="py-12 space-y-10 text-slate-700 leading-relaxed">
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               1. Quem somos
             </h2>
-            <p className="mb-3">A CoreoHub é uma plataforma de gestão para festivais e mostras de dança. Somos responsáveis pelo tratamento dos dados pessoais coletados em nosso site (<strong className="text-white font-semibold">www.coreohub.com</strong>) e na plataforma (<strong className="text-white font-semibold">app.coreohub.com</strong>).</p>
+            <p className="mb-3">A CoreoHub é uma plataforma de gestão para festivais e mostras de dança. Somos responsáveis pelo tratamento dos dados pessoais coletados em nosso site (<strong className="text-slate-900 font-semibold">www.coreohub.com</strong>) e na plataforma (<strong className="text-slate-900 font-semibold">app.coreohub.com</strong>).</p>
             <p>Contato do encarregado de dados (DPO):{' '}
               <a
                 href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#FF0068] hover:underline"
+                className="text-brand-primary-ink hover:underline"
               >
                 (17) 99793-6169
               </a>.
@@ -79,16 +79,16 @@ const PoliticaDePrivacidade: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               2. Dados que coletamos
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="border-b border-white/12">
-                    <th className="text-left py-2.5 px-3 text-white font-semibold text-xs uppercase tracking-wide bg-white/5">Dado</th>
-                    <th className="text-left py-2.5 px-3 text-white font-semibold text-xs uppercase tracking-wide bg-white/5">Finalidade</th>
-                    <th className="text-left py-2.5 px-3 text-white font-semibold text-xs uppercase tracking-wide bg-white/5">Base legal (LGPD)</th>
+                  <tr className="border-b border-slate-300">
+                    <th className="text-left py-2.5 px-3 text-slate-900 font-semibold text-xs uppercase tracking-wide bg-white">Dado</th>
+                    <th className="text-left py-2.5 px-3 text-slate-900 font-semibold text-xs uppercase tracking-wide bg-white">Finalidade</th>
+                    <th className="text-left py-2.5 px-3 text-slate-900 font-semibold text-xs uppercase tracking-wide bg-white">Base legal (LGPD)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/6">
@@ -102,9 +102,9 @@ const PoliticaDePrivacidade: React.FC = () => {
                     ['Vídeos enviados pelo inscrito', 'Pré-seleção remota pelo júri', 'Consentimento'],
                   ].map(([dado, fin, base]) => (
                     <tr key={dado}>
-                      <td className="py-2.5 px-3 align-top text-white/70">{dado}</td>
-                      <td className="py-2.5 px-3 align-top text-white/70">{fin}</td>
-                      <td className="py-2.5 px-3 align-top text-white/70">{base}</td>
+                      <td className="py-2.5 px-3 align-top text-slate-700">{dado}</td>
+                      <td className="py-2.5 px-3 align-top text-slate-700">{fin}</td>
+                      <td className="py-2.5 px-3 align-top text-slate-700">{base}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -113,7 +113,7 @@ const PoliticaDePrivacidade: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               3. Como usamos seus dados
             </h2>
             <ul className="list-disc pl-5 space-y-1.5 mb-4">
@@ -127,46 +127,46 @@ const PoliticaDePrivacidade: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               4. Compartilhamento de dados
             </h2>
             <p className="mb-3">Compartilhamos dados apenas com:</p>
             <ul className="list-disc pl-5 space-y-1.5 mb-4">
-              <li><strong className="text-white font-semibold">Asaas</strong> — gateway de pagamento, para processar transações financeiras</li>
-              <li><strong className="text-white font-semibold">Google</strong> — Analytics (GA4) para métricas de uso, com dados anonimizados</li>
-              <li><strong className="text-white font-semibold">Produtor do evento</strong> — acessa os dados dos inscritos para gestão do festival ou mostra em que você se inscreveu</li>
-              <li><strong className="text-white font-semibold">Novo titular de um ingresso transferido</strong> — recebe o ingresso por e-mail e o nome de quem o transferiu</li>
-              <li><strong className="text-white font-semibold">Órgãos de defesa do consumidor</strong> (Procon, Senacon e outros do Sistema Nacional de Defesa do Consumidor) — dados de compra e de transferência de ingressos, quando pedirem por escrito e com justificativa</li>
+              <li><strong className="text-slate-900 font-semibold">Asaas</strong> — gateway de pagamento, para processar transações financeiras</li>
+              <li><strong className="text-slate-900 font-semibold">Google</strong> — Analytics (GA4) para métricas de uso, com dados anonimizados</li>
+              <li><strong className="text-slate-900 font-semibold">Produtor do evento</strong> — acessa os dados dos inscritos para gestão do festival ou mostra em que você se inscreveu</li>
+              <li><strong className="text-slate-900 font-semibold">Novo titular de um ingresso transferido</strong> — recebe o ingresso por e-mail e o nome de quem o transferiu</li>
+              <li><strong className="text-slate-900 font-semibold">Órgãos de defesa do consumidor</strong> (Procon, Senacon e outros do Sistema Nacional de Defesa do Consumidor) — dados de compra e de transferência de ingressos, quando pedirem por escrito e com justificativa</li>
             </ul>
             <p>Todos os parceiros são obrigados contratualmente a proteger seus dados e não utilizá-los para outras finalidades.</p>
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               5. Cookies
             </h2>
             <p>Utilizamos cookies essenciais (necessários para o funcionamento da plataforma) e cookies de analytics (Google Analytics 4, para entender como o site é usado). Você pode desativar os cookies de analytics nas configurações do seu navegador sem prejuízo ao uso da plataforma.</p>
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               6. Seus direitos (LGPD)
             </h2>
             <p className="mb-3">Como titular de dados, você tem direito a:</p>
             <ul className="list-disc pl-5 space-y-1.5 mb-4">
-              <li><strong className="text-white font-semibold">Acesso:</strong> solicitar cópia dos seus dados pessoais</li>
-              <li><strong className="text-white font-semibold">Correção:</strong> corrigir dados incompletos ou desatualizados</li>
-              <li><strong className="text-white font-semibold">Exclusão:</strong> solicitar a eliminação dos seus dados quando não forem mais necessários</li>
-              <li><strong className="text-white font-semibold">Portabilidade:</strong> receber seus dados em formato estruturado</li>
-              <li><strong className="text-white font-semibold">Revogação de consentimento:</strong> retirar consentimentos dados anteriormente</li>
-              <li><strong className="text-white font-semibold">Oposição:</strong> contestar tratamentos baseados em legítimo interesse</li>
+              <li><strong className="text-slate-900 font-semibold">Acesso:</strong> solicitar cópia dos seus dados pessoais</li>
+              <li><strong className="text-slate-900 font-semibold">Correção:</strong> corrigir dados incompletos ou desatualizados</li>
+              <li><strong className="text-slate-900 font-semibold">Exclusão:</strong> solicitar a eliminação dos seus dados quando não forem mais necessários</li>
+              <li><strong className="text-slate-900 font-semibold">Portabilidade:</strong> receber seus dados em formato estruturado</li>
+              <li><strong className="text-slate-900 font-semibold">Revogação de consentimento:</strong> retirar consentimentos dados anteriormente</li>
+              <li><strong className="text-slate-900 font-semibold">Oposição:</strong> contestar tratamentos baseados em legítimo interesse</li>
             </ul>
             <p>Para exercer qualquer um desses direitos, entre em contato via WhatsApp:{' '}
               <a
                 href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#FF0068] hover:underline"
+                className="text-brand-primary-ink hover:underline"
               >
                 (17) 99793-6169
               </a>. Respondemos em até 15 dias úteis.
@@ -174,46 +174,46 @@ const PoliticaDePrivacidade: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               7. Retenção de dados
             </h2>
             <p className="mb-3">Guardamos seus dados só pelo tempo necessário para cada finalidade:</p>
             <ul className="list-disc pl-5 space-y-1.5 mb-4">
-              <li><strong className="text-white font-semibold">Conta:</strong> enquanto estiver ativa ou for necessária para cumprir obrigações legais.</li>
-              <li><strong className="text-white font-semibold">Compra e ingresso</strong> (nome, CPF, e-mail, telefone, valor pago): durante o evento e, depois dele, por até <strong className="text-white font-semibold">5 anos</strong>, para cumprir obrigações legais e fiscais, atender pedidos de reembolso e nos defender em reclamações ou processos.</li>
-              <li><strong className="text-white font-semibold">Transferência de ingresso</strong> (quem transferiu, quem recebeu, data e hora): por, no mínimo, <strong className="text-white font-semibold">2 anos</strong>, como exige o Decreto nº 13.108/2026, e por até 5 anos para defesa em reclamações ou processos. Nesse período, só pessoas autorizadas acessam esses dados, e só quando necessário.</li>
-              <li><strong className="text-white font-semibold">IP registrado na transferência:</strong> por <strong className="text-white font-semibold">6 meses</strong>.</li>
-              <li><strong className="text-white font-semibold">Estatísticas de vendas que não identificam você:</strong> podem ficar por mais tempo.</li>
-              <li><strong className="text-white font-semibold">Transações financeiras:</strong> 5 anos, conforme exigência fiscal.</li>
-              <li><strong className="text-white font-semibold">Certificados emitidos:</strong> ficam disponíveis por tempo indeterminado para fins de validação.</li>
-              <li><strong className="text-white font-semibold">Comentários de avaliação dos jurados</strong> (áudio e/ou texto): até 90 dias após o evento, para o inscrito e para o produtor, e removidos automaticamente depois.</li>
+              <li><strong className="text-slate-900 font-semibold">Conta:</strong> enquanto estiver ativa ou for necessária para cumprir obrigações legais.</li>
+              <li><strong className="text-slate-900 font-semibold">Compra e ingresso</strong> (nome, CPF, e-mail, telefone, valor pago): durante o evento e, depois dele, por até <strong className="text-slate-900 font-semibold">5 anos</strong>, para cumprir obrigações legais e fiscais, atender pedidos de reembolso e nos defender em reclamações ou processos.</li>
+              <li><strong className="text-slate-900 font-semibold">Transferência de ingresso</strong> (quem transferiu, quem recebeu, data e hora): por, no mínimo, <strong className="text-slate-900 font-semibold">2 anos</strong>, como exige o Decreto nº 13.108/2026, e por até 5 anos para defesa em reclamações ou processos. Nesse período, só pessoas autorizadas acessam esses dados, e só quando necessário.</li>
+              <li><strong className="text-slate-900 font-semibold">IP registrado na transferência:</strong> por <strong className="text-slate-900 font-semibold">6 meses</strong>.</li>
+              <li><strong className="text-slate-900 font-semibold">Estatísticas de vendas que não identificam você:</strong> podem ficar por mais tempo.</li>
+              <li><strong className="text-slate-900 font-semibold">Transações financeiras:</strong> 5 anos, conforme exigência fiscal.</li>
+              <li><strong className="text-slate-900 font-semibold">Certificados emitidos:</strong> ficam disponíveis por tempo indeterminado para fins de validação.</li>
+              <li><strong className="text-slate-900 font-semibold">Comentários de avaliação dos jurados</strong> (áudio e/ou texto): até 90 dias após o evento, para o inscrito e para o produtor, e removidos automaticamente depois.</li>
             </ul>
             <p>Terminado o prazo, eliminamos ou anonimizamos os dados, exceto se houver processo ou obrigação legal em andamento.</p>
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               8. Segurança
             </h2>
             <p>Adotamos medidas técnicas e organizacionais para proteger seus dados, incluindo criptografia em trânsito (HTTPS/TLS), controle de acesso por perfil e autenticação por PIN para jurados. Não armazenamos dados de cartão de crédito — o processamento é integralmente realizado pelo gateway Asaas.</p>
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               9. Transferência internacional
             </h2>
             <p>O Google Analytics pode processar dados em servidores fora do Brasil. O Google adere a mecanismos de adequação reconhecidos internacionalmente, garantindo proteção equivalente à LGPD.</p>
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               10. Alterações nesta política
             </h2>
             <p>Podemos atualizar esta política periodicamente. A data de "última atualização" no topo do documento indica quando houve a revisão mais recente. Alterações relevantes serão comunicadas por e-mail.</p>
           </section>
 
           <section>
-            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+            <h2 className="font-black text-xl uppercase tracking-wide text-slate-900 border-b border-slate-200 pb-2 mb-4">
               11. Contato
             </h2>
             <p className="mb-3">Dúvidas, solicitações ou reclamações relacionadas à privacidade:</p>
@@ -223,7 +223,7 @@ const PoliticaDePrivacidade: React.FC = () => {
                   href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#FF0068] hover:underline"
+                  className="text-brand-primary-ink hover:underline"
                 >
                   (17) 99793-6169
                 </a>
@@ -233,7 +233,7 @@ const PoliticaDePrivacidade: React.FC = () => {
                   href="https://www.gov.br/anpd"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#FF0068] hover:underline"
+                  className="text-brand-primary-ink hover:underline"
                 >
                   gov.br/anpd
                 </a>
@@ -245,12 +245,12 @@ const PoliticaDePrivacidade: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/8 py-8 text-center text-xs text-white/40">
+      <footer className="border-t border-slate-200 py-8 text-center text-xs text-slate-500">
         <div className="flex justify-center gap-6 mb-3 flex-wrap">
-          <Link to="/" className="hover:text-white transition-colors">Página inicial</Link>
-          <Link to="/sobre" className="hover:text-white transition-colors">Sobre</Link>
-          <Link to="/termos" className="hover:text-white transition-colors">Termos de Uso</Link>
-          <Link to="/privacidade" className="hover:text-white transition-colors">Política de Privacidade</Link>
+          <Link to="/" className="hover:text-slate-900 transition-colors">Página inicial</Link>
+          <Link to="/sobre" className="hover:text-slate-900 transition-colors">Sobre</Link>
+          <Link to="/termos" className="hover:text-slate-900 transition-colors">Termos de Uso</Link>
+          <Link to="/privacidade" className="hover:text-slate-900 transition-colors">Política de Privacidade</Link>
         </div>
         <p>© 2026 CoreoHub. Todos os direitos reservados.</p>
       </footer>
