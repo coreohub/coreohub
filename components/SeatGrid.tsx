@@ -43,6 +43,10 @@ interface SeatGridProps {
   fullscreenable?: boolean;
   /** Dentro da tela cheia: a área do mapa ocupa a altura toda. */
   tall?: boolean;
+  /** sell: lugares livres que NÃO aceitam este pedido, com o motivo mostrado ao tocar (troca de lugar: outra zona). */
+  lockedSeats?: Record<string, string>;
+  /** Realça lugares (ex.: o lugar atual do ingresso na troca de lugar). */
+  markedSeats?: string[];
   /** Checkout público: rótulos grandes "Palco / Frente" e "Fundo" e letra da fileira maior. */
   showOrientation?: boolean;
 }
@@ -71,7 +75,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * 2 passos do Seats.io no mobile).
  */
 export default function SeatGrid(props: SeatGridProps) {
-  const { rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors, maxFit = 1, fullscreenable = false, tall = false, showOrientation = false } = props;
+  const { rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors, maxFit = 1, fullscreenable = false, tall = false, showOrientation = false, lockedSeats, markedSeats } = props;
   const [full, setFull] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -301,7 +305,7 @@ export default function SeatGrid(props: SeatGridProps) {
               const zoneStyled = !!zc && !isSelected && !isTaken && !showBlocked;
               const reason = zoneMode ? null : blockMode
                 ? (special && !isBlockedSeat ? 'Lugares PCD e de acompanhante não podem ser bloqueados.' : null)
-                : blockReason(seatId, tipo);
+                : (lockedSeats?.[seatId] ?? blockReason(seatId, tipo));
               const locked = !isTaken && !isSelected && !!reason;
               const label = tipo === 'cadeirante' ? 'espaço de cadeirante' : tipo === 'pcd_largo' ? 'assento para pessoa obesa (largo)' : tipo === 'acompanhante' ? 'acompanhante de PCD' : '';
               const Icon = showBlocked ? Ban : tipo === 'cadeirante' ? Accessibility : tipo === 'pcd_largo' ? ArrowLeftRight : tipo === 'acompanhante' ? Users : null;
@@ -324,7 +328,7 @@ export default function SeatGrid(props: SeatGridProps) {
                     aria-label={`Assento ${seatId}${label ? `, ${label}` : ''}${showBlocked ? (blockReasons?.[seatId] ? `, bloqueado: ${blockReasons[seatId]}` : ', bloqueado') : isTaken ? (isBlockedSeat ? ', indisponível' : ', ocupado') : locked ? ', indisponível para este pedido' : ', disponível'}`}
                     aria-pressed={isSelected}
                     aria-disabled={locked || undefined}
-                    className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors
+                    className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors${markedSeats?.includes(seatId) ? ' ring-2 ring-[#E3FF0A] ring-offset-1 ring-offset-black' : ''}
                       ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : zoneStyled ? 'hover:brightness-125' : special ? specialFree : freeClass}`}
                     style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 } : zoneStyled ? { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` } : undefined) : undefined}
                   >

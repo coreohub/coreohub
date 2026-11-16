@@ -65,3 +65,47 @@ describe('mapSwapError', () => {
     expect(r.message).not.toMatch(/timeout/i)
   })
 })
+
+import { groupSplitWarning, swapLockedSeats, swapBlockedReason } from '../utils/seatSwap'
+
+describe('groupSplitWarning', () => {
+  it('sem outros ingressos no pedido nao avisa', () => {
+    expect(groupSplitWarning([], 'H-5')).toBeNull()
+  })
+  it('lugar ao lado de outro do pedido nao avisa', () => {
+    expect(groupSplitWarning(['I-10'], 'I-11')).toBeNull()
+    expect(groupSplitWarning(['I-10'], 'I-9')).toBeNull()
+  })
+  it('mesma fileira mas longe avisa', () => {
+    expect(groupSplitWarning(['I-10'], 'I-14')).toMatch(/não ao lado/)
+  })
+  it('outra fileira avisa', () => {
+    expect(groupSplitWarning(['I-10'], 'H-10')).toMatch(/outra fileira/)
+  })
+})
+
+describe('swapLockedSeats', () => {
+  const st = (status: string) => ({ seat_id: 'x', status, is_pcd: false }) as any
+  it('trava livres de outra zona e deixa livres da mesma zona', () => {
+    const locked = swapLockedSeats({ 'A-1': st('livre'), 'A-2': st('livre'), 'A-3': st('vendido') }, { 'A-1': 'plat', 'A-2': 'vip' }, 'plat')
+    expect(Object.keys(locked)).toEqual(['A-2'])
+  })
+  it('evento sem zonas: nada e travado', () => {
+    expect(swapLockedSeats({ 'A-1': st('livre') }, {}, null)).toEqual({})
+  })
+  it('sem zona (null) nao mistura com lugar que tem zona', () => {
+    expect(Object.keys(swapLockedSeats({ 'A-1': st('livre') }, { 'A-1': 'vip' }, null))).toEqual(['A-1'])
+  })
+})
+
+describe('swapBlockedReason', () => {
+  const ok = { status_pagamento: 'APROVADO', refunded_at: null, check_in_status: 'PENDENTE', seat_id: 'I-11', seatTipo: 'comum' }
+  it('ingresso valido pode trocar', () => { expect(swapBlockedReason(ok)).toBeNull() })
+  it('explica cada bloqueio', () => {
+    expect(swapBlockedReason({ ...ok, status_pagamento: 'PENDENTE' })).toMatch(/aprovado/)
+    expect(swapBlockedReason({ ...ok, refunded_at: '2026-01-01' })).toMatch(/estornado/)
+    expect(swapBlockedReason({ ...ok, check_in_status: 'OK' })).toMatch(/check-in/)
+    expect(swapBlockedReason({ ...ok, seatTipo: 'cadeirante' })).toMatch(/especial/)
+    expect(swapBlockedReason({ ...ok, seat_id: null })).toMatch(/lugar marcado/)
+  })
+})
