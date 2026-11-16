@@ -7,6 +7,15 @@
   --color-brand-cyan: #1DE7F2;
   --color-brand-primary: #FF0068; /* Rosa CoreoHub */
   --color-brand-primary-hover: #FF1A7D; /* Slightly lighter shade for hover */
+  /* Tons para fundo CLARO (páginas públicas, WCAG AA 4,5:1 sobre #fff). As cores
+     da marca acima reprovam em texto pequeno sobre branco: #FF0068 = 3,85:1,
+     #A8B800 = 2,21:1, #1DE7F2 = 1,53:1 (medido 2026-11-16).
+     - *-ink: use como COR DE TEXTO/ÍCONE sobre branco ou slate-50.
+     - primary-strong: fundo de botão com texto branco pequeno (<18,66px negrito). */
+  --color-brand-primary-ink: #D4005A;    /* 5,32:1 */
+  --color-brand-primary-strong: #E6005F; /* branco sobre ele: 4,64:1 */
+  --color-brand-lime-ink: #6B7500;       /* 5,04:1 */
+  --color-brand-cyan-ink: #0E7490;       /* 5,36:1 */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 

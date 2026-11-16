@@ -1,5 +1,6 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { applyThemeClass } from './utils/publicLightRoutes';
 import { Loader2 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from './types';
 import { identifyUser, trackAppPageView } from './services/appAnalytics';
@@ -144,6 +145,16 @@ const PublicPageViewTracker: React.FC = () => {
       trackPageView(location.pathname);
     }
   }, [location.pathname]);
+  return null;
+};
+
+/** Reaplica o tema a cada troca de rota: vitrine/checkout/ingresso públicos
+ *  ficam sempre claros (utils/publicLightRoutes.ts), o painel segue o tema salvo. */
+const ThemeRouteSync: React.FC<{ theme: 'light' | 'dark'; customDomain: boolean }> = ({ theme, customDomain }) => {
+  const location = useLocation();
+  useLayoutEffect(() => {
+    applyThemeClass(theme, location.pathname, customDomain);
+  }, [theme, customDomain, location.pathname]);
   return null;
 };
 
@@ -418,10 +429,9 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (theme === 'dark') document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    applyThemeClass(theme, window.location.pathname, !!customDomainSlug);
     localStorage.setItem('theme', theme);
-  }, [theme]);
+  }, [theme, customDomainSlug]);
 
   // Phase 5: bootstrapa o drainer de outbox uma vez por sessão. Idempotente —
   // chamadas extras são no-op. Lazy-import pra não inflar bundle inicial.
@@ -718,6 +728,7 @@ const App: React.FC = () => {
   return (
     <PwaUpdateProvider>
     <Router>
+      <ThemeRouteSync theme={theme} customDomain={!!customDomainSlug} />
       <PublicPageViewTracker />
       <Routes>
         <Route path="/" element={
