@@ -32,6 +32,32 @@ export function groupSplitWarning(others: string[], newSeat: string): string | n
     : `O novo lugar fica na mesma fileira, mas não ao lado dos demais lugares do mesmo pedido (${others.map(seatLabel).join(', ')}).`;
 }
 
+/** Ordena lugares por fileira e numero ("I-9" antes de "I-11"). */
+export function sortSeats(seats: string[]): string[] {
+  return [...seats].sort((a, b) => {
+    const pa = parseSeat(a);
+    const pb = parseSeat(b);
+    if (!pa || !pb) return a.localeCompare(b);
+    return pa.row === pb.row ? pa.n - pb.n : pa.row.localeCompare(pb.row, 'pt-BR', { numeric: true });
+  });
+}
+
+/**
+ * Pedido inteiro: aviso (nao bloqueante) quando os lugares escolhidos ficam em mais de
+ * uma fileira ou com vao entre eles. Pede a confirmacao extra "lugares separados".
+ */
+export function orderSplitWarning(seats: string[]): string | null {
+  if (seats.length < 2) return null;
+  const parsed = sortSeats(seats).map(parseSeat);
+  if (parsed.some(p => !p)) return null;
+  const ps = parsed as { row: string; n: number }[];
+  if (new Set(ps.map(p => p.row)).size > 1) return 'Os lugares escolhidos ficam em fileiras diferentes.';
+  for (let i = 1; i < ps.length; i++) {
+    if (ps[i].n - ps[i - 1].n !== 1) return 'Os lugares escolhidos não ficam todos lado a lado.';
+  }
+  return null;
+}
+
 /**
  * Lugares que NAO podem receber a troca (assento -> motivo mostrado ao tocar).
  * So entram os livres: ocupado/bloqueado ja aparece travado no mapa. Lugar especial

@@ -9,7 +9,7 @@ describe('parseSwapBody', () => {
     const r = parseSwapBody({ event_id: EV, ticket_id: TK, new_seat_id: 'I-12' })
     expect(r).toEqual({
       ok: true,
-      value: { eventId: EV, ticketId: TK, newSeatId: 'I-12', releaseOld: true, notifyBuyer: true, reason: null },
+      value: { eventId: EV, items: [{ ticketId: TK, newSeatId: 'I-12' }], ticketId: TK, newSeatId: 'I-12', releaseOld: true, notifyBuyer: true, reason: null },
     })
   })
 
@@ -31,6 +31,25 @@ describe('parseSwapBody', () => {
     expect(parseSwapBody({ event_id: EV, ticket_id: TK, new_seat_id: 'A1' }).ok).toBe(false)
     expect(parseSwapBody({ event_id: EV, ticket_id: TK, new_seat_id: "A-1'; drop" }).ok).toBe(false)
     expect(parseSwapBody(null).ok).toBe(false)
+  })
+})
+
+describe('parseSwapBody: pedido inteiro (swaps)', () => {
+  const TK2 = '03e4ffd8-651d-4059-a93a-60e62da40eb6'
+  it('aceita varios ingressos', () => {
+    const r = parseSwapBody({ event_id: EV, swaps: [{ ticket_id: TK, new_seat_id: 'H-1' }, { ticket_id: TK2, new_seat_id: 'H-2' }] })
+    expect(r.ok && r.value.items).toEqual([{ ticketId: TK, newSeatId: 'H-1' }, { ticketId: TK2, newSeatId: 'H-2' }])
+  })
+  it('recusa lista vazia, repetidos e mais de 10', () => {
+    expect(parseSwapBody({ event_id: EV, swaps: [] }).ok).toBe(false)
+    expect(parseSwapBody({ event_id: EV, swaps: [{ ticket_id: TK, new_seat_id: 'H-1' }, { ticket_id: TK, new_seat_id: 'H-2' }] }).ok).toBe(false)
+    expect(parseSwapBody({ event_id: EV, swaps: [{ ticket_id: TK, new_seat_id: 'H-1' }, { ticket_id: TK2, new_seat_id: 'H-1' }] }).ok).toBe(false)
+    const many = Array.from({ length: 11 }, (_, i) => ({ ticket_id: `00000000-0000-4000-8000-0000000000${String(i).padStart(2, '0')}`, new_seat_id: `H-${i + 1}` }))
+    expect(parseSwapBody({ event_id: EV, swaps: many }).ok).toBe(false)
+  })
+  it('recusa item com lugar ou ingresso invalido', () => {
+    expect(parseSwapBody({ event_id: EV, swaps: [{ ticket_id: TK, new_seat_id: 'xx' }] }).ok).toBe(false)
+    expect(parseSwapBody({ event_id: EV, swaps: [{ ticket_id: 'x', new_seat_id: 'H-1' }] }).ok).toBe(false)
   })
 })
 
@@ -66,7 +85,7 @@ describe('mapSwapError', () => {
   })
 })
 
-import { groupSplitWarning, swapLockedSeats, swapBlockedReason } from '../utils/seatSwap'
+import { groupSplitWarning, swapLockedSeats, swapBlockedReason, orderSplitWarning, sortSeats } from '../utils/seatSwap'
 
 describe('groupSplitWarning', () => {
   it('sem outros ingressos no pedido nao avisa', () => {
@@ -107,5 +126,19 @@ describe('swapBlockedReason', () => {
     expect(swapBlockedReason({ ...ok, check_in_status: 'OK' })).toMatch(/check-in/)
     expect(swapBlockedReason({ ...ok, seatTipo: 'cadeirante' })).toMatch(/especial/)
     expect(swapBlockedReason({ ...ok, seat_id: null })).toMatch(/lugar marcado/)
+  })
+})
+
+describe('orderSplitWarning / sortSeats', () => {
+  it('ordena numericamente', () => {
+    expect(sortSeats(['I-11', 'I-9', 'H-3'])).toEqual(['H-3', 'I-9', 'I-11'])
+  })
+  it('sem aviso para lugares juntos, mesmo fora de ordem', () => {
+    expect(orderSplitWarning(['I-11', 'I-10'])).toBeNull()
+    expect(orderSplitWarning(['I-9'])).toBeNull()
+  })
+  it('avisa vao e fileiras diferentes', () => {
+    expect(orderSplitWarning(['I-10', 'I-12'])).toMatch(/lado a lado/)
+    expect(orderSplitWarning(['I-10', 'H-11'])).toMatch(/fileiras diferentes/)
   })
 })

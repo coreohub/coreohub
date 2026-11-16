@@ -1,29 +1,35 @@
 /**
  * Edge Function: swap-ticket-seat
  *
- * Troca o lugar de um ingresso de plateia JA PAGO, dentro do mesmo evento/sessao e da
+ * Troca o lugar de ingresso(s) de plateia JA PAGOS, dentro do mesmo evento/sessao e da
  * mesma zona (mesmo preco). Nao mexe em dinheiro: sem estorno, sem nova cobranca.
- * Banco: migration 20261116_swap_ticket_seat.sql (RPC swap_ticket_seat, tudo-ou-nada,
- * com trava nos dois lugares e auditoria em ticket_seat_changes).
+ * Banco: migrations 20261116_swap_ticket_seat.sql e 20261116b_swap_order_seats.sql
+ * (RPCs tudo-ou-nada, com trava nos lugares e auditoria em ticket_seat_changes).
  *
- * Auth: JWT do DONO do evento OU super admin (a RPC confere de novo). Equipe de
- * portaria nao troca. Nao confia em RLS: a escrita e por RPC service-role.
- * O access_token do ingresso NAO muda: link e QR ja enviados continuam valendo.
+ * Auth: JWT do DONO do evento, SUPER ADMIN ou EQUIPE com a permissao `trocar_assento`
+ * (vale para o grupo de sessoes do espetaculo). A RPC swap_seat_actor_role decide e o
+ * banco confere de novo. Nao confia em RLS: a escrita e por RPC service-role.
+ * O access_token dos ingressos NAO muda: link e QR ja enviados continuam valendo.
  *
- * Body: { event_id, ticket_id, new_seat_id, release_old?: bool (padrao true),
- *         notify_buyer?: bool (padrao true), reason?: string }
- * Resposta: { success, change_id, old_seat_id, new_seat_id, released_old,
- *             group_other_seats: string[], email: 'enviado'|'falhou'|'nao_solicitado' }
+ * Body (1 ingresso): { event_id, ticket_id, new_seat_id, release_old?, notify_buyer?, reason? }
+ * Body (pedido inteiro, ate 10 ingressos do MESMO pedido):
+ *   { event_id, swaps: [{ ticket_id, new_seat_id }], release_old?, notify_buyer?, reason? }
+ *   release_old padrao true; notify_buyer padrao true.
+ * Resposta: { success, batch_id, changes: [{ change_id, ticket_id, old_seat_id, new_seat_id }],
+ *             released_old, group_other_seats, email: 'enviado'|'falhou'|'nao_solicitado',
+ *             actor_role?, change_id/old_seat_id/new_seat_id (atalhos do 1o item) }
  *
- * E-mail: so quando notify_buyer = true; lista TODOS os lugares atuais do pedido
- * (group_id) e diz que vale sobre qualquer e-mail anterior. Falha de e-mail nao
- * desfaz a troca (a resposta informa).
+ * E-mail: so quando notify_buyer = true; UM e-mail por pedido, listando TODOS os lugares
+ * atuais (group_id) e dizendo que vale sobre qualquer e-mail anterior. Falha de e-mail
+ * nao desfaz a troca (a resposta informa).
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
 import { parseSwapBody, mapSwapError, seatLabel } from '../_shared/seat-swap.ts'
 import { dispararEmail } from '../_shared/audience-refund.ts'
+
+interface Change { change_id: string; ticket_id: string; old_seat_id: string; new_seat_id: string }
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -43,7 +49,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? '',
     )
 
-    // ── Auth: dono do evento OU super admin ──────────────────────────────────
+    // ── Auth: dono, super admin ou equipe com a permissao (decidido no banco) ─
     const authHeader = req.headers.get('Authorization') ?? ''
     const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
     if (!user) return json({ error: 'Não autorizado' }, 401)
@@ -55,37 +61,52 @@ Deno.serve(async (req) => {
       .maybeSingle()
     if (!event) return json({ error: 'Evento não encontrado' }, 404)
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_super_admin')
-      .eq('id', user.id)
-      .maybeSingle()
-    if (event.created_by !== user.id && profile?.is_super_admin !== true) {
-      return json({ error: 'Só o produtor do evento pode trocar o lugar de um ingresso.' }, 403)
+    const { data: role, error: roleErr } = await supabase.rpc('swap_seat_actor_role', {
+      p_event_id: input.eventId,
+      p_actor: user.id,
+    })
+    if (roleErr) {
+      console.error('[swap-ticket-seat] papel:', roleErr.code, roleErr.message)
+      return json({ error: 'Não foi possível trocar o lugar agora. Tente de novo em instantes.' }, 500)
+    }
+    if (!role) {
+      return json({ error: 'Você não tem permissão para trocar lugares deste evento.' }, 403)
     }
     if (!event.seat_map_enabled) return json({ error: 'Este evento não usa mapa de assentos.' }, 400)
 
     // ── RPC tudo-ou-nada ─────────────────────────────────────────────────────
-    const { data, error } = await supabase.rpc('swap_ticket_seat', {
+    const common = {
       p_event_id: input.eventId,
-      p_ticket_id: input.ticketId,
-      p_new_seat_id: input.newSeatId,
       p_actor: user.id,
       p_release_old: input.releaseOld,
       p_notify_buyer: input.notifyBuyer,
       p_reason: input.reason,
-    })
+    }
+    const { data, error } = input.items.length === 1
+      ? await supabase.rpc('swap_ticket_seat', {
+          ...common,
+          p_ticket_id: input.items[0].ticketId,
+          p_new_seat_id: input.items[0].newSeatId,
+        })
+      : await supabase.rpc('swap_order_seats', {
+          ...common,
+          p_ticket_ids: input.items.map(i => i.ticketId),
+          p_new_seat_ids: input.items.map(i => i.newSeatId),
+        })
     if (error) {
       const mapped = mapSwapError(error)
       if (mapped.status >= 500) console.error('[swap-ticket-seat] rpc erro:', error.code, error.message)
       return json({ error: mapped.message }, mapped.status)
     }
-    const r = data as {
-      change_id: string; old_seat_id: string; new_seat_id: string
-      released_old: boolean; group_other_seats: string[]
-    }
 
-    // ── E-mail (opcional, nunca desfaz a troca) ──────────────────────────────
+    // Uniformiza a resposta da RPC de 1 ingresso e da de pedido inteiro.
+    const r = data as Record<string, any>
+    const changes: Change[] = Array.isArray(r.changes)
+      ? r.changes
+      : [{ change_id: r.change_id, ticket_id: r.ticket_id, old_seat_id: r.old_seat_id, new_seat_id: r.new_seat_id }]
+    const groupOther: string[] = r.group_other_seats ?? []
+
+    // ── E-mail (opcional, nunca desfaz a troca): UM por pedido ───────────────
     let email: 'enviado' | 'falhou' | 'nao_solicitado' = 'nao_solicitado'
     if (input.notifyBuyer) {
       email = 'falhou'
@@ -93,7 +114,7 @@ Deno.serve(async (req) => {
         const { data: tk } = await supabase
           .from('audience_tickets')
           .select('buyer_name, buyer_email, group_id')
-          .eq('id', input.ticketId)
+          .eq('id', changes[0].ticket_id)
           .maybeSingle()
         if (tk?.buyer_email) {
           // Pedido inteiro (todos os ingressos aprovados do mesmo group_id) com os lugares ATUAIS.
@@ -102,8 +123,9 @@ Deno.serve(async (req) => {
             .select('id, ticket_type_nome, seat_id, access_token')
             .eq('event_id', input.eventId)
             .eq('status_pagamento', 'APROVADO')
-          q = tk.group_id ? q.eq('group_id', tk.group_id) : q.eq('id', input.ticketId)
+          q = tk.group_id ? q.eq('group_id', tk.group_id) : q.eq('id', changes[0].ticket_id)
           const { data: lista } = await q.order('created_at', { ascending: true })
+          const trocados = new Set(changes.map(c => c.ticket_id))
 
           const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
           const { data: prod } = event.created_by
@@ -126,13 +148,13 @@ Deno.serve(async (req) => {
                 })()
               : undefined,
             eventoLocal,
-            lugarAntigo: seatLabel(r.old_seat_id),
-            lugarNovo: seatLabel(r.new_seat_id),
+            lugarAntigo: changes.map(c => seatLabel(c.old_seat_id)).join(' e '),
+            lugarNovo: changes.map(c => seatLabel(c.new_seat_id)).join(' e '),
             tickets: (lista ?? []).map((t: any) => ({
               tipo: t.ticket_type_nome,
               url: `${appUrl}/meu-ingresso/${t.access_token}`,
               assento: t.seat_id ?? null,
-              trocado: t.id === input.ticketId,
+              trocado: trocados.has(t.id),
             })),
             appUrl,
           })
@@ -145,11 +167,14 @@ Deno.serve(async (req) => {
 
     return json({
       success: true,
-      change_id: r.change_id,
-      old_seat_id: r.old_seat_id,
-      new_seat_id: r.new_seat_id,
+      batch_id: r.batch_id ?? null,
+      changes,
+      change_id: changes[0].change_id,
+      old_seat_id: changes[0].old_seat_id,
+      new_seat_id: changes[0].new_seat_id,
       released_old: r.released_old,
-      group_other_seats: r.group_other_seats ?? [],
+      group_other_seats: groupOther,
+      actor_role: role,
       email,
     })
   } catch (e) {
