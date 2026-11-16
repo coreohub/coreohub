@@ -45,6 +45,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { judgeSessionMode, signJudgeSession, verifyJudgeSession } from '../_shared/judge-session.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,6 +68,18 @@ Deno.serve(async (req) => {
   if (!supabaseUrl || !serviceKey) return json({ error: 'server_misconfigured' }, 500)
 
   const supa = createClient(supabaseUrl, serviceKey)
+
+  // Sessão assinada do jurado (Lote 2, B#3): ver _shared/judge-session.ts.
+  const sessionSecret = Deno.env.get('JUDGE_SESSION_SECRET') ?? ''
+  const sessionMode = judgeSessionMode(Deno.env.get('JUDGE_SESSION_MODE'), sessionSecret)
+  /** Devolve uma Response 401 quando a sessão é exigida e inválida; null = pode seguir. */
+  const requireSession = async (sessionToken: unknown, expect: { judge_id?: string | null; producer_id: string; event_id?: string | null }, tag: string): Promise<Response | null> => {
+    if (sessionMode === 'off') return null
+    const v = await verifyJudgeSession(sessionSecret, sessionToken, expect)
+    if (v.ok) return null
+    console.warn(`[JUDGE_SESSION] ${sessionMode} ${tag} recusaria: ${v.reason} judge=${expect.judge_id ?? '-'}`)
+    return sessionMode === 'enforce' ? json({ ok: false, reason: 'session_required', detail: v.reason }, 401) : null
+  }
 
   // ─── Branch: multipart (upload-audio) ────────────────────────────────────
   // Phase 2B: jurado sem produtor logado precisa subir áudio via Edge Function
@@ -92,6 +105,8 @@ Deno.serve(async (req) => {
     const { data: judge } = await supa
       .from('judges').select('id').eq('id', judge_id).eq('created_by', producer.id).maybeSingle()
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+    const deniedUp = await requireSession(form.get('session_token'), { judge_id, producer_id: producer.id }, 'upload-audio')
+    if (deniedUp) return deniedUp
 
     // Valida registration pertence a um evento do produtor. Query em 2 passos
     // (sem embedded join) — PostgREST às vezes falha em resolver
@@ -179,6 +194,12 @@ Deno.serve(async (req) => {
       .maybeSingle()
     if (error) console.error('resolveEvent error:', error.message)
     return data
+  }
+
+  // Toda ação além de list/validate exige a sessão assinada (emitida pelo validate, após o PIN).
+  if (action !== 'list' && action !== 'validate') {
+    const denied = await requireSession(body?.session_token, { judge_id: body?.judge_id ?? null, producer_id: producer.id, event_id: body?.event_id ?? null }, String(action))
+    if (denied) return denied
   }
 
   // ─── action: list ────────────────────────────────────────────────────────
@@ -303,8 +324,13 @@ Deno.serve(async (req) => {
       videoSelectionAvailable = !!ev?.video_selection_enabled && (ev?.video_evaluators_count ?? 1) >= 2
     }
 
+    const session_token = sessionMode === 'off'
+      ? null
+      : await signJudgeSession(sessionSecret, { judge_id, event_id, producer_id: producer.id })
+
     return json({
       ok: true,
+      session_token,
       judge: {
         id: judge.id,
         name: judge.name,

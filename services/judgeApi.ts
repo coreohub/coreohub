@@ -18,7 +18,8 @@ const callJudgeFn = async (body: Record<string, unknown>) => {
       'apikey': supabaseAnonKey,
       'Authorization': `Bearer ${supabaseAnonKey}`,
     },
-    body: JSON.stringify(body),
+    // Sessão assinada do jurado (Lote 2, B#3): vai em toda chamada; o servidor decide se exige.
+    body: JSON.stringify({ session_token: readJudgeSession()?.session_token, ...body }),
   });
   const data = await res.json().catch(() => ({}));
   return { status: res.status, data };
@@ -143,6 +144,8 @@ export const uploadAudio = async (registrationId: string, blob: Blob): Promise<s
   const form = new FormData();
   form.append('token', token);
   form.append('judge_id', judge_id);
+  const sessionToken = readJudgeSession()?.session_token;
+  if (sessionToken) form.append('session_token', sessionToken);
   form.append('registration_id', registrationId);
   form.append('audio', blob, 'feedback.webm');
 
