@@ -50,13 +50,13 @@ const fmtDateTime = (iso: string | null) => {
 };
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  PENDENTE:   { label: 'Aguardando pagamento', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
-  APROVADO:   { label: 'Confirmado',           cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
-  GRATUITO:   { label: 'Grátis · Confirmado',  cls: 'bg-violet-500/15 text-violet-300 border-violet-500/30' },
-  CORTESIA:   { label: 'Cortesia',             cls: 'bg-violet-500/15 text-violet-300 border-violet-500/30' },
-  CANCELADO:  { label: 'Cancelado',            cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
-  VENCIDO:    { label: 'Vencido',              cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
-  ESTORNADO:  { label: 'Estornado',            cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
+  PENDENTE:   { label: 'Aguardando pagamento', cls: 'bg-amber-500/15 text-amber-700 border-amber-500/30' },
+  APROVADO:   { label: 'Confirmado',           cls: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
+  GRATUITO:   { label: 'Grátis · Confirmado',  cls: 'bg-violet-500/15 text-violet-700 border-violet-500/30' },
+  CORTESIA:   { label: 'Cortesia',             cls: 'bg-violet-500/15 text-violet-700 border-violet-500/30' },
+  CANCELADO:  { label: 'Cancelado',            cls: 'bg-slate-500/15 text-slate-700 border-slate-500/30' },
+  VENCIDO:    { label: 'Vencido',              cls: 'bg-rose-500/15 text-rose-700 border-rose-500/30' },
+  ESTORNADO:  { label: 'Estornado',            cls: 'bg-rose-500/15 text-rose-700 border-rose-500/30' },
 };
 
 const MeuWorkshop: React.FC = () => {
@@ -150,20 +150,20 @@ const MeuWorkshop: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#ff0068]" size={32} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-primary-ink" size={32} />
       </div>
     );
   }
 
   if (error || !reg) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white/5 border border-rose-500/30 rounded-2xl p-6 text-center">
-          <AlertCircle className="text-rose-400 mx-auto mb-3" size={32} />
-          <p className="text-white font-bold mb-2">Não foi possível carregar</p>
-          <p className="text-sm text-slate-400 mb-4">{error}</p>
-          <button onClick={() => navigate('/')} className="text-xs font-black text-[#ff0068] uppercase tracking-widest">← Início</button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white border border-rose-500/30 rounded-2xl p-6 text-center">
+          <AlertCircle className="text-rose-700 mx-auto mb-3" size={32} />
+          <p className="text-slate-900 font-bold mb-2">Não foi possível carregar</p>
+          <p className="text-sm text-slate-600 mb-4">{error}</p>
+          <button onClick={() => navigate('/')} className="text-xs font-black text-brand-primary-ink uppercase tracking-widest">← Início</button>
         </div>
       </div>
     );
@@ -175,27 +175,27 @@ const MeuWorkshop: React.FC = () => {
   const isPendente  = reg.status_pagamento === 'PENDENTE';
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-white pb-12">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-12">
       {/* Cover */}
       <div className="relative h-32 md:h-48 overflow-hidden">
         {reg.workshop_cover_url ? (
           <img src={reg.workshop_cover_url} alt="" className="w-full h-full object-cover opacity-40" />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-[#0b0b0f]" />
+          <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-slate-300" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0b0b0f]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50" />
       </div>
 
       <div className="max-w-2xl mx-auto px-4 -mt-8 relative">
-        <button onClick={() => navigate(`/workshop/${reg.workshop_slug ?? reg.workshop_id}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-4">
+        <button onClick={() => navigate(`/workshop/${reg.workshop_slug ?? reg.workshop_id}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink mb-4">
           <ArrowLeft size={14} /> Detalhes do workshop
         </button>
 
-        <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-[#ff0068] px-2.5 py-1 rounded-full mb-2">
+        <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-brand-primary-ink px-2.5 py-1 rounded-full mb-2">
           <GraduationCap size={11} />Inscrição em workshop
         </div>
         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase mb-1">{reg.workshop_name}</h1>
-        <p className="text-sm text-slate-400 mb-2">com <strong className="text-white">{reg.workshop_professor_name}</strong></p>
+        <p className="text-sm text-slate-600 mb-2">com <strong className="text-slate-900">{reg.workshop_professor_name}</strong></p>
 
         <div className={`inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest border rounded-full px-3 py-1 mb-6 ${status.cls}`}>
           {isConfirmed && <CheckCircle size={11} />}
@@ -230,7 +230,7 @@ const MeuWorkshop: React.FC = () => {
         {isPendente && reg.payment_url && (
           <a
             href={reg.payment_url}
-            className="block w-full text-center rounded-xl bg-[#ff0068] px-4 py-3.5 mb-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] transition"
+            className="block w-full text-center rounded-xl bg-brand-primary-strong px-4 py-3.5 mb-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] transition"
           >
             <span className="inline-flex items-center justify-center gap-2"><ExternalLink size={14} />Continuar pagamento</span>
           </a>
@@ -245,7 +245,7 @@ const MeuWorkshop: React.FC = () => {
         </div>
 
         {/* Resumo */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4 space-y-1.5 text-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-4 space-y-1.5 text-sm">
           <Row label="Comprador" value={reg.buyer_name} />
           <Row label="Email" value={reg.buyer_email_masked} />
           {reg.workshop_modalidade && <Row label="Modalidade" value={reg.workshop_modalidade} />}
@@ -256,10 +256,10 @@ const MeuWorkshop: React.FC = () => {
         {/* Ações */}
         {isConfirmed && !isTerminal && (
           <div className="flex items-center gap-2">
-            <button onClick={handleSaveImage} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-200 hover:bg-white/5 transition">
+            <button onClick={handleSaveImage} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-800 hover:bg-white transition">
               <Download size={14} />Salvar QR
             </button>
-            <button onClick={handleShare} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-200 hover:bg-white/5 transition">
+            <button onClick={handleShare} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-800 hover:bg-white transition">
               <Share2 size={14} />Compartilhar
             </button>
           </div>
@@ -267,16 +267,16 @@ const MeuWorkshop: React.FC = () => {
 
         {/* Selo Asaas — comprovante de pagamento de workshop é ponto obrigatório
             conforme Playbook Asaas (Resolução Conjunta nº 16/2025 BCB). */}
-        <div className="mt-4 pt-4 border-t border-white/10 flex flex-col items-center gap-2">
-          <AsaasBadge variant="compact" theme="negative" width={100} height={30} />
-          <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
+        <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col items-center gap-2">
+          <AsaasBadge variant="compact" theme="positive" width={100} height={30} />
+          <p className="text-[9px] text-slate-600 text-center max-w-md leading-relaxed">
             Pagamento processado pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
             autorizada pelo Banco Central do Brasil.
           </p>
         </div>
 
         {isTerminal && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 text-sm text-rose-200 mt-4">
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 text-sm text-rose-700 mt-4">
             <p className="font-bold mb-1">Inscrição não está mais ativa</p>
             <p className="text-xs opacity-80">
               {reg.status_pagamento === 'CANCELADO' && 'Esta inscrição foi cancelada.'}
@@ -292,7 +292,7 @@ const MeuWorkshop: React.FC = () => {
         <div
           role="status"
           aria-live="polite"
-          className="fixed left-1/2 -translate-x-1/2 bottom-8 z-50 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-full shadow-2xl border border-white/10"
+          className="fixed left-1/2 -translate-x-1/2 bottom-8 z-50 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-full shadow-2xl border border-slate-200"
         >
           {toast}
         </div>
@@ -302,18 +302,18 @@ const MeuWorkshop: React.FC = () => {
 };
 
 const InfoBox: React.FC<{ icon: any; label: string; value: string }> = ({ icon: Icon, label, value }) => (
-  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 inline-flex items-center gap-1.5">
+  <div className="bg-white border border-slate-200 rounded-xl p-4">
+    <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-1 inline-flex items-center gap-1.5">
       <Icon size={10} />{label}
     </p>
-    <p className="text-sm font-bold text-white">{value}</p>
+    <p className="text-sm font-bold text-slate-900">{value}</p>
   </div>
 );
 
 const Row: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="flex items-center justify-between gap-3">
-    <span className="text-slate-400 text-xs">{label}</span>
-    <span className="font-bold text-white text-right">{value}</span>
+    <span className="text-slate-600 text-xs">{label}</span>
+    <span className="font-bold text-slate-900 text-right">{value}</span>
   </div>
 );
 

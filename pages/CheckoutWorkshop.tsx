@@ -468,54 +468,54 @@ const CheckoutWorkshop: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#ff0068]" size={32} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-primary-ink" size={32} />
       </div>
     );
   }
 
   if (error && !workshop) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white/5 border border-rose-500/30 rounded-2xl p-6 text-center">
-          <AlertCircle className="text-rose-400 mx-auto mb-3" size={32} />
-          <p className="text-white font-bold mb-2">Não foi possível carregar</p>
-          <p className="text-sm text-slate-400 mb-4">{error}</p>
-          <button onClick={() => navigate(-1)} className="text-xs font-black text-[#ff0068] uppercase tracking-widest">← Voltar</button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white border border-rose-500/30 rounded-2xl p-6 text-center">
+          <AlertCircle className="text-rose-700 mx-auto mb-3" size={32} />
+          <p className="text-slate-900 font-bold mb-2">Não foi possível carregar</p>
+          <p className="text-sm text-slate-600 mb-4">{error}</p>
+          <button onClick={() => navigate(-1)} className="text-xs font-black text-brand-primary-ink uppercase tracking-widest">← Voltar</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       {workshop?.cover_url && (
         <div className="relative h-32 md:h-48 overflow-hidden">
           <img src={workshop.cover_url} alt="" className="w-full h-full object-cover opacity-30" />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0b0b0f]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50" />
         </div>
       )}
 
       <div className={`max-w-2xl mx-auto px-4 py-6 relative ${workshop?.cover_url ? '-mt-8' : ''}`}>
         <div className="flex items-center gap-4 flex-wrap mb-6">
-          <button onClick={() => navigate(`/workshop/${workshop?.slug ?? workshop?.id}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+          <button onClick={() => navigate(`/workshop/${workshop?.slug ?? workshop?.id}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink">
             <ArrowLeft size={14} /> Voltar pro workshop
           </button>
           {workshop?.events?.slug && (
-            <button onClick={() => navigate(`/evento/${workshop.events.slug}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+            <button onClick={() => navigate(`/evento/${workshop.events.slug}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink">
               ← {workshop.events.name}
             </button>
           )}
         </div>
 
-        <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-[#ff0068] px-2.5 py-1 rounded-full mb-2">
+        <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-brand-primary-ink px-2.5 py-1 rounded-full mb-2">
           <GraduationCap size={11} />Inscrição em workshop
         </div>
         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase mb-1">{workshop.name}</h1>
-        <p className="text-sm text-slate-400 mb-6">com {workshop.professor_name}</p>
+        <p className="text-sm text-slate-600 mb-6">com {workshop.professor_name}</p>
 
         {error && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-200 flex items-center gap-2">
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-700 flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0" />
             <span className="font-bold">{error}</span>
           </div>
@@ -523,7 +523,7 @@ const CheckoutWorkshop: React.FC = () => {
 
         <form onSubmit={handlePay} className="space-y-4">
           {/* Form */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
             <FieldLabel icon={UserIcon} label="Nome completo">
               <input type="text" value={name} onChange={e => setName(e.target.value)} className={inputCls} placeholder="Como vai aparecer no certificado" required />
             </FieldLabel>
@@ -533,7 +533,7 @@ const CheckoutWorkshop: React.FC = () => {
             <FieldLabel icon={FileText} label="CPF">
               <input type="text" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} className={inputCls} placeholder="000.000.000-00" maxLength={14} required />
               {cpf.length === 14 && !isValidCpf(cpf) && (
-                <p className="mt-1 text-[11px] text-rose-300">CPF inválido</p>
+                <p className="mt-1 text-[11px] text-rose-700">CPF inválido</p>
               )}
             </FieldLabel>
             <FieldLabel icon={Phone} label="Telefone (opcional)">
@@ -543,7 +543,7 @@ const CheckoutWorkshop: React.FC = () => {
 
           {/* Day Pass — escolha de dia (obrigatória quando configurada) */}
           {dayOptions.length > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5">
               <FieldLabel icon={GraduationCap} label="Escolha o dia">
                 <select
                   value={selectedDayOptionId}
@@ -573,8 +573,8 @@ const CheckoutWorkshop: React.FC = () => {
               bailarino substitui CPF/login pra detectar o combo. */}
           {discountToken && tokenInfo && (
             <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 space-y-2">
-              <p className="text-sm font-bold text-violet-200 flex items-center gap-2">
-                <Sparkles size={16} className="text-violet-400 shrink-0" />
+              <p className="text-sm font-bold text-violet-700 flex items-center gap-2">
+                <Sparkles size={16} className="text-violet-700 shrink-0" />
                 Desconto de inscrito — {tokenInfo.coreografia}
               </p>
               <FieldLabel icon={UserIcon} label="Quem está se inscrevendo?">
@@ -597,7 +597,7 @@ const CheckoutWorkshop: React.FC = () => {
             </div>
           )}
           {discountToken && tokenInfo === null && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-200">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-700">
               Link de desconto inválido ou expirado — preço cheio será aplicado.
             </div>
           )}
@@ -606,12 +606,12 @@ const CheckoutWorkshop: React.FC = () => {
           {!discountToken && workshop.event_id && workshop.auto_detect_combo && (
             <>
               {userId === null && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 flex items-start gap-2">
-                  <Sparkles size={16} className="text-[#ff0068] mt-0.5 shrink-0" />
+                <div className="bg-white border border-slate-200 rounded-xl p-3 text-sm text-slate-700 flex items-start gap-2">
+                  <Sparkles size={16} className="text-brand-primary-ink mt-0.5 shrink-0" />
                   <div>
                     <p className="font-bold">Tem preço de inscrito?</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      <button type="button" onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`/checkout-workshop/${workshop.id}`)}`)} className="text-[#ff0068] font-bold underline">
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      <button type="button" onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`/checkout-workshop/${workshop.id}`)}`)} className="text-brand-primary-ink font-bold underline">
                         Entre na sua conta
                       </button> para verificar se você tem o preço especial de inscrito da mostra.
                     </p>
@@ -619,13 +619,13 @@ const CheckoutWorkshop: React.FC = () => {
                 </div>
               )}
               {comboLoading && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-slate-400 flex items-center gap-2">
+                <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex items-center gap-2">
                   <Loader2 size={12} className="animate-spin" /> Verificando inscrição na mostra...
                 </div>
               )}
               {!comboLoading && combo?.found && (
-                <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 text-sm text-violet-200 flex items-start gap-2">
-                  <Sparkles size={16} className="text-violet-400 mt-0.5 shrink-0" />
+                <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 text-sm text-violet-700 flex items-start gap-2">
+                  <Sparkles size={16} className="text-violet-700 mt-0.5 shrink-0" />
                   <div>
                     <p className="font-bold">
                       {workshop.gratis_para_inscritos ? '🎉 Workshop grátis!' : '✨ Desconto de inscrito aplicado'}
@@ -641,12 +641,12 @@ const CheckoutWorkshop: React.FC = () => {
 
           {/* Hospedagem (add-on) — seletor de noites, sem expor diária */}
           {workshop.hospedagem_delta != null && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
               <div>
-                <p className="text-sm font-bold text-white">Precisa de hospedagem?</p>
-                <p className="text-xs text-slate-400 mt-0.5">Hotel 4 estrelas, acomodação tripla compartilhada, café da manhã incluso.</p>
+                <p className="text-sm font-bold text-slate-900">Precisa de hospedagem?</p>
+                <p className="text-xs text-slate-600 mt-0.5">Hotel 4 estrelas, acomodação tripla compartilhada, café da manhã incluso.</p>
                 {lodgingEsgotada && (
-                  <p className="text-xs text-rose-300 mt-1 font-bold">Vagas de hospedagem esgotadas pro período deste pass.</p>
+                  <p className="text-xs text-rose-700 mt-1 font-bold">Vagas de hospedagem esgotadas pro período deste pass.</p>
                 )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Quantas noites de hospedagem">
@@ -656,7 +656,7 @@ const CheckoutWorkshop: React.FC = () => {
                   aria-checked={!inclHospedagem}
                   onClick={() => selectLodgingTier(null)}
                   className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition ${
-                    !inclHospedagem ? 'border-[#ff0068] bg-[#ff0068]/10 text-white' : 'border-white/10 text-slate-300 hover:border-white/30'
+                    !inclHospedagem ? 'border-[#ff0068] bg-[#ff0068]/10 text-slate-900' : 'border-slate-200 text-slate-700 hover:border-slate-300'
                   }`}
                 >
                   Não preciso
@@ -672,11 +672,11 @@ const CheckoutWorkshop: React.FC = () => {
                       disabled={lodgingEsgotada}
                       onClick={() => selectLodgingTier(tier)}
                       className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed ${
-                        active ? 'border-[#ff0068] bg-[#ff0068]/10 text-white' : 'border-white/10 text-slate-300 hover:border-white/30'
+                        active ? 'border-[#ff0068] bg-[#ff0068]/10 text-slate-900' : 'border-slate-200 text-slate-700 hover:border-slate-300'
                       }`}
                     >
                       {tier.nights} noite{tier.nights > 1 ? 's' : ''}
-                      <span className="block text-[#ff0068] mt-0.5">{formatBRL(tier.price)}</span>
+                      <span className="block text-brand-primary-ink mt-0.5">{formatBRL(tier.price)}</span>
                     </button>
                   );
                 })}
@@ -697,18 +697,18 @@ const CheckoutWorkshop: React.FC = () => {
 
           {/* Cupom */}
           {breakdown && breakdown.precoAposCombo > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 inline-flex items-center gap-1.5">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-2 inline-flex items-center gap-1.5">
                 <Tag size={11} />Cupom
               </p>
               {couponApplied ? (
                 <div className="flex items-center justify-between gap-2">
                   <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-1.5 text-sm">
-                    <Check size={14} className="text-emerald-400" />
-                    <span className="font-bold text-emerald-200">{couponApplied.code}</span>
-                    <span className="text-emerald-300">−{formatBRL(couponApplied.discount)}</span>
+                    <Check size={14} className="text-emerald-700" />
+                    <span className="font-bold text-emerald-700">{couponApplied.code}</span>
+                    <span className="text-emerald-700">−{formatBRL(couponApplied.discount)}</span>
                   </div>
-                  <button type="button" onClick={handleRemoveCoupon} className="text-slate-400 hover:text-rose-400"><X size={14} /></button>
+                  <button type="button" onClick={handleRemoveCoupon} className="text-slate-600 hover:text-rose-700"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="flex items-stretch gap-2">
@@ -722,13 +722,13 @@ const CheckoutWorkshop: React.FC = () => {
                     type="button"
                     disabled={!couponInput.trim() || couponLoading}
                     onClick={handleApplyCoupon}
-                    className="px-4 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+                    className="px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
                   >
                     {couponLoading ? <Loader2 size={14} className="animate-spin" /> : 'Aplicar'}
                   </button>
                 </div>
               )}
-              {couponError && <p className="mt-2 text-xs text-rose-300">{couponError}</p>}
+              {couponError && <p className="mt-2 text-xs text-rose-700">{couponError}</p>}
             </div>
           )}
 
@@ -748,7 +748,7 @@ const CheckoutWorkshop: React.FC = () => {
 
           {/* Resumo */}
           {breakdown && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
               <Row label="Preço base" value={formatBRL(breakdown.precoBase)} />
               {breakdown.comboApplied && breakdown.precoAposCombo !== breakdown.precoBase && (
                 <Row label="Desconto inscrito" value={`−${formatBRL(breakdown.precoBase - breakdown.precoAposCombo)}`} highlight="violet" />
@@ -775,9 +775,9 @@ const CheckoutWorkshop: React.FC = () => {
                   </>
                 );
               })()}
-              <div className="border-t border-white/10 pt-2 flex items-center justify-between">
+              <div className="border-t border-slate-200 pt-2 flex items-center justify-between">
                 <span className="text-sm font-black uppercase tracking-widest">Total</span>
-                <span className="text-2xl font-black text-white">
+                <span className="text-2xl font-black text-slate-900">
                   {breakdown.charged === 0 ? 'Grátis' : formatBRL(breakdown.charged)}
                 </span>
               </div>
@@ -790,7 +790,7 @@ const CheckoutWorkshop: React.FC = () => {
             <CheckoutLegalNotice
               accepted={refundAccepted}
               onAcceptedChange={setRefundAccepted}
-              theme="dark"
+              theme="light"
             />
           )}
 
@@ -802,7 +802,7 @@ const CheckoutWorkshop: React.FC = () => {
                 : breakdown?.charged !== 0 && !refundAccepted ? 'Aceite a política de reembolso para prosseguir'
                 : undefined
             }
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary-strong px-4 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             {(paying || comboLoading) && <Loader2 size={16} className="animate-spin" />}
             {comboLoading
@@ -824,7 +824,7 @@ const CheckoutWorkshop: React.FC = () => {
 
           {/* Selo BaaS Asaas — playbook pág. 3 exige em checkouts/páginas de venda */}
           <div className="flex justify-center pt-2">
-            <AsaasBadge variant="compact" theme="negative" width={100} height={30} />
+            <AsaasBadge variant="compact" theme="positive" width={100} height={30} />
           </div>
         </form>
       </div>
@@ -834,7 +834,7 @@ const CheckoutWorkshop: React.FC = () => {
 
 const FieldLabel: React.FC<{ icon: any; label: string; children: React.ReactNode }> = ({ icon: Icon, label, children }) => (
   <label className="block">
-    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 inline-flex items-center gap-1.5">
+    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1 inline-flex items-center gap-1.5">
       <Icon size={10} />{label}
     </span>
     {children}
@@ -843,11 +843,11 @@ const FieldLabel: React.FC<{ icon: any; label: string; children: React.ReactNode
 
 const Row: React.FC<{ label: string; value: string; highlight?: 'violet' | 'emerald' }> = ({ label, value, highlight }) => (
   <div className="flex items-center justify-between text-sm">
-    <span className="text-slate-400">{label}</span>
-    <span className={`font-bold ${highlight === 'violet' ? 'text-violet-300' : highlight === 'emerald' ? 'text-emerald-300' : 'text-white'}`}>{value}</span>
+    <span className="text-slate-600">{label}</span>
+    <span className={`font-bold ${highlight === 'violet' ? 'text-violet-700' : highlight === 'emerald' ? 'text-emerald-700' : 'text-slate-900'}`}>{value}</span>
   </div>
 );
 
-const inputCls = 'w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40';
+const inputCls = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40';
 
 export default CheckoutWorkshop;

@@ -196,20 +196,20 @@ const PublicWorkshopPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#ff0068]" size={32} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-primary-ink" size={32} />
       </div>
     );
   }
 
   if (error || !workshop) {
     return (
-      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white/5 border border-rose-500/30 rounded-2xl p-6 text-center">
-          <AlertCircle className="text-rose-400 mx-auto mb-3" size={32} />
-          <p className="text-white font-bold mb-2">Workshop indisponível</p>
-          <p className="text-sm text-slate-400 mb-4">{error}</p>
-          <button onClick={() => navigate(-1)} className="text-xs font-black text-[#ff0068] uppercase tracking-widest">← Voltar</button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white border border-rose-500/30 rounded-2xl p-6 text-center">
+          <AlertCircle className="text-rose-700 mx-auto mb-3" size={32} />
+          <p className="text-slate-900 font-bold mb-2">Workshop indisponível</p>
+          <p className="text-sm text-slate-600 mb-4">{error}</p>
+          <button onClick={() => navigate(-1)} className="text-xs font-black text-brand-primary-ink uppercase tracking-widest">← Voltar</button>
         </div>
       </div>
     );
@@ -288,7 +288,7 @@ const PublicWorkshopPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-white pb-24 sm:pb-12">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24 sm:pb-12">
       {/* Meta tags dinâmicas — React 19 nativo as iça pro <head>. */}
       <title>{seoTitle}</title>
       <meta name="description" content={seoDescription} />
@@ -321,58 +321,58 @@ const PublicWorkshopPage: React.FC = () => {
                 : `${workshop.professor_photo_focal_x ?? 50}% ${workshop.professor_photo_focal_y ?? 50}%` }}
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-[#0b0b0f]" />
+            <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-slate-300" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-[#0b0b0f]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-slate-50" />
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 -mt-20 relative">
         <div className="flex items-center gap-4 flex-wrap mb-4">
-          <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+          <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink">
             <ArrowLeft size={14} /> Voltar
           </button>
           {workshop.events?.slug && (
-            <button onClick={() => navigate(`/evento/${workshop.events!.slug}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+            <button onClick={() => navigate(`/evento/${workshop.events!.slug}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest hover:text-brand-primary-ink">
               ← {workshop.events.name}
             </button>
           )}
         </div>
 
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-[#ff0068] px-2.5 py-1 rounded-full">
+          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-brand-primary-ink px-2.5 py-1 rounded-full">
             <GraduationCap size={11} />Workshop
           </span>
           {workshop.modalidade && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest bg-white/10 text-slate-200 px-2.5 py-1 rounded-full"><Tag size={11} />{workshop.modalidade}</span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-800 px-2.5 py-1 rounded-full"><Tag size={11} />{workshop.modalidade}</span>
           )}
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest bg-white/10 text-slate-200 px-2.5 py-1 rounded-full"><Award size={11} />{NIVEL_LABEL[workshop.nivel]}</span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-800 px-2.5 py-1 rounded-full"><Award size={11} />{NIVEL_LABEL[workshop.nivel]}</span>
         </div>
 
         <h1 className="text-3xl md:text-4xl font-black tracking-tighter uppercase mb-2">{workshop.name}</h1>
-        <p className="text-sm text-slate-400 mb-6">com <strong className="text-white">{workshop.professor_name}</strong></p>
+        <p className="text-sm text-slate-600 mb-6">com <strong className="text-slate-900">{workshop.professor_name}</strong></p>
 
         {/* Card de inscrição */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-6">
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <div>
               {stock?.active_lot_nome && (
-                <p className="text-[10px] font-black text-[#ff0068] uppercase tracking-widest mb-0.5">{stock.active_lot_nome}</p>
+                <p className="text-[10px] font-black text-brand-primary-ink uppercase tracking-widest mb-0.5">{stock.active_lot_nome}</p>
               )}
-              <p className="text-3xl font-black text-white">{fmtCurrency(precoAtivo)} <span className="text-sm font-bold text-slate-400 align-middle">sem hospedagem</span></p>
+              <p className="text-3xl font-black text-slate-900">{fmtCurrency(precoAtivo)} <span className="text-sm font-bold text-slate-600 align-middle">sem hospedagem</span></p>
               {workshop.hospedagem_delta != null && precoAtivo != null && (
-                <p className="text-sm font-bold text-[#ff0068] mt-1">
-                  {fmtCurrency(Number(precoAtivo) + Number(workshop.hospedagem_delta))} <span className="text-slate-400 font-medium">com hospedagem</span>
+                <p className="text-sm font-bold text-brand-primary-ink mt-1">
+                  {fmtCurrency(Number(precoAtivo) + Number(workshop.hospedagem_delta))} <span className="text-slate-600 font-medium">com hospedagem</span>
                 </p>
               )}
               {precoCombo != null && precoCombo < (precoAtivo ?? 0) && (
-                <p className="text-xs text-violet-300 mt-1">↓ {fmtCurrency(precoCombo)} para inscritos da mostra</p>
+                <p className="text-xs text-violet-700 mt-1">↓ {fmtCurrency(precoCombo)} para inscritos da mostra</p>
               )}
               {workshop.gratis_para_inscritos && (
-                <p className="text-xs text-emerald-300 mt-1 font-bold">🎉 Grátis para inscritos da mostra</p>
+                <p className="text-xs text-emerald-700 mt-1 font-bold">🎉 Grátis para inscritos da mostra</p>
               )}
               {proximoLote && (
-                <p className="text-[10px] font-bold text-[#ff0068] mt-1">
+                <p className="text-[10px] font-bold text-brand-primary-ink mt-1">
                   <AvisoViradaLote preco={proximoLote.preco} dataVirada={proximoLote.dataVirada} dias={proximoLote.dias} formatPreco={fmtCurrency} />
                 </p>
               )}
@@ -396,24 +396,24 @@ const PublicWorkshopPage: React.FC = () => {
                 </div>
               )}
             </div>
-            <button onClick={handleShare} className="p-2 rounded-lg hover:bg-white/10 text-slate-400" title="Compartilhar">
+            <button onClick={handleShare} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Compartilhar">
               <Share2 size={16} />
             </button>
           </div>
 
           {/* Estoque restante */}
           {restantes != null && restantes <= 10 && restantes > 0 && (
-            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2 mb-3 text-[11px] font-bold text-amber-200">
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2 mb-3 text-[11px] font-bold text-amber-700">
               ⚡ Restam apenas {restantes} {restantes === 1 ? 'vaga' : 'vagas'}
             </div>
           )}
           {lotEsgotado && (
-            <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 px-3 py-2 mb-3 text-[11px] font-bold text-rose-200">
+            <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 px-3 py-2 mb-3 text-[11px] font-bold text-rose-700">
               Esgotado
             </div>
           )}
           {isExpired && (
-            <div className="rounded-xl bg-slate-500/10 border border-slate-500/30 px-3 py-2 mb-3 text-[11px] font-bold text-slate-300">
+            <div className="rounded-xl bg-slate-500/10 border border-slate-500/30 px-3 py-2 mb-3 text-[11px] font-bold text-slate-700">
               Inscrições encerradas — workshop já começou
             </div>
           )}
@@ -423,7 +423,7 @@ const PublicWorkshopPage: React.FC = () => {
           <button
             disabled={!podeComprar}
             onClick={() => navigate(`/checkout-workshop/${workshop.slug ?? workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
-            className={`w-full items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition ${podeComprar ? 'hidden sm:flex' : 'flex'}`}
+            className={`w-full items-center justify-center gap-2 rounded-xl bg-brand-primary-strong px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition ${podeComprar ? 'hidden sm:flex' : 'flex'}`}
           >
             {podeComprar ? 'Comprar agora' : lotEsgotado ? 'Esgotado' : 'Indisponível'}
           </button>
@@ -445,16 +445,16 @@ const PublicWorkshopPage: React.FC = () => {
 
         {/* Descrição */}
         {workshop.description && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-6">
-            <h2 className="text-xs font-black uppercase tracking-widest text-[#ff0068] mb-3">Sobre o workshop</h2>
-            <p className="text-sm text-slate-300 whitespace-pre-line leading-relaxed">{workshop.description}</p>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-6">
+            <h2 className="text-xs font-black uppercase tracking-widest text-brand-primary-ink mb-3">Sobre o workshop</h2>
+            <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">{workshop.description}</p>
           </div>
         )}
 
         {/* PersonCard do professor */}
         {workshop.professor_is_public && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-            <h2 className="text-xs font-black uppercase tracking-widest text-[#ff0068] mb-4">Professor</h2>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <h2 className="text-xs font-black uppercase tracking-widest text-brand-primary-ink mb-4">Professor</h2>
             <div className="flex items-start gap-4">
               {workshop.professor_photo_url ? (
                 <img
@@ -464,30 +464,30 @@ const PublicWorkshopPage: React.FC = () => {
                   style={{ objectPosition: `${workshop.professor_photo_focal_x ?? 50}% ${workshop.professor_photo_focal_y ?? 50}%` }}
                 />
               ) : (
-                <div className="w-20 h-20 rounded-2xl bg-white/10 flex items-center justify-center">
-                  <UserIcon size={32} className="text-slate-400" />
+                <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center">
+                  <UserIcon size={32} className="text-slate-600" />
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-lg font-black text-white">{workshop.professor_name}</p>
+                <p className="text-lg font-black text-slate-900">{workshop.professor_name}</p>
                 {workshop.professor_bio_short && (
-                  <p className="text-sm text-slate-300 mt-1">{workshop.professor_bio_short}</p>
+                  <p className="text-sm text-slate-700 mt-1">{workshop.professor_bio_short}</p>
                 )}
                 {workshop.professor_bio && workshop.professor_bio !== workshop.professor_bio_short && (
-                  <p className="text-xs text-slate-400 mt-2 whitespace-pre-line">{workshop.professor_bio}</p>
+                  <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{workshop.professor_bio}</p>
                 )}
                 <div className="flex items-center gap-3 mt-3">
                   {workshop.professor_instagram && (
                     <a
                       href={`https://instagram.com/${workshop.professor_instagram.replace(/^@/, '')}`}
                       target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-[#ff0068]"
+                      className="inline-flex items-center gap-1 text-xs text-slate-700 hover:text-brand-primary-ink"
                     >
                       <Instagram size={12} />{workshop.professor_instagram}
                     </a>
                   )}
                   {workshop.professor_site_url && (
-                    <a href={workshop.professor_site_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-[#ff0068]">
+                    <a href={workshop.professor_site_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-slate-700 hover:text-brand-primary-ink">
                       <Globe size={12} />Site
                     </a>
                   )}
@@ -500,10 +500,10 @@ const PublicWorkshopPage: React.FC = () => {
 
       {/* CTA fixo mobile */}
       {podeComprar && (
-        <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-[#0b0b0f]/95 backdrop-blur border-t border-white/10 p-3 z-30">
+        <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-white/95 backdrop-blur border-t border-slate-200 p-3 z-30">
           <button
             onClick={() => navigate(`/checkout-workshop/${workshop.slug ?? workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
-            className="w-full rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30"
+            className="w-full rounded-xl bg-brand-primary-strong px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30"
           >
             Comprar · {fmtCurrency(precoAtivo)}
           </button>
@@ -515,7 +515,7 @@ const PublicWorkshopPage: React.FC = () => {
         <div
           role="status"
           aria-live="polite"
-          className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-8 z-50 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-full shadow-2xl border border-white/10"
+          className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-8 z-50 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-full shadow-2xl border border-slate-200"
         >
           {toast}
         </div>
@@ -525,11 +525,11 @@ const PublicWorkshopPage: React.FC = () => {
 };
 
 const InfoBox: React.FC<{ icon: any; label: string; value: string }> = ({ icon: Icon, label, value }) => (
-  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 inline-flex items-center gap-1.5">
+  <div className="bg-white border border-slate-200 rounded-xl p-4">
+    <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-1 inline-flex items-center gap-1.5">
       <Icon size={10} />{label}
     </p>
-    <p className="text-sm font-bold text-white">{value}</p>
+    <p className="text-sm font-bold text-slate-900">{value}</p>
   </div>
 );
 

@@ -1725,7 +1725,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                           {t.obs && <p className="text-[10px] text-slate-600">{t.obs}</p>}
 
                           {ticketCategory(t) === 'promocional' && (
-                            <p className="text-[10px] font-bold text-violet-300">
+                            <p className="text-[10px] font-bold text-violet-700">
                               Ingresso promocional · não é meia-entrada e não acumula com o benefício
                             </p>
                           )}
@@ -1870,7 +1870,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   )}
                   {aceitaAvaliada && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-700">
-                      <GraduationCap size={12} className="text-violet-300" />
+                      <GraduationCap size={12} className="text-violet-700" />
                       {resolveAvaliadaLabel(config)}
                     </span>
                   )}
@@ -2061,7 +2061,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                           {Number(pass.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                         {pass.preco_inscritos_mostra != null && (
-                          <p className="text-xs text-violet-300">↓ {Number(pass.preco_inscritos_mostra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} p/ inscritos</p>
+                          <p className="text-xs text-violet-700">↓ {Number(pass.preco_inscritos_mostra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} p/ inscritos</p>
                         )}
                         <PriceFeeNote
                           disclosure={computePriceDisclosure({

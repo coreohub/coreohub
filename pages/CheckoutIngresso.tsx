@@ -1134,9 +1134,8 @@ export default function CheckoutIngresso() {
 
         {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}
         {feeEnabled && payOptions && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4">
           <PaymentMethodPicker
-            theme="adaptive"
+            theme="light"
             options={payOptions}
             method={payMethod}
             installments={installments}
@@ -1146,7 +1145,6 @@ export default function CheckoutIngresso() {
             refundTarget="o valor do ingresso"
             formatBRL={formatBRL}
           />
-          </div>
         )}
 
         {/* Resumo de valores */}

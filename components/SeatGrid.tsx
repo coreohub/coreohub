@@ -78,6 +78,8 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  */
 export default function SeatGrid(props: SeatGridProps) {
   const { rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons, seatZoneColors, maxFit = 1, fullscreenable = false, tall = false, showOrientation = false, lockedSeats, markedSeats } = props;
+  // Cores de zona (hex vivo do produtor) precisam de versão escura no tema claro. "auto" lê a classe .dark no render.
+  const lightZone = variant === "light" || (variant === "auto" && typeof document !== "undefined" && !document.documentElement.classList.contains("dark"));
   const [full, setFull] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -340,7 +342,7 @@ export default function SeatGrid(props: SeatGridProps) {
                     aria-disabled={locked || undefined}
                     className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors${markedSeats?.includes(seatId) ? ' ring-2 ring-[#E3FF0A] ring-offset-1 ring-offset-black' : ''}
                       ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : zoneStyled ? 'hover:brightness-125' : special ? specialFree : freeClass}`}
-                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 } : zoneStyled ? (variant === 'light' ? { backgroundColor: `${zc}33`, color: readableOnLight(zc), boxShadow: `inset 0 0 0 1px ${zc}` } : { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` }) : undefined) : undefined}
+                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 } : zoneStyled ? (lightZone ? { backgroundColor: `${zc}33`, color: readableOnLight(zc), boxShadow: `inset 0 0 0 1px ${zc}` } : { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` }) : undefined) : undefined}
                   >
                     {Icon ? <Icon size={s.icon} /> : n}
                   </button>

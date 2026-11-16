@@ -66,7 +66,7 @@ const TransferTicketPanel: React.FC<Props> = ({ token, isMeia, hasSeat, onTransf
         aria-expanded={open}
         className="cursor-pointer w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-600"
       >
-        <span className="inline-flex items-center gap-1.5"><Send size={12} className="text-[#ff0068]" /> Transferir ingresso</span>
+        <span className="inline-flex items-center gap-1.5"><Send size={12} className="text-brand-primary-ink" /> Transferir ingresso</span>
         <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -104,7 +104,7 @@ const TransferTicketPanel: React.FC<Props> = ({ token, isMeia, hasSeat, onTransf
             </p>
           )}
 
-          <p className="text-[9px] leading-snug text-slate-400">
+          <p className="text-[9px] leading-snug text-slate-600">
             Usamos o nome, CPF, e-mail e telefone do novo titular apenas para emitir o ingresso, conferir a identidade na entrada e manter o histórico de titulares exigido por lei, guardado por, no mínimo, 2 anos e até 5 anos, com acesso restrito. Base legal: cumprimento de obrigação legal e execução do contrato de compra do ingresso. Veja o prazo e os seus direitos na{' '}<a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">Política de Privacidade</a>.
           </p>
 
@@ -114,7 +114,7 @@ const TransferTicketPanel: React.FC<Props> = ({ token, isMeia, hasSeat, onTransf
             <button
               type="button"
               onClick={() => { const v = validate(); if (v) { setError(v); return; } setError(null); setConfirming(true); }}
-              className="cursor-pointer w-full rounded-xl bg-[#ff0068] py-2.5 text-[11px] font-black uppercase tracking-widest text-white hover:bg-[#ff1a7d]"
+              className="cursor-pointer w-full rounded-xl bg-brand-primary-strong py-2.5 text-[11px] font-black uppercase tracking-widest text-white hover:bg-[#ff1a7d]"
             >
               Transferir
             </button>
@@ -125,11 +125,11 @@ const TransferTicketPanel: React.FC<Props> = ({ token, isMeia, hasSeat, onTransf
               </p>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setConfirming(false)} disabled={busy}
-                  className="cursor-pointer flex-1 rounded-xl bg-white border border-slate-200 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 disabled:bg-slate-100 disabled:text-slate-400">
+                  className="cursor-pointer flex-1 rounded-xl bg-white border border-slate-200 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 disabled:bg-slate-100 disabled:text-slate-600">
                   Voltar
                 </button>
                 <button type="button" onClick={() => void submit()} disabled={busy}
-                  className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#ff0068] py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-[#ff1a7d] disabled:bg-slate-300 disabled:text-slate-500">
+                  className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-primary-strong py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-[#ff1a7d] disabled:bg-slate-300 disabled:text-slate-500">
                   {busy && <Loader2 size={12} className="animate-spin" />} Confirmar
                 </button>
               </div>
