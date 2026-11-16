@@ -602,3 +602,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/manage-producer-debt/deno.json"
 entrypoint = "./functions/manage-producer-debt/index.ts"
+
+# Auditoria 2026-11-16 (Lote 2, B-N4): o gate da função só decodifica o JWT; com verify_jwt=false qualquer um forjava role=service_role.
+# O cron chama com a service key (JWT válido), então o gateway pode verificar a assinatura.
+[functions.expire-audience-payments]
+enabled = true
+verify_jwt = true

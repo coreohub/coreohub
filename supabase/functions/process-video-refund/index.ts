@@ -14,6 +14,14 @@ import { buildCorsHeaders } from '../_shared/cors.ts'
 // Idempotência: se video_fee_status já é 'waived' (estornado/dispensado),
 // não faz nada e retorna OK.
 
+function jwtRole(auth: string): string | null {
+  try {
+    const payload = auth.replace(/^Bearer\s+/i, '').split('.')[1]
+    if (!payload) return null
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))).role ?? null
+  } catch { return null }
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
 
@@ -40,6 +48,28 @@ Deno.serve(async (req) => {
       .eq('id', registration_id)
       .maybeSingle()
     if (!reg) throw new Error('Inscrição não encontrada.')
+
+    // Auditoria 2026-11-16 (Lote 2, B#2): só o dono do evento, super admin ou service_role estorna.
+    // verify_jwt não basta: a anon key também é um JWT válido.
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const forbidden = (status: number, error: string) =>
+      new Response(JSON.stringify({ error }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (jwtRole(authHeader) !== 'service_role') {
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
+      )
+      const { data: { user } } = await supabaseAuth.auth.getUser()
+      if (!user) return forbidden(401, 'Não autorizado')
+      const [{ data: ownerEv }, { data: prof }] = await Promise.all([
+        supabase.from('events').select('created_by').eq('id', reg.event_id).maybeSingle(),
+        supabase.from('profiles').select('is_super_admin').eq('id', user.id).maybeSingle(),
+      ])
+      if (ownerEv?.created_by !== user.id && prof?.is_super_admin !== true) {
+        return forbidden(403, 'Você não é o dono deste evento.')
+      }
+    }
     if (reg.video_fee_status === 'waived') {
       return new Response(
         JSON.stringify({ ok: true, already_processed: true }),
