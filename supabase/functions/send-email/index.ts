@@ -573,6 +573,78 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
   }
 }
 
+// ─── Template: audience_seat_changed (comprador) ─────────────────────────────
+// A produção trocou o lugar de um ingresso já pago. Aviso operacional, sem selo Asaas
+// (nenhuma transação). Lista o pedido INTEIRO com os lugares atuais e diz que este
+// e-mail vale sobre qualquer e-mail anterior com outro lugar. O link/QR não muda.
+
+interface AudienceSeatChangedPayload {
+  buyerName?: string
+  buyerEmail: string
+  produtorEmail?: string
+  eventoNome?: string
+  eventoData?: string
+  eventoLocal?: string
+  /** Já formatados, ex.: "Fileira I · Nº 11". */
+  lugarAntigo?: string
+  lugarNovo?: string
+  tickets?: Array<{ tipo: string; url: string; assento?: string | null; trocado?: boolean }>
+  appUrl?: string
+}
+
+function buildAudienceSeatChanged(p: AudienceSeatChangedPayload) {
+  const tickets = Array.isArray(p.tickets) ? p.tickets : []
+  const seatText = (a?: string | null) => {
+    if (!a) return ''
+    const k = a.lastIndexOf('-')
+    return k < 0 ? a : `Fileira ${a.slice(0, k)} · Nº ${a.slice(k + 1)}`
+  }
+  const eventInfo = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.eventoData ? infoRow('Data', escape(p.eventoData)) : '',
+    p.eventoLocal ? infoRow('Local', escape(p.eventoLocal)) : '',
+    p.lugarAntigo ? infoRow('Lugar anterior', escape(p.lugarAntigo)) : '',
+    p.lugarNovo ? infoRow('Novo lugar', `<span style="color:${BRAND_COLOR};">${escape(p.lugarNovo)}</span>`) : '',
+  ].filter(Boolean).join('')
+
+  const ticketBlocks = tickets.map((t, i) => {
+    const seat = seatText(t.assento)
+    const label = `${tickets.length > 1 ? `Ingresso ${i + 1} de ${tickets.length} — ` : ''}${t.tipo}${seat ? ` · ${seat}` : ''}${t.trocado ? ' (lugar atualizado)' : ''}`
+    return `
+      <div style="margin-top:${i === 0 ? 24 : 12}px;padding:18px;border:2px solid ${BRAND_COLOR};border-radius:14px;background:#fff5f8;">
+        <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${BRAND_COLOR};">${escape(label)}</p>
+        <a href="${escape(t.url)}" style="display:inline-block;padding:11px 22px;background:${BRAND_COLOR};color:#fff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">
+          Acessar ingresso →
+        </a>
+      </div>`
+  }).join('')
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${eventInfo}</table>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#0b0b0f;font-weight:700;">
+      Este e-mail vale mais do que qualquer e-mail anterior com outros lugares.
+    </p>
+    <p style="margin:6px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Se você recebeu antes uma confirmação com o lugar antigo, considere apenas os lugares abaixo. O link e o QR do seu ingresso continuam os mesmos, só o lugar mudou.
+    </p>
+    ${ticketBlocks}
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Nenhuma cobrança ou devolução foi feita por causa dessa troca.
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Seu lugar foi atualizado`,
+    html: baseLayout({
+      preheader: `Seu lugar em ${p.eventoNome ?? 'o evento'} mudou${p.lugarNovo ? ` para ${p.lugarNovo}` : ''}. Este e-mail vale sobre os anteriores.`,
+      title: 'Seu lugar foi atualizado',
+      intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, a organização do evento trocou o seu lugar${p.lugarNovo ? ` para ${escape(p.lugarNovo)}` : ''}. Veja abaixo os lugares atuais do seu pedido.`,
+      contentHtml,
+      footerNote: 'Em caso de dúvidas, responda este e-mail.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
 interface AudienceProducerPayload {
   produtorNome?: string
   produtorEmail: string
@@ -2252,6 +2324,7 @@ interface SendEmailRequest {
     | 'event_created_producer'
     | 'producer_welcome'
     | 'audience_ticket_confirmed'
+    | 'audience_seat_changed'
     | 'audience_ticket_producer'
     | 'audience_ticket_late_refund'
     | 'audience_ticket_late_refund_producer'
@@ -2422,6 +2495,17 @@ Deno.serve(async (req) => {
         html = tpl.html
         festivalName = p.eventoNome
         replyTo = p.produtorEmail   // comprador responde → produtor recebe
+        break
+      }
+      case 'audience_seat_changed': {
+        const p = payload as unknown as AudienceSeatChangedPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        const tpl = buildAudienceSeatChanged(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
         break
       }
       case 'audience_ticket_producer': {
