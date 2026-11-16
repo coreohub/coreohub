@@ -19,6 +19,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
 import { runPlannedPayout } from '../_shared/payout-run.ts'
+import { attemptsMode } from '../_shared/payout-attempts.ts'
 import { parseFeeMode } from '../_shared/subconta-fee.ts'
 import { resolveTransferScope } from '../_shared/transfer-scope.ts'
 
@@ -173,6 +174,8 @@ Deno.serve(async (req) => {
       asaasBaseUrl,
       description:      `CoreoHub — ${scope === 'available' ? 'transferência manual' : 'antecipação manual'} (${pending.length} comissões)`,
       releasedManually: true,
+      attemptsMode:     attemptsMode(Deno.env.get('PAYOUT_ATTEMPTS_MODE')),
+      producerId:       producerId,
       fee:              { producerId, mode: parseFeeMode(Deno.env.get('SUBCONTA_FEE_MODE')) },
     })
     const result = run.result
@@ -198,6 +201,8 @@ Deno.serve(async (req) => {
         ? 'Não conseguimos consultar o saldo da sua conta na Asaas agora. Tente novamente em alguns minutos.'
         : result.reason === 'fee_credit_waiting'
         ? 'O valor disponível ainda é pequeno demais para transferir. Ele será repassado junto com os próximos recebimentos.'
+        : result.reason === 'transfer_uncertain' || result.reason === 'attempt_unresolved' || result.reason === 'attempt_needs_admin' || result.reason === 'attempt_marking_failed' || result.reason === 'attempt_other_kind_open'
+        ? 'Estamos conferindo uma transferência anterior junto à Asaas. Para sua segurança, o próximo repasse só sai depois dessa conferência. Se demorar, a equipe CoreoHub resolve.'
         : result.reason === 'pix_invalid'
         ? 'Sua chave PIX cadastrada parece inválida. Atualize em Configurações.'
         : `Não foi possível processar a transferência agora (${result.reason ?? 'erro desconhecido'}). Tente novamente em alguns minutos.`

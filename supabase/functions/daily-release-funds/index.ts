@@ -17,6 +17,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getTransferStatus } from '../_shared/asaas-payouts.ts'
 import { acquirePayoutLock, releasePayoutLock } from '../_shared/payout-lock.ts'
+import { attemptsMode } from '../_shared/payout-attempts.ts'
 import { runPlannedPayout, ID_CHUNK, type PlannedPayoutResult } from '../_shared/payout-run.ts'
 import { parseFeeMode } from '../_shared/subconta-fee.ts'
 
@@ -217,6 +218,8 @@ Deno.serve(async (req) => {
             asaasBaseUrl,
             description:      `CoreoHub — liberação automática D+7 (${items.length} comissões)`,
             releasedManually: false,
+            attemptsMode:     attemptsMode(Deno.env.get('PAYOUT_ATTEMPTS_MODE')),
+            producerId:       bucket.producerId,
             fee:              { producerId: bucket.producerId, mode: parseFeeMode(Deno.env.get('SUBCONTA_FEE_MODE')) },
           })
         }
@@ -281,7 +284,7 @@ Deno.serve(async (req) => {
         // Comissões NÃO são marcadas (nada foi sacado) — entram no próximo ciclo. Asaas pode
         // estar retentando, KYC pode estar pendente, PIX inválido etc.
         // [ALERT] emitido se for falha técnica recorrente.
-        const TECH_FAILS = new Set(['transfer_failed', 'pix_invalid', 'kyc_pending', 'exception'])
+        const TECH_FAILS = new Set(['transfer_failed', 'pix_invalid', 'kyc_pending', 'exception', 'transfer_uncertain', 'attempt_needs_admin', 'attempt_open_failed', 'attempts_check_failed', 'attempt_marking_failed', 'attempt_other_kind_open'])
         if (result.reason && TECH_FAILS.has(result.reason)) {
           console.error(
             `[daily-release-funds][ALERT] produtor=${bucket.producerId} (${bucket.fullName})` +
