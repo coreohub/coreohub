@@ -27,6 +27,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveAsaasEnv } from '../_shared/asaas-env.ts'
+import { loadHeldPaymentIds } from '../_shared/payment-hold.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -90,7 +91,16 @@ Deno.serve(async (req) => {
     return respond(500, { error: error.message })
   }
 
-  const candidates = expiredPayments ?? []
+  // Cobrança retida em análise (PAYMENT_CHECK_MODE=enforce): a Asaas já recebeu, NUNCA expirar nem cancelar.
+  // Se não der para saber quais estão retidas, não expira nada neste ciclo (lado seguro).
+  const heldInfo = await loadHeldPaymentIds(supabase, (expiredPayments ?? []).map((p: any) => p.asaas_payment_id))
+  if (heldInfo.error) {
+    console.error('[expire-pending-payments] não deu para consultar retenções, nada expirado neste ciclo:', heldInfo.error)
+    return respond(200, { status: 'skipped_hold_check_failed', error: heldInfo.error })
+  }
+  const heldSkipped = (expiredPayments ?? []).filter((p: any) => heldInfo.held.has(String(p.asaas_payment_id)))
+  if (heldSkipped.length) console.warn(`[expire-pending-payments] ${heldSkipped.length} cobrança(s) retida(s) em análise puladas`)
+  const candidates = (expiredPayments ?? []).filter((p: any) => !heldInfo.held.has(String(p.asaas_payment_id)))
   console.log(`[expire-pending-payments] candidatos=${candidates.length}`)
 
   let okCount = 0

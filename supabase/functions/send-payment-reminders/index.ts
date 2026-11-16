@@ -28,6 +28,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { loadHeldPaymentIds } from '../_shared/payment-hold.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = {
@@ -78,6 +79,7 @@ Deno.serve(async (req) => {
 
   type Payment = {
     id: string
+    asaas_payment_id?: string | null
     user_id: string
     event_id: string
     value_total: number
@@ -90,7 +92,7 @@ Deno.serve(async (req) => {
   // 7-day reminder candidates: entre +25h e +8d (catch-up amplo)
   const { data: cand7, error: err7 } = await supabase
     .from('payments')
-    .select('id, user_id, event_id, value_total, payment_url, expires_at, reminder_7d_at, reminder_1d_at')
+    .select('id, asaas_payment_id, user_id, event_id, value_total, payment_url, expires_at, reminder_7d_at, reminder_1d_at')
     .eq('status', 'PENDENTE')
     .not('expires_at', 'is', null)
     .gte('expires_at', twentyFiveH)
@@ -101,7 +103,7 @@ Deno.serve(async (req) => {
   // 1-day last chance: entre +1h e +25h
   const { data: cand1, error: err1 } = await supabase
     .from('payments')
-    .select('id, user_id, event_id, value_total, payment_url, expires_at, reminder_7d_at, reminder_1d_at')
+    .select('id, asaas_payment_id, user_id, event_id, value_total, payment_url, expires_at, reminder_7d_at, reminder_1d_at')
     .eq('status', 'PENDENTE')
     .not('expires_at', 'is', null)
     .gte('expires_at', oneHour)
@@ -112,6 +114,15 @@ Deno.serve(async (req) => {
   if (err7 || err1) {
     return respond(500, { error: err7?.message ?? err1?.message })
   }
+
+  // Cobrança retida em análise: não lembrar o inscrito de pagar o que a Asaas já recebeu.
+  // Sem conseguir consultar, não envia lembrete nenhum neste ciclo.
+  const heldInfo = await loadHeldPaymentIds(supabase, [...(cand7 ?? []), ...(cand1 ?? [])].map((p: any) => p.asaas_payment_id))
+  if (heldInfo.error) {
+    console.error('[send-payment-reminders] não deu para consultar retenções, nenhum lembrete neste ciclo:', heldInfo.error)
+    return respond(200, { status: 'skipped_hold_check_failed', error: heldInfo.error })
+  }
+  const notHeld = (p: any) => !heldInfo.held.has(String(p.asaas_payment_id))
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
 
@@ -187,11 +198,11 @@ Deno.serve(async (req) => {
 
   let sent7 = 0, sent1 = 0, errors: any[] = []
 
-  for (const p of (cand7 ?? []) as Payment[]) {
+  for (const p of ((cand7 ?? []) as Payment[]).filter(notHeld)) {
     const r = await dispatch(p, 'reminder_7d_at')
     if (r.ok) sent7++; else errors.push({ id: p.id, type: '7d', error: r.error })
   }
-  for (const p of (cand1 ?? []) as Payment[]) {
+  for (const p of ((cand1 ?? []) as Payment[]).filter(notHeld)) {
     const r = await dispatch(p, 'reminder_1d_at')
     if (r.ok) sent1++; else errors.push({ id: p.id, type: '1d', error: r.error })
   }

@@ -10,6 +10,7 @@
 // 'check_error', para que um problema aqui jamais bloqueie um pagamento legítimo.
 
 import { countBailarinos } from './payment-expectations.ts'
+import { isHoldAnomaly, isResolvedAnomaly } from './payment-hold.ts'
 
 export type PaymentCheckMode = 'off' | 'observe' | 'enforce'
 
@@ -72,14 +73,20 @@ export async function checkPaymentExpectation(supabase: Sb, opts: {
 
     const { data: exp, error: expErr } = await supabase
       .from('payment_expectations')
-      .select('registration_id, kind, event_id, expected_value, installments, bailarinos_count, formato')
+      .select('registration_id, kind, event_id, expected_value, installments, bailarinos_count, formato, anomaly')
       .eq('asaas_payment_id', asaasId)
     if (expErr) return { ...empty, receivedValue: received, reasons: [`check_error:${expErr.code ?? 'read'}`] }
 
-    const rows = (exp ?? []) as Array<{
+    const allRows = (exp ?? []) as Array<{
       registration_id: string | null; kind: string; event_id: string | null
-      expected_value: number | string; installments: number | null; bailarinos_count: number | null; formato?: string | null
+      expected_value: number | string; installments: number | null; bailarinos_count: number | null; formato?: string | null; anomaly?: string | null
     }>
+    // Liberado pelo admin (docs/procedimento-pagamento-retido.md): todas as linhas 'resolved:'.
+    if (allRows.length > 0 && allRows.every(r => isResolvedAnomaly(r.anomaly))) {
+      return { ok: true, hadExpectation: true, reasons: ['resolved_by_admin'], expectedTotal: null, receivedValue: received }
+    }
+    // Linha-marcador de retenção (sem inscrição, valor 0, 'enforce:'): não é expectativa de preço.
+    const rows = allRows.filter(r => !(r.registration_id == null && Number(r.expected_value) === 0 && isHoldAnomaly(r.anomaly)))
     if (rows.length === 0) {
       // Cobrança criada antes do deploy da gravação (ou gravação falhou): nada a conferir ainda.
       return { ...empty, receivedValue: received, reasons: ['no_expectation'] }

@@ -2,6 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../_shared/asaas-env.ts'
 import { cardCreditFallback } from '../_shared/card-credit-date.ts'
 import { paymentCheckMode, checkPaymentExpectation, markExpectationAnomaly } from '../_shared/payment-check.ts'
+import { HOLD_PREFIX } from '../_shared/payment-hold.ts'
+import { checkSplitWallet, expectedProducerWallet } from '../_shared/payment-wallet-check.ts'
 import { requestInstallmentAnticipation } from '../_shared/asaas-anticipation.ts'
 import {
   allocateProportional,
@@ -104,6 +106,49 @@ async function notifySuperAdmins(supabase: any, opts: {
   }
 }
 
+/** Pagamento retido pelo PAYMENT_CHECK_MODE=enforce: avisa todo super admin (in-app) UMA vez por cobrança.
+ *  O dinheiro já foi recebido e repartido pela Asaas; sem este aviso a inscrição ficaria PENDENTE sem ninguém saber.
+ *  Procedimento: docs/procedimento-pagamento-retido.md. Best-effort, nunca lança. */
+async function notifyPaymentHeld(supabase: any, opts: { asaasPaymentId: string; kind: string; reasons: string[]; expected: number | null; received: number | null }): Promise<void> {
+  try {
+    const { data: admins, error } = await supabase.from('profiles').select('id').eq('is_super_admin', true)
+    if (error || !admins?.length) return
+    const { data: already } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('type', 'payment_held')
+      .eq('metadata->>asaas_payment_id', opts.asaasPaymentId)
+      .limit(1)
+    if (already?.length) return // reentrega do webhook: já avisou
+    const rows = admins.map((a: any) => ({
+      user_id:   a.id,
+      type:      'payment_held',
+      severity:  'error',
+      title:     'Pagamento retido para análise',
+      body:      `${opts.kind} ${opts.asaasPaymentId}: ${opts.reasons.join(', ')} (esperado ${opts.expected ?? '?'}, recebido ${opts.received ?? '?'}). A Asaas já recebeu: confira e libere.`,
+      cta_url:   '/super-admin',
+      cta_label: 'Ver painel',
+      metadata:  { asaas_payment_id: opts.asaasPaymentId, kind: opts.kind, reasons: opts.reasons },
+    }))
+    await supabase.from('notifications').insert(rows)
+  } catch (e) {
+    console.error('[asaas-webhook] falha ao notificar pagamento retido:', (e as Error).message)
+  }
+}
+
+/** Cobrança retida SEM linha esperada (não há o que marcar): grava uma linha-marcador (valor 0, sem inscrição)
+ *  para que os crons enxerguem a retenção. Idempotente pelo índice único (asaas_payment_id) sem inscrição. */
+async function markHoldWithoutExpectation(supabase: any, opts: { asaasPaymentId: string; kind: 'REG' | 'VS' | 'AGG'; reasons: string[] }): Promise<void> {
+  try {
+    await supabase.from('payment_expectations').insert({
+      asaas_payment_id: opts.asaasPaymentId, registration_id: null, kind: opts.kind,
+      expected_value: 0, anomaly: `${HOLD_PREFIX}${opts.reasons.join(',')}`, anomaly_at: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('[asaas-webhook] falha ao gravar marcador de retenção:', (e as Error)?.message)
+  }
+}
+
 /** Conferência do pagamento contra payment_expectations (auditoria 2026-11-15, Lote 1, L1-c).
  *  Segredo PAYMENT_CHECK_MODE: off (padrão) | observe | enforce. Só age em APROVADO.
  *  - off:     retorna null sem consultar nada.
@@ -117,6 +162,8 @@ async function paymentCheckGate(supabase: any, opts: {
   statusInterno: string
   registrationId?: string | null
   paymentGroupId?: string | null
+  asaasBaseUrl?: string
+  asaasApiKey?: string
 }): Promise<Response | null> {
   if (opts.statusInterno !== 'APROVADO') return null
   const mode = paymentCheckMode(Deno.env.get('PAYMENT_CHECK_MODE'))
@@ -136,6 +183,7 @@ async function paymentCheckGate(supabase: any, opts: {
       )
       await markExpectationAnomaly(supabase, String(opts.payment?.id), v.reasons, mode)
       if (mode === 'enforce') {
+        await notifyPaymentHeld(supabase, { asaasPaymentId: String(opts.payment?.id), kind: opts.kind, reasons: v.reasons, expected: v.expectedTotal, received: v.receivedValue })
         return new Response(
           JSON.stringify({ status: 'held_payment_mismatch', payment_id: String(opts.payment?.id), reasons: v.reasons }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -148,6 +196,25 @@ async function paymentCheckGate(supabase: any, opts: {
       const created = Date.parse(String(opts.payment?.dateCreated ?? ''))
       if (v.reasons.includes('no_expectation') && Number.isFinite(cutoff) && Number.isFinite(created) && created >= cutoff) {
         console.error(`[ALERT][PAYMENT_EXPECTATION_MISSING] ${tag} dateCreated=${opts.payment?.dateCreated} cutoff=${Deno.env.get('PAYMENT_CHECK_CUTOFF')}`)
+        // Sem expectativa não dá para conferir valor: confere se o split vai para o produtor do evento
+        // (GET /payments/{id}). Só reprova desvio claro; erro de rede/HTTP é inconclusivo e NÃO segura.
+        const exp = await expectedProducerWallet(supabase, { kind: opts.kind, registrationId: opts.registrationId, paymentGroupId: opts.paymentGroupId })
+        const w = exp.skip
+          ? { ok: null as boolean | null, reason: `pulado:${exp.reason}` }
+          : await checkSplitWallet({ baseUrl: opts.asaasBaseUrl ?? '', apiKey: opts.asaasApiKey ?? '', asaasPaymentId: String(opts.payment?.id), expectedWallet: exp.wallet })
+        console.warn(`[PAYMENT_CHECK] ${tag} no_expectation wallet=${w.ok === null ? 'inconclusivo' : w.ok ? 'ok' : 'DIVERGENTE'} (${w.reason})`)
+        if (w.ok === false) {
+          const reasons = ['no_expectation', w.reason]
+          console.error(`[ALERT][PAYMENT_MISMATCH] ${tag} reasons=${reasons.join(',')} received=${v.receivedValue}`)
+          if (mode === 'enforce') {
+            await markHoldWithoutExpectation(supabase, { asaasPaymentId: String(opts.payment?.id), kind: opts.kind, reasons })
+            await notifyPaymentHeld(supabase, { asaasPaymentId: String(opts.payment?.id), kind: opts.kind, reasons, expected: null, received: v.receivedValue })
+            return new Response(
+              JSON.stringify({ status: 'held_payment_mismatch', payment_id: String(opts.payment?.id), reasons }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+        }
       }
       console.warn(`[PAYMENT_CHECK] ${tag} ok reasons=${v.reasons.join(',')} expected=${v.expectedTotal} received=${v.receivedValue}`)
     } else {
@@ -1418,6 +1485,8 @@ async function handleAggregatePayment(opts: {
   payment:       any
   statusInterno: string
   paymentId:     string  // UUID em public.payments
+  asaasBaseUrl?: string
+  asaasApiKey?:  string
 }): Promise<Response> {
   const { supabase, payment, statusInterno, paymentId } = opts
 
@@ -1440,7 +1509,7 @@ async function handleAggregatePayment(opts: {
   }
 
   // Conferência contra o que a edge de cobrança esperava (PAYMENT_CHECK_MODE; observe só loga).
-  const heldAgg = await paymentCheckGate(supabase, { kind: 'AGG', payment, statusInterno, paymentGroupId: paymentId })
+  const heldAgg = await paymentCheckGate(supabase, { kind: 'AGG', payment, statusInterno, paymentGroupId: paymentId, asaasBaseUrl: opts.asaasBaseUrl, asaasApiKey: opts.asaasApiKey })
   if (heldAgg) return heldAgg
 
   if (STALE_DOWNGRADE_STATUSES.has(statusInterno)) {
@@ -1875,6 +1944,7 @@ async function handleVideoSelectionFee(opts: {
   statusInterno:  string
   registrationId: string
   asaasBaseUrl:   string
+  asaasApiKey?:   string
 }): Promise<Response> {
   const { supabase, payment, statusInterno, registrationId, asaasBaseUrl } = opts
 
@@ -1896,7 +1966,7 @@ async function handleVideoSelectionFee(opts: {
   }
 
   // Conferência contra o que a edge de cobrança esperava (PAYMENT_CHECK_MODE; observe só loga).
-  const heldVs = await paymentCheckGate(supabase, { kind: 'VS', payment, statusInterno, registrationId })
+  const heldVs = await paymentCheckGate(supabase, { kind: 'VS', payment, statusInterno, registrationId, asaasBaseUrl: opts.asaasBaseUrl, asaasApiKey: opts.asaasApiKey })
   if (heldVs) return heldVs
 
   // Mapeia status interno → video_fee_status
@@ -2595,6 +2665,8 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         paymentId: aggregatePaymentId,
+        asaasBaseUrl: ASAAS_BASE_URL,
+        asaasApiKey:  ASAAS_API_KEY,
       })
     }
 
@@ -2606,6 +2678,7 @@ Deno.serve(async (req) => {
         statusInterno,
         registrationId: videoSelectionRegistrationId,
         asaasBaseUrl:   ASAAS_BASE_URL,
+        asaasApiKey:    ASAAS_API_KEY,
       })
     }
 
@@ -2784,7 +2857,7 @@ Deno.serve(async (req) => {
     }
 
     // Conferência contra o que a edge de cobrança esperava (PAYMENT_CHECK_MODE; observe só loga).
-    const heldReg = await paymentCheckGate(supabase, { kind: 'REG', payment, statusInterno, registrationId })
+    const heldReg = await paymentCheckGate(supabase, { kind: 'REG', payment, statusInterno, registrationId, asaasBaseUrl: ASAAS_BASE_URL, asaasApiKey: ASAAS_API_KEY })
     if (heldReg) return heldReg
 
     // Defesa contra cobrança duplicada/abandonada OU evento fora de ordem da
