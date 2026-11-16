@@ -1294,3 +1294,7 @@ Plano e decisões em `docs/plano-modo-claro-paginas-publicas.md`. Decisão do pr
 - Regra: tentativas 1 a 3 do MESMO evento respondem 500 (Asaas reenvia) ANTES dos e-mails; a 4ª volta a 200 com alerta ao super admin (`webhook_failure`). Teto porque 15 falhas consecutivas pausam a fila da Asaas (só 200 conta como sucesso; docs.asaas.com/docs/fila-pausada). Se nem a contagem grava (banco fora), NÃO pede reenvio. Chave duplicada (23505) não é falha.
 - Ramos de cartão parcelado já respondiam 500 em `commission_insert_failed` (sem mudança). `deno check` do webhook tem 3 erros de tipo que já existem no HEAD (não são desta mudança).
 - Falta: aplicar a migration e deployar o `asaas-webhook` só na janela sem venda e com OK do dono; testar em sandbox forçando erro de comissão (reenvio, esgotamento e e-mail único); comportamento real de reenvio da Asaas (intervalo) não está documentado.
+
+### 2026-11-16 (fim da noite) — Modo claro: Termos, Política, Entrar Juri e revisão final (SÓ NA DEV)
+
+Termos, Política e Entrar Juri entraram na trava de claro por rota (commit 9e73815), axe com 0 violações. Revisão do diff 60387a5..9e73815: sem sobras de classe escura (restam selos sobre foto e avisos temporários, escuros de propósito); componentes compartilhados seguem no padrão escuro no painel; botões brancos sobre #ff0068 em MeuIngresso e ValidarCertificado trocados por brand-primary-strong. Não verificado: Meu Ingresso com ingresso real, api/og.ts, logos de produtor em PNG branco sobre fundo claro.
