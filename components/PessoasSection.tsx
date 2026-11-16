@@ -145,9 +145,9 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
   return (
     <div id="jurados" className="space-y-4 scroll-mt-20">
       <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-        <Award size={24} className="text-[#ff0068]" /> {title}
+        <Award size={24} className="text-brand-primary-ink" /> {title}
       </h2>
-      <p className="text-xs text-slate-400">{subtitle}</p>
+      <p className="text-xs text-slate-600">{subtitle}</p>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {people.map(p => (
           <PersonCard key={p.id} person={p} onClick={() => setSelected(p)} />
