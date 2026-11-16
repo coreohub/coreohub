@@ -1523,7 +1523,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
         {/* Outras sessões do mesmo espetáculo — cada sessão é um evento com URL própria */}
         {eventSessions.length > 1 && (
-          <div id="sessoes" className="space-y-4 scroll-mt-20">
+          <div id="sessoes" className="space-y-4 scroll-mt-20 rounded-3xl bg-[#ff0068]/[0.04] border border-[#ff0068]/15 p-5 sm:p-6">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <Calendar size={24} className="text-brand-primary-ink" /> Escolha a sessão
             </h2>
@@ -1571,7 +1571,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           // Várias sessões e nenhuma escolhida: aviso visível em vez de preços (a sessão muda data, lugares e preço).
           if (needsSessionChoice && politica !== 'GRATUITO') {
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 rounded-3xl bg-[#ff0068]/[0.04] border border-[#ff0068]/15 p-5 sm:p-6 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
                 </h2>
@@ -1590,7 +1590,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           if (politica === 'GRATUITO') {
             const notaCustom = config?.entrada_gratuita_nota?.trim();
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 rounded-3xl bg-[#ff0068]/[0.04] border border-[#ff0068]/15 p-5 sm:p-6 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-emerald-700" /> Ingressos
                 </h2>
@@ -1616,7 +1616,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
           if (politica === 'EXTERNO' && config?.url_ingressos) {
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 rounded-3xl bg-[#ff0068]/[0.04] border border-[#ff0068]/15 p-5 sm:p-6 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
                 </h2>
@@ -1667,7 +1667,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               );
             }
             return (
-              <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
+              <div id="ingressos" className={`space-y-4 scroll-mt-20 rounded-3xl bg-[#ff0068]/[0.04] border border-[#ff0068]/15 p-5 sm:p-6 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
                 </h2>
@@ -2343,49 +2343,49 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             em versão compacta embaixo da capa no hero (evita duplicar o
             mesmo link 2x na mesma página). */}
         {hasSocial && (
-          <div className="space-y-4 lg:hidden">
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Siga o evento</h2>
-            <div className="flex flex-wrap gap-3">
+          <div className="space-y-3 lg:hidden">
+            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-600">Siga o evento</h2>
+            <div className="flex flex-wrap gap-2">
               {social.instagram && (
-                <a href={social.instagram} target="_blank" rel="noopener noreferrer"
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
-                  <Instagram size={16} /> Instagram
+                <a aria-label="Instagram" title="Instagram" href={social.instagram} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                  <Instagram size={18} />
                 </a>
               )}
               {social.facebook && (
-                <a href={social.facebook} target="_blank" rel="noopener noreferrer"
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-[#1465d6] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
-                  <Facebook size={16} /> Facebook
+                <a aria-label="Facebook" title="Facebook" href={social.facebook} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                  <Facebook size={18} />
                 </a>
               )}
               {social.tiktok && (
-                <a href={social.tiktok} target="_blank" rel="noopener noreferrer"
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-black border border-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
-                  <TikTokIcon size={16} /> TikTok
+                <a aria-label="TikTok" title="TikTok" href={social.tiktok} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                  <TikTokIcon size={18} />
                 </a>
               )}
               {social.youtube && (
-                <a href={social.youtube} target="_blank" rel="noopener noreferrer"
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-red-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
-                  <Youtube size={16} /> YouTube
+                <a aria-label="YouTube" title="YouTube" href={social.youtube} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                  <Youtube size={18} />
                 </a>
               )}
               {social.whatsapp && (
-                <a href={social.whatsapp} target="_blank" rel="noopener noreferrer"
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-emerald-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
-                  <WhatsAppIcon size={16} /> WhatsApp
+                <a aria-label="WhatsApp" title="WhatsApp" href={social.whatsapp} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                  <WhatsAppIcon size={18} />
                 </a>
               )}
               {social.website && (
-                <a href={social.website} target="_blank" rel="noopener noreferrer"
-                   className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all">
-                  <Globe size={16} /> Site oficial
+                <a aria-label="Site oficial" title="Site oficial" href={social.website} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                  <Globe size={18} />
                 </a>
               )}
               {social.email && (
-                <a href={social.email}
-                   className="text-white flex items-center gap-2 px-5 py-3 bg-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
-                  <Mail size={16} /> E-mail
+                <a aria-label="E-mail" title="E-mail" href={social.email}
+                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                  <Mail size={18} />
                 </a>
               )}
             </div>

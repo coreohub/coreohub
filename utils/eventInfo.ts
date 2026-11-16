@@ -5,7 +5,7 @@
  */
 
 export const INFO_SECTIONS = [
-  { key: 'portoes', titulo: 'Portões e horários', placeholder: 'Ex: Portões abrem às 18h. O espetáculo começa às 19h, com tolerância de 15 min.' },
+  { key: 'portoes', titulo: 'Portaria e horários', placeholder: 'Ex: Portões abrem às 18h. O espetáculo começa às 19h, com tolerância de 15 min.' },
   { key: 'meia', titulo: 'Meia-entrada', placeholder: 'Ex: Vale para estudantes, idosos, PCD e jovens de baixa renda (Lei 12.933). Apresente o documento na entrada.' },
   { key: 'menores', titulo: 'Menores de idade', placeholder: 'Ex: Crianças até 5 anos não pagam, mas não têm assento próprio.' },
   { key: 'acessibilidade', titulo: 'Acessibilidade', placeholder: 'Ex: Assentos PCD e para acompanhante, rampa de acesso e banheiro adaptado.' },

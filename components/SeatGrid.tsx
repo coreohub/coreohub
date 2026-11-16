@@ -251,10 +251,10 @@ export default function SeatGrid(props: SeatGridProps) {
   const barTone = variant === 'dark' ? 'bg-white/10 text-slate-300' : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300';
   const takenClass = variant === 'dark'
     ? 'bg-white/5 text-slate-700 cursor-not-allowed'
-    : 'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-slate-700 cursor-not-allowed';
+    : 'bg-slate-300 dark:bg-white/5 text-slate-500 dark:text-slate-700 cursor-not-allowed';
   const freeClass = variant === 'dark'
     ? 'bg-white/10 text-slate-400 hover:bg-white/20'
-    : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20';
+    : 'bg-white ring-1 ring-slate-400 dark:ring-0 dark:bg-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-50 hover:ring-slate-600 dark:hover:bg-white/20';
   // Assentos PCD/cadeirante/acompanhante: tom azul (info), sempre distinguíveis do comum.
   const specialFree = variant === 'dark'
     ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/50 hover:bg-sky-500/35'
@@ -342,7 +342,7 @@ export default function SeatGrid(props: SeatGridProps) {
                     aria-disabled={locked || undefined}
                     className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors${markedSeats?.includes(seatId) ? ' ring-2 ring-[#E3FF0A] ring-offset-1 ring-offset-black' : ''}
                       ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : zoneStyled ? 'hover:brightness-125' : special ? specialFree : freeClass}`}
-                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 } : zoneStyled ? (lightZone ? { backgroundColor: `${zc}33`, color: readableOnLight(zc), boxShadow: `inset 0 0 0 1px ${zc}` } : { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` }) : undefined) : undefined}
+                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? (lightZone ? { backgroundColor: '#cbd5e1', color: '#64748b' } : { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 }) : zoneStyled ? (lightZone ? { backgroundColor: `${zc}59`, color: readableOnLight(zc), boxShadow: `inset 0 0 0 1px ${zc}` } : { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` }) : undefined) : undefined}
                   >
                     {Icon ? <Icon size={s.icon} /> : n}
                   </button>
