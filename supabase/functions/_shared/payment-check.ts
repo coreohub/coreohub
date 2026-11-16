@@ -29,6 +29,30 @@ export interface PaymentCheckVerdict {
 // deno-lint-ignore no-explicit-any
 type Sb = any
 
+type ExpRow = { event_id: string | null; formato?: string | null }
+
+/** Devolve uma função que diz se o preço daquela linha esperada depende do tamanho do elenco. */
+async function rosterDrivesPrice(supabase: Sb, rows: ExpRow[]): Promise<(row: ExpRow) => boolean> {
+  const always = () => true
+  try {
+    const ids = Array.from(new Set(rows.map(r => r.event_id).filter((x): x is string => !!x)))
+    if (ids.length === 0) return always
+    const { data, error } = await supabase.from('events').select('id, formacoes_config').in('id', ids)
+    if (error || !Array.isArray(data)) return always
+    const byEvent = new Map<string, unknown>()
+    for (const e of data) byEvent.set(e.id, e.formacoes_config)
+    return (row: ExpRow) => {
+      const cfg = row.event_id ? byEvent.get(row.event_id) : undefined
+      if (!Array.isArray(cfg) || !row.formato) return true
+      const alvo = String(row.formato).trim().toLowerCase()
+      const f = cfg.find((x: { name?: string }) => String(x?.name ?? '').trim().toLowerCase() === alvo)
+      if (!f) return true
+      const t = (f as { pricing_type?: string }).pricing_type ?? 'FIXED'
+      return t === 'PER_MEMBER' || t === 'PROGRESSIVE_PER_DANCER'
+    }
+  } catch { return always }
+}
+
 /**
  * kind 'REG' | 'VS': registrationIds = [id da inscrição].
  * kind 'AGG': paymentGroupId = uuid de public.payments (payment_group_id das inscrições).
@@ -48,13 +72,13 @@ export async function checkPaymentExpectation(supabase: Sb, opts: {
 
     const { data: exp, error: expErr } = await supabase
       .from('payment_expectations')
-      .select('registration_id, kind, event_id, expected_value, installments, bailarinos_count')
+      .select('registration_id, kind, event_id, expected_value, installments, bailarinos_count, formato')
       .eq('asaas_payment_id', asaasId)
     if (expErr) return { ...empty, receivedValue: received, reasons: [`check_error:${expErr.code ?? 'read'}`] }
 
     const rows = (exp ?? []) as Array<{
       registration_id: string | null; kind: string; event_id: string | null
-      expected_value: number | string; installments: number | null; bailarinos_count: number | null
+      expected_value: number | string; installments: number | null; bailarinos_count: number | null; formato?: string | null
     }>
     if (rows.length === 0) {
       // Cobrança criada antes do deploy da gravação (ou gravação falhou): nada a conferir ainda.
@@ -78,6 +102,10 @@ export async function checkPaymentExpectation(supabase: Sb, opts: {
     const regById = new Map<string, { event_id: string | null; bailarinos_detalhes: unknown }>()
     for (const r of (regs ?? [])) regById.set(r.id, r)
 
+    // O elenco só importa quando o preço depende dele (por membro ou progressivo por bailarino).
+    // Formação não encontrada ou leitura com erro: trata como "depende" (comportamento conservador anterior).
+    const priceByRoster = await rosterDrivesPrice(supabase, rows)
+
     const reasons: string[] = []
     let bad = false
     if (kindMismatch) { reasons.push('kind_mismatch'); bad = true }
@@ -88,7 +116,8 @@ export async function checkPaymentExpectation(supabase: Sb, opts: {
       if (!reg) { reasons.push('registration_missing'); continue }
       if (row.event_id && reg.event_id !== row.event_id) { reasons.push('event_mismatch'); bad = true }
       if (row.bailarinos_count != null && countBailarinos(reg.bailarinos_detalhes) > row.bailarinos_count) {
-        reasons.push('roster_grew'); bad = true
+        if (priceByRoster(row)) { reasons.push('roster_grew'); bad = true }
+        else reasons.push('roster_grew_price_fixed') // preço fixo por formação: só registra
       }
     }
     // Inscrição ligada à cobrança mas sem linha esperada (agregado): fatura mexida depois de criada.
@@ -103,6 +132,10 @@ export async function checkPaymentExpectation(supabase: Sb, opts: {
     const expectedCents = rows.reduce((s, r) => s + cents(Number(r.expected_value)), 0)
     const expectedTotal = expectedCents / 100
     const payInstallments = Math.max(1, Number(opts.payment?.installmentCount ?? 1) || 1)
+    // Parcela de um parcelamento da Asaas (tem `installment`/`installmentNumber`) sem `installmentCount`:
+    // `value` é a parcela, então não dá para comparar com o total esperado.
+    const isInstallmentCharge = payInstallments === 1
+      && (!!opts.payment?.installment || Number(opts.payment?.installmentNumber ?? 0) > 0)
     const expectsInstallments = rows.some(r => Number(r.installments ?? 1) > 1)
     if (payInstallments > 1) {
       // Pagamento parcelado na Asaas: `value` pode ser a parcela. Compara o total (parcela x N),
@@ -112,7 +145,7 @@ export async function checkPaymentExpectation(supabase: Sb, opts: {
       } else {
         reasons.push('value_checked_as_installments')
       }
-    } else if (expectsInstallments) {
+    } else if (expectsInstallments || isInstallmentCharge) {
       reasons.push('value_check_skipped_installments')
     } else if (cents(received) < expectedCents - 1) {
       reasons.push('value_below_expected'); bad = true
