@@ -16,6 +16,7 @@ import {
 import { startImpersonate } from '../services/impersonateService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import SuperAdminMfaGate from '../components/SuperAdminMfaGate';
+import PayoutAttemptsCard from '../components/PayoutAttemptsCard';
 
 interface ProducerRow {
   id: string;
@@ -703,6 +704,9 @@ const SuperAdmin = () => {
               tone={stats.refundsCount30d > 0 ? 'rose' : 'pink'}
             />
           </div>
+
+          {/* Lote 2 (2026-11-16): repasses PIX com resultado incerto, decisão do admin. */}
+          <div className="mt-4"><PayoutAttemptsCard /></div>
 
           {/* Bloco 1 (2026-05-28): leads sem atribuição.
               Padrão Sympla/Eventbrite: plataforma é dona dos signups sem evento.
