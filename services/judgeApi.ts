@@ -6,7 +6,7 @@
  */
 
 import { supabaseUrl, supabaseAnonKey } from './supabase';
-import { readJudgeSession } from '../pages/JudgeLogin';
+import { readJudgeSession, clearJudgeSession } from '../pages/JudgeLogin';
 
 const JUDGE_FN_URL = `${supabaseUrl}/functions/v1/judge-login`;
 
@@ -22,6 +22,13 @@ const callJudgeFn = async (body: Record<string, unknown>) => {
     body: JSON.stringify({ session_token: readJudgeSession()?.session_token, ...body }),
   });
   const data = await res.json().catch(() => ({}));
+  // Servidor em enforce e esta sessao e antiga (sem session_token) ou expirou: limpa e volta ao login
+  // (o terminal redireciona sozinho quando nao ha sessao). A fila offline fica intacta no IndexedDB
+  // e esvazia depois do novo PIN.
+  if (res.status === 401 && data?.reason === 'session_required') {
+    clearJudgeSession();
+    setTimeout(() => window.location.reload(), 0);
+  }
   return { status: res.status, data };
 };
 
