@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -24,6 +26,20 @@ Deno.serve(async (req) => {
 
     const { event_id, registration_id } = await req.json();
     if (!event_id) return json({ error: 'event_id obrigatório' }, 400);
+
+    // Auditoria 2026-11-16 (Lote 2, B#7): o trigger não manda credencial, então a função só
+    // repassa o ESTADO REAL: event_id + registration_id precisam bater com events.live_registration_id.
+    // Quem chamar de fora só consegue reenviar o que já é verdade (nunca forjar outra apresentação).
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? '',
+    );
+    const { data: ev, error: evErr } = await supabase
+      .from('events').select('id, live_registration_id').eq('id', event_id).maybeSingle();
+    if (evErr || !ev) return json({ error: 'evento não encontrado' }, 404);
+    if ((ev.live_registration_id ?? null) !== (registration_id ?? null)) {
+      return json({ error: 'registration_id não é a apresentação atual do evento' }, 409);
+    }
 
     const resp = await fetch(stageUrl, {
       method: 'POST',
