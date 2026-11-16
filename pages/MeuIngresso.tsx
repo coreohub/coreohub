@@ -454,7 +454,7 @@ const MeuIngresso: React.FC = () => {
               </div>
               <a
                 href={ticket.payment_url}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-brand-primary-strong text-white rounded-2xl font-black text-xs uppercase tracking-widest"
               >
                 Pagar agora <ExternalLink size={14} />
               </a>
