@@ -24,7 +24,7 @@ export interface SeatDepthSummary {
 export const DEPTH_LABEL: Record<SeatDepth, string> = {
   frente: 'frente',
   meio: 'meio',
-  fundo: 'fundo, longe do palco',
+  fundo: 'fundo',
 };
 
 export function rowDepth(rank: number, total: number): SeatDepth {
