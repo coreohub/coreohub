@@ -217,7 +217,8 @@ Deno.serve(async (req) => {
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
         audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status,
-        processing_fee_enabled, audience_processing_payer, state, max_installments, seat_zones
+        processing_fee_enabled, audience_processing_payer, state, max_installments, seat_zones,
+        audience_sales_opens_at
       `)
       .eq('id', event_id)
       .single()
@@ -236,6 +237,20 @@ Deno.serve(async (req) => {
     }
     if (event.politica_ingressos !== 'INTERNO') {
       throw new Error('Este evento não vende ingressos pela plataforma')
+    }
+    // Abertura programada: antes da data/hora marcada pelo produtor a compra é recusada.
+    // NULL = sem programação (vende normalmente). Vale só pra venda pública desta função;
+    // PDV e cortesia do produtor são outras funções e não passam por aqui.
+    const opensAtRaw = (event as { audience_sales_opens_at?: string | null }).audience_sales_opens_at
+    if (opensAtRaw) {
+      const opensAt = new Date(opensAtRaw)
+      if (!Number.isNaN(opensAt.getTime()) && opensAt.getTime() > Date.now()) {
+        const quando = new Intl.DateTimeFormat('pt-BR', {
+          weekday: 'short', day: '2-digit', month: 'long', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
+        }).format(opensAt)
+        throw new Error(`As vendas ainda não abriram. Abertura: ${quando}.`)
+      }
     }
 
     // events.event_date é coluna legada (sempre NULL): o fim das vendas usa a data
