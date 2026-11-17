@@ -1654,7 +1654,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 {salesEnabled && event.seat_map_enabled && (
                   <p className="text-xs text-slate-700 flex items-center gap-2">
                     <Armchair size={14} className="text-brand-primary-ink shrink-0" aria-hidden="true" />
-                    Lugar marcado: escolha a quantidade e depois marque seus assentos no mapa.
+                    Lugar marcado: escolha seus assentos direto no mapa. O tipo de ingresso de cada lugar (inteira, meia) você define na hora.
                   </p>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1767,7 +1767,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
                           {/* Carrinho multi-tipo: +/− por tipo (padrão Sympla/Eventbrite).
                               Some "Comprar" individual; total vai pra sticky bar. */}
-                          {!eventOver && salesEnabled && preco > 0 && !soldOut && (() => {
+                          {!eventOver && salesEnabled && !event.seat_map_enabled && preco > 0 && !soldOut && (() => {
                             const key = String(realIdx);
                             const qty = cart[key] ?? 0;
                             const isMeia = String(t.nome).toLowerCase().includes('meia');
@@ -1826,6 +1826,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       );
                     })}
                 </div>
+                {!eventOver && salesEnabled && event.seat_map_enabled && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/checkout-ingresso/${slugOrId}`, { state: { cart: {} } })}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-brand-primary-strong text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all"
+                  >
+                    <Armchair size={14} aria-hidden="true" /> Escolher meus lugares
+                  </button>
+                )}
                 {salesEnabled && (
                   <MeiaEntradaInfo eventId={event.id} ingressos={event.ingressos_config} seatMapEnabled={Boolean(event.seat_map_enabled)} />
                 )}

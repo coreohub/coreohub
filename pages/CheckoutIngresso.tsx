@@ -37,6 +37,7 @@ import { applyZonePricing, priceForZone, priceRangeForType, resolveSeatAssignmen
 import { useSeatMap } from '../hooks/useSeatMap';
 import { companionBySpecial, isSpecialTipo, seatsSatisfyRules, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
 import { ticketSeatKind, type TicketSeatKind } from '../supabase/functions/_shared/seat-rules';
+import { commonTypeOrder, countSeatTypes, orderSeatsByType, pickDefaultType, seatTypeChangeError } from '../utils/seatCart';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 import { isEventOver } from '../utils/eventStatus';
 import { sessionKey } from '../utils/sessionCode';
@@ -122,7 +123,9 @@ export default function CheckoutIngresso() {
   const [event, setEvent] = useState<any>(null);
   // Pra onde o "voltar" leva: o link do evento principal já na sessão que está sendo comprada.
   const [backPath, setBackPath] = useState<string | null>(null);
-  const [cart, setCart] = useState<Record<string, number>>(initialCart);
+  // Em evento com mapa o carrinho nasce dos lugares clicados (derivado abaixo); aqui ficam só os ingressos
+  // especiais (PCD, obeso, acompanhante). Sem mapa, é o carrinho de sempre.
+  const [cartBase, setCart] = useState<Record<string, number>>(initialCart);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,6 +141,17 @@ export default function CheckoutIngresso() {
   // Ref espelha a seleção pro callback do polling (fecha sobre o valor atual, não o do render antigo).
   const selectedSeatsRef = useRef<string[]>([]);
   selectedSeatsRef.current = selectedSeats;
+  // Fluxo por assento: tipo de ingresso de cada lugar comum (Inteira por padrão).
+  const [seatTypes, setSeatTypes] = useState<Record<string, number>>({});
+  const seatMapEnabled = Boolean(event?.seat_map_enabled);
+  const cart = useMemo<Record<string, number>>(() => {
+    if (!seatMapEnabled) return cartBase;
+    const ing: any[] = Array.isArray(event?.ingressos_config) ? event.ingressos_config : [];
+    const c: Record<string, number> = {};
+    for (const [k, q] of Object.entries(cartBase)) if (ticketSeatKind(ing[Number(k)]) !== 'comum') c[k] = q;
+    for (const [t, n] of Object.entries(countSeatTypes(selectedSeats, seatTypes))) c[t] = (c[t] ?? 0) + n;
+    return c;
+  }, [seatMapEnabled, cartBase, selectedSeats, seatTypes, event]);
   const [seatLostNotice, setSeatLostNotice] = useState<string | null>(null);
   // Hold ao escolher o assento (A2): token de sessão + prazo da reserva.
   const [holdToken, setHoldToken] = useState<string | null>(null);
@@ -344,9 +358,12 @@ export default function CheckoutIngresso() {
   // ─── Estoque: carrega + faz polling 30s pros tipos do carrinho ────────────
   useEffect(() => {
     if (!event?.id) return;
-    const typesWithLimit = lines
-      .filter(l => l.quantidadeTotal != null)
-      .map(l => ({ id: String(l.idx), total: l.quantidadeTotal }));
+    const ingAll: any[] = Array.isArray(event.ingressos_config) ? event.ingressos_config : [];
+    const typesWithLimit = seatMapEnabled
+      ? ingAll.flatMap((t, i) => (t?.nome && Number(t.quantidade_total) > 0 ? [{ id: String(i), total: Number(t.quantidade_total) }] : []))
+      : lines
+        .filter(l => l.quantidadeTotal != null)
+        .map(l => ({ id: String(l.idx), total: l.quantidadeTotal }));
     if (typesWithLimit.length === 0) { setStockByIdx({}); return; }
     let cancelled = false;
     const tick = async () => {
@@ -365,10 +382,9 @@ export default function CheckoutIngresso() {
     const interval = setInterval(tick, 30_000);
     return () => { cancelled = true; clearInterval(interval); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event?.id, JSON.stringify(lines.map(l => [l.idx, l.quantidadeTotal]))]);
+  }, [event?.id, seatMapEnabled, JSON.stringify(lines.map(l => [l.idx, l.quantidadeTotal]))]);
 
   // ─── Assento numerado: layout (1x) + status ao vivo (polling 15s) ─────────
-  const seatMapEnabled = Boolean(event?.seat_map_enabled);
 
   // Evento mudou (navegação sem reload completo) — nunca carrega assento
   // selecionado de um evento diferente (o hook já reseta layout/status).
@@ -482,6 +498,20 @@ export default function CheckoutIngresso() {
   };
   const isReleased = (id: string) => seatStatuses[id]?.liberado ?? tipoOfSeat(id) === 'comum';
 
+  // Tipos comuns à venda (Inteira primeiro, meia por último) e estoque que ainda resta de cada um.
+  const ingressosAll: any[] = Array.isArray(event?.ingressos_config) ? event.ingressos_config : [];
+  const isMeiaIdx = (i: number) => detectKind(ingressosAll[i]?.nome) === 'meia';
+  const remainingOf = (i: number) => stockByIdx[String(i)]?.remaining ?? Infinity;
+  const commonOrder = useMemo(() => commonTypeOrder(ingressosAll, {
+    sellable: i => {
+      const t = ingressosAll[i];
+      const r = resolveLote(Array.isArray(t?.lotes) ? t.lotes : [], todayISO());
+      const preco = r ? Number(r.lote.preco ?? 0) : Number(t?.preco ?? 0);
+      return preco > 0 || (zonePriced && priceRangeForType(t ?? {}, i, seatZones, todayISO(), { includeBase: true }).max > 0);
+    },
+    isMeia: isMeiaIdx,
+  }), [event, zonePriced, seatZones]);
+
   const toggleSeat = (seatId: string) => {
     setSeatLostNotice(null);
     const prev = selectedSeatsRef.current;
@@ -494,8 +524,24 @@ export default function CheckoutIngresso() {
       return;
     }
     if (seatStatuses[seatId]?.status !== 'livre') return;
-    if (prev.length >= totalQty) return; // já escolheu a quantidade do carrinho
+    if (!seatMapEnabled) return;
+    // Fluxo por assento: cada lugar comum clicado vira um ingresso (Inteira por padrão).
+    if (isReleased(seatId)) {
+      if (totalQty >= maxPurchase) { setSeatLostNotice(`Máximo de ${maxPurchase} ingressos por compra.`); return; }
+      const counts = countSeatTypes(prev, seatTypes);
+      const t = pickDefaultType(commonOrder, counts, { remaining: remainingOf, isMeia: isMeiaIdx });
+      if (t == null) { setSeatLostNotice('Os ingressos disponíveis para este evento esgotaram.'); return; }
+      setSeatTypes(st => ({ ...st, [seatId]: t }));
+    }
     setSelectedSeats([...prev, seatId]);
+  };
+
+  // Trocar o tipo de ingresso de um lugar já escolhido (Inteira, Meia, ...).
+  const changeSeatType = (seatId: string, typeIdx: number) => {
+    const err = seatTypeChangeError({ selectedSeats, seatTypes, seatId, nextIdx: typeIdx, remaining: remainingOf, isMeia: isMeiaIdx });
+    if (err) { setSeatLostNotice(err); return; }
+    setSeatLostNotice(null);
+    setSeatTypes(st => ({ ...st, [seatId]: typeIdx }));
   };
 
   // Ingresso PCD/acompanhante removido do carrinho: solta os lugares que sobraram.
@@ -543,7 +589,7 @@ export default function CheckoutIngresso() {
       const remaining = stockByIdx[String(idx)]?.remaining ?? Infinity;
       const typeCap = Math.min(isMeia ? 1 : 99, remaining);
       // Garante que o total não estoura o limite por compra.
-      const othersQty = Object.entries(prev).reduce((s, [k, q]) => s + (Number(k) === idx ? 0 : q), 0);
+      const othersQty = Object.entries(seatMapEnabled ? cart : prev).reduce((s, [k, q]) => s + (Number(k) === idx ? 0 : q), 0);
       const globalCap = Math.max(0, maxPurchase - othersQty);
       const clamped = Math.max(0, Math.min(nextQty, typeCap, globalCap));
       const next = { ...prev };
@@ -556,15 +602,14 @@ export default function CheckoutIngresso() {
   // ─── Cupom: aplica + re-valida quando o total muda (cart-level) ───────────
   // Preço por zona: com todos os lugares escolhidos, cada ingresso passa a custar o preço da zona do
   // seu lugar (mesma função que o servidor usa). Antes disso vale o preço-base, só de estimativa.
-  const [seatPrefs, setSeatPrefs] = useState<Record<string, number>>({});
   const zoneIngressos: any[] = Array.isArray(event?.ingressos_config) ? event.ingressos_config : [];
   const seatAssignments = useMemo(() => {
-    if (!zonePriced || selectedSeats.length !== totalQty || totalQty === 0) return null;
+    if (!seatMapEnabled || selectedSeats.length !== totalQty || totalQty === 0) return null;
     const tipoById = new Map(selectedSeats.map(id => [id, String(seatStatuses[id]?.seat_tipo ?? 'comum')]));
-    return resolveSeatAssignments({ lines, seatIds: selectedSeats, tipoById, prefs: seatPrefs });
-  }, [zonePriced, selectedSeats, totalQty, lines, seatStatuses, seatPrefs]);
+    return resolveSeatAssignments({ lines, seatIds: selectedSeats, tipoById, prefs: seatTypes });
+  }, [seatMapEnabled, selectedSeats, totalQty, lines, seatStatuses, seatTypes]);
   const zoned = useMemo(() => {
-    if (!seatAssignments) return null;
+    if (!zonePriced || !seatAssignments) return null;
     try {
       const seatInfo = new Map(selectedSeats.map(id => [id, { zone_key: zoneBySeat[id] ?? null, seat_tipo: seatStatuses[id]?.seat_tipo ?? null }]));
       return applyZonePricing({
@@ -718,8 +763,8 @@ export default function CheckoutIngresso() {
           coupon_code: appliedCouponCode ?? undefined,
           quote_id: quote?.id,
           ...(feeEnabled ? { payment_method: payMethod, installments: payMethod === 'card' ? installments : 1 } : {}),
-          ...(seatMapEnabled ? { seat_ids: selectedSeats, hold_token: holdToken ?? undefined } : {}),
-          ...(zonePriced && seatAssignments ? { seat_assignments: seatAssignments } : {}),
+          ...(seatMapEnabled ? { seat_ids: seatAssignments ? orderSeatsByType(seatAssignments) : selectedSeats, hold_token: holdToken ?? undefined } : {}),
+          ...(seatAssignments ? { seat_assignments: seatAssignments } : {}),
         },
       });
       if (invokeErr) {
@@ -773,7 +818,7 @@ export default function CheckoutIngresso() {
   }
 
   // Carrinho vazio (refresh sem state, ou removeu tudo) → volta pro evento.
-  if (event && lines.length === 0) {
+  if (event && lines.length === 0 && !seatMapEnabled) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 text-center">
@@ -854,6 +899,7 @@ export default function CheckoutIngresso() {
         )}
 
         {/* Resumo editável do carrinho */}
+        {!seatMapEnabled && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 space-y-3">
           <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Ingressos</p>
           {lines.map(l => {
@@ -918,6 +964,40 @@ export default function CheckoutIngresso() {
             </p>
           )}
         </div>
+        )}
+
+        {/* Lugar especial (PCD, pessoa obesa, acompanhante): o ingresso é o que libera o lugar no mapa */}
+        {seatMapEnabled && ingressosAll.some(t => t?.nome && ticketSeatKind(t) !== 'comum') && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 space-y-3">
+            <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Precisa de lugar para pessoa com deficiência, pessoa obesa ou acompanhante?</p>
+            <p className="text-[11px] text-slate-600">Adicione o ingresso especial aqui e depois escolha o lugar azul no mapa. Os demais ingressos você escolhe direto no mapa.</p>
+            {ingressosAll.map((t, i) => ({ t, i })).filter(({ t }) => t?.nome && ticketSeatKind(t) !== 'comum').map(({ t, i }) => {
+              const qty = cart[String(i)] ?? 0;
+              const r = resolveLote(Array.isArray(t.lotes) ? t.lotes : [], todayISO());
+              const preco = quote?.prices[String(i)]?.preco ?? (r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0));
+              const atMax = totalQty >= maxPurchase || qty >= Math.min(99, remainingOf(i));
+              return (
+                <div key={i} className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 first:border-t-0 first:pt-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black uppercase tracking-tight text-slate-900 truncate">{t.nome}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">{formatBRL(preco)} cada</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button type="button" aria-label={`Diminuir quantidade de ${t.nome}`} disabled={qty <= 0} onClick={() => setLineQty(i, qty - 1)}
+                      className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 flex items-center justify-center">
+                      {qty <= 1 ? <Trash2 size={14} /> : <Minus size={14} />}
+                    </button>
+                    <span className="text-base font-black tabular-nums w-5 text-center">{qty}</span>
+                    <button type="button" aria-label={`Adicionar um ${t.nome}`} disabled={atMax} onClick={() => setLineQty(i, qty + 1)}
+                      className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-brand-primary-strong disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center">
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Totais de meia-entrada + texto da Lei 12.933 (Decreto 8.537 art. 11: todo ponto de venda virtual) */}
         <div className="mb-4">
@@ -976,7 +1056,7 @@ export default function CheckoutIngresso() {
                 <Armchair size={14} /> Escolher lugar
               </p>
               <p className="text-[10px] text-slate-500">
-                {selectedSeats.length}/{totalQty} selecionado{totalQty === 1 ? '' : 's'}
+                {selectedSeats.length} lugar{selectedSeats.length === 1 ? '' : 'es'} escolhido{selectedSeats.length === 1 ? '' : 's'} · máx. {maxPurchase}
               </p>
             </div>
 
@@ -1011,7 +1091,7 @@ export default function CheckoutIngresso() {
               <SeatZoneLegend
                 variant="auto"
                 zones={seatZones}
-                types={lines.map(l => ({
+                types={commonOrder.map(i => ({ idx: i, nome: String(ingressosAll[i]?.nome ?? '') })).map(l => ({
                   idx: l.idx,
                   nome: l.nome,
                   priceByZone: Object.fromEntries(seatZones.map(z => {
@@ -1037,7 +1117,7 @@ export default function CheckoutIngresso() {
               pcdQty={pcdQty}
               obesoQty={obesoQty}
               compQty={compQty}
-              comumQty={comumQty}
+              comumQty={seatMapEnabled ? Math.max(0, maxPurchase - pcdQty - compQty) : comumQty}
               onBlocked={setSeatLostNotice}
               showOrientation
               seatZoneColors={zonePriced ? Object.fromEntries(Object.entries(zoneBySeat).flatMap(([id, k]) => { const c = seatZones.find(z => z.key === k)?.cor; return c ? [[id, c]] : []; })) : undefined}
@@ -1058,20 +1138,30 @@ export default function CheckoutIngresso() {
               </div>
             )}
 
-            {zonePriced && selectedSeats.length > 0 && (
+            {selectedSeats.length > 0 && (
               <SeatZoneSelection
-              variant="auto"
+                variant="auto"
                 zones={seatZones}
                 rows={selectedSeats.map(id => {
                   const a = seatAssignments?.find(x => x.seat_id === id);
+                  const typeIdx = a?.ticket_type_idx ?? seatTypes[id] ?? null;
                   const zk = zoneBySeat[id] ?? DEFAULT_ZONE_KEY;
-                  const g = zoned?.resolved.find(r => r.idx === a?.ticket_type_idx && r.zoneKey === zk);
-                  return { seatId: id, zoneKey: zoneBySeat[id] ?? null, typeIdx: a?.ticket_type_idx ?? null, price: g ? g.precoUnit : null };
+                  const g = zoned?.resolved.find(r => r.idx === typeIdx && r.zoneKey === zk);
+                  const price = g ? g.precoUnit : (typeIdx != null ? (lines.find(l => l.idx === typeIdx)?.precoUnit ?? null) : null);
+                  return { seatId: id, zoneKey: zoneBySeat[id] ?? null, typeIdx, price };
                 })}
-                swappable={lines.filter(l => l.seatKind === 'comum').map(l => ({ idx: l.idx, nome: l.nome }))}
-                typeNameByIdx={Object.fromEntries(lines.map(l => [l.idx, l.nome]))}
-                onChangeType={(seatId, typeIdx) => setSeatPrefs(prev => ({ ...prev, [seatId]: typeIdx }))}
+                swappable={commonOrder.map(i => ({ idx: i, nome: String(ingressosAll[i]?.nome ?? '') }))}
+                typeNameByIdx={Object.fromEntries(ingressosAll.map((t, i) => [i, String(t?.nome ?? '')]))}
+                onChangeType={changeSeatType}
+                onRemove={toggleSeat}
               />
+            )}
+
+            {selectedSeats.some(id => seatTypes[id] != null && isMeiaIdx(seatTypes[id])) && (
+              <p className="mt-2 text-[10px] text-amber-700 flex items-start gap-1.5">
+                <AlertCircle size={11} className="mt-0.5 shrink-0" />
+                <span><strong>Lei 12.933:</strong> meia-entrada é nominativa e limitada a 1 por CPF. Apresente o documento que comprove o benefício na entrada.</span>
+              </p>
             )}
 
             {companionOffer && (
@@ -1099,7 +1189,7 @@ export default function CheckoutIngresso() {
         )}
 
         {/* Form do comprador */}
-        <form onSubmit={handlePay} noValidate>
+        <form id="dados-comprador" onSubmit={handlePay} noValidate>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 space-y-3">
           <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Dados do comprador</p>
 
@@ -1233,6 +1323,32 @@ export default function CheckoutIngresso() {
           Após confirmar o pagamento (PIX/cartão/boleto), você recebe seus ingressos digitais com QR no email.
         </p>
       </div>
+
+      {/* Fluxo por assento: total e botão sempre à vista enquanto escolhe os lugares */}
+      {seatMapEnabled && (
+        <>
+          <div className="h-24" aria-hidden="true" />
+          <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="max-w-2xl mx-auto flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-600">
+                  {selectedSeats.length === 0 ? 'Nenhum lugar escolhido' : `${selectedSeats.length} lugar${selectedSeats.length === 1 ? '' : 'es'}`}
+                </p>
+                <p className="text-lg font-black tabular-nums text-slate-900">{formatBRL(breakdown?.totalCharged ?? totalBase)}</p>
+              </div>
+              <button
+                type="button"
+                disabled={selectedSeats.length === 0 || !seatsReady}
+                onClick={() => document.getElementById('dados-comprador')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="px-5 py-3 bg-brand-primary-strong disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2"
+              >
+                {selectedSeats.length > 0 && <span className="px-2 py-0.5 rounded-lg bg-white/20 tabular-nums">{selectedSeats.length}</span>}
+                Continuar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

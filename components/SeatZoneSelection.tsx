@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react';
 import { isLightNow, zoneDisplayColor } from '../utils/zoneColor';
 import type { SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 
@@ -13,11 +14,13 @@ interface Props {
   swappable: SelectableType[];
   typeNameByIdx: Record<number, string>;
   onChangeType: (seatId: string, typeIdx: number) => void;
+  /** Tirar o lugar da seleção (lixeira ao lado do preço). */
+  onRemove?: (seatId: string) => void;
   variant?: 'dark' | 'auto';
 }
 
 /** Lugares escolhidos: zona, preço e (com 2+ tipos no carrinho) qual ingresso vai em cada lugar. */
-export default function SeatZoneSelection({ rows, zones, swappable, typeNameByIdx, onChangeType, variant = 'dark' }: Props) {
+export default function SeatZoneSelection({ rows, zones, swappable, typeNameByIdx, onChangeType, onRemove, variant = 'dark' }: Props) {
   if (rows.length === 0) return null;
   const box = variant === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10';
   const strong = variant === 'dark' ? 'text-white' : 'text-slate-900 dark:text-white';
@@ -44,7 +47,7 @@ export default function SeatZoneSelection({ rows, zones, swappable, typeNameById
                   value={r.typeIdx as number}
                   onChange={e => onChangeType(r.seatId, Number(e.target.value))}
                   aria-label={`Ingresso do lugar ${r.seatId}`}
-                  className="bg-transparent border border-white/20 rounded-lg py-1 px-2 text-xs font-bold text-inherit"
+                  className="bg-transparent border border-slate-300 dark:border-white/20 rounded-lg py-1 px-2 text-xs font-bold text-inherit"
                 >
                   {swappable.map(t => <option key={t.idx} value={t.idx} className="text-black">{t.nome}</option>)}
                 </select>
@@ -52,6 +55,12 @@ export default function SeatZoneSelection({ rows, zones, swappable, typeNameById
                 <span className={muted}>{r.typeIdx != null ? typeNameByIdx[r.typeIdx] : ''}</span>
               )}
               <span className={`ml-auto font-black tabular-nums ${strong}`}>{r.price != null ? formatBRL(r.price) : '—'}</span>
+              {onRemove && (
+                <button type="button" onClick={() => onRemove(r.seatId)} aria-label={`Tirar o lugar ${r.seatId}`}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-rose-500/10 hover:text-rose-600 ${muted}`}>
+                  <Trash2 size={13} aria-hidden="true" />
+                </button>
+              )}
             </li>
           );
         })}
