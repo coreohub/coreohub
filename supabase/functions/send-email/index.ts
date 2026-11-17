@@ -1844,6 +1844,57 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
   }
 }
 
+interface SalesOpenReminderPayload {
+  /** E-mail de quem pediu o aviso (destino). */
+  subscriberEmail:  string
+  eventoNome:       string
+  eventoSlug?:      string | null
+  eventoCover?:     string | null
+  /** Nome da sessão (ex.: "Elenco 1"), quando o evento tem sessões. */
+  sessaoLabel?:     string | null
+  /** Link de descadastro (obrigatório: o e-mail é uma lista opt-in). */
+  unsubscribeUrl:   string
+  produtorEmail?:   string | null
+  appUrl?:          string
+}
+
+function buildSalesOpenReminder(p: SalesOpenReminderPayload) {
+  const base = p.appUrl ?? 'https://app.coreohub.com'
+  const ctaUrl = p.eventoSlug ? `${base}/evento/${p.eventoSlug}` : `${base}/festivais`
+  const titulo = p.sessaoLabel ? `${p.eventoNome} — ${p.sessaoLabel}` : p.eventoNome
+  const coverBlock = p.eventoCover
+    ? `<div style="margin-bottom:18px;border-radius:14px;overflow:hidden;">
+         <img src="${escape(p.eventoCover)}" alt="${escape(p.eventoNome)}" width="100%" style="display:block;width:100%;height:auto;" />
+       </div>`
+    : ''
+  const contentHtml = `
+    ${coverBlock}
+    <div style="margin-top:4px;padding:22px;border-radius:14px;background:#fff5f8;border:2px solid #ff0068;text-align:center;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#ff0068;">Vendas abertas</p>
+      <p style="margin:8px 0 0;font-size:22px;font-weight:900;color:#0b0b0f;letter-spacing:-.01em;">${escape(titulo)}</p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Você pediu para ser avisado quando os ingressos abrissem. Os lugares costumam sair rápido, então garanta o seu agora.
+    </p>
+    <p style="margin:18px 0 0;font-size:11px;line-height:1.6;color:#94a3b8;">
+      Não quer mais esse aviso? <a href="${escape(p.unsubscribeUrl)}" style="color:#94a3b8;">Sair da lista</a>.
+    </p>`
+  return {
+    subject: `[${p.eventoNome}] As vendas de ingresso abriram`,
+    html: baseLayout({
+      preheader: `Os ingressos de ${p.eventoNome} já estão à venda.`,
+      title: 'Os ingressos abriram',
+      intro: `Você pediu um aviso sobre <strong>${escape(p.eventoNome)}</strong>. As vendas começaram.`,
+      contentHtml,
+      ctaLabel: 'Comprar ingressos',
+      ctaUrl,
+      footerNote: 'Você recebeu este e-mail porque pediu um aviso de abertura de vendas na página do evento. Você receberá só este aviso.',
+      // Aviso de marketing/lembrete: sem transação envolvida.
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
 // ─── Taxa de plano em atraso (Termo do Produtor, cláusula 5.6) ─────
 
 interface PlanFeeDeletionWarningPayload {
@@ -2346,6 +2397,7 @@ interface SendEmailRequest {
     | 'video_rejected'
     | 'payout_released'
     | 'lead_reengagement'
+    | 'sales_open_reminder'
     | 'plan_fee_deletion_warning'
     | 'plan_fee_invoice'
     | 'plan_fee_overdue_admin'
@@ -2787,6 +2839,19 @@ Deno.serve(async (req) => {
         if (typeof p.diasRestantes !== 'number') throw new Error('diasRestantes é obrigatório')
         const tpl = buildLeadReengagement(p)
         to = p.leadEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail ?? undefined
+        break
+      }
+      case 'sales_open_reminder': {
+        const p = payload as unknown as SalesOpenReminderPayload
+        if (!p.subscriberEmail) throw new Error('subscriberEmail é obrigatório')
+        if (!p.eventoNome) throw new Error('eventoNome é obrigatório')
+        if (!p.unsubscribeUrl) throw new Error('unsubscribeUrl é obrigatório')
+        const tpl = buildSalesOpenReminder(p)
+        to = p.subscriberEmail
         subject = tpl.subject
         html = tpl.html
         festivalName = p.eventoNome

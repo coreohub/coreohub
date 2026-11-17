@@ -486,6 +486,13 @@ verify_jwt = false
 import_map = "./functions/subscribe-sales-open/deno.json"
 entrypoint = "./functions/subscribe-sales-open/index.ts"
 
+# Link "Sair da lista" do e-mail de abertura de vendas. verify_jwt=false (público, GET com token).
+[functions.unsubscribe-sales-open]
+enabled = true
+verify_jwt = false
+import_map = "./functions/unsubscribe-sales-open/deno.json"
+entrypoint = "./functions/unsubscribe-sales-open/index.ts"
+
 # Tier 2: refund de ingresso. verify_jwt=true porque requer auth do produtor
 # (ou super admin). Função revalida permissão internamente.
 [functions.refund-audience-ticket]
