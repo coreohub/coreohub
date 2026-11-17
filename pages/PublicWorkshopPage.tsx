@@ -14,6 +14,7 @@ import { diffDias, todayISO, findNextWorkshopLot } from '../utils/lotes';
 import AvisoViradaLote from '../components/AvisoViradaLote';
 import PriceFeeNote from '../components/PriceFeeNote';
 import { computePriceDisclosure } from '../utils/priceDisclosure';
+import { safeHttpUrl } from '../utils/safeUrl';
 import {
   Loader2, AlertCircle, ArrowLeft, Calendar, Clock, MapPin, User as UserIcon,
   GraduationCap, Tag, Users, Globe, Instagram, Award, Share2,
@@ -487,7 +488,7 @@ const PublicWorkshopPage: React.FC = () => {
                     </a>
                   )}
                   {workshop.professor_site_url && (
-                    <a href={workshop.professor_site_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-[#ff0068]">
+                    <a href={safeHttpUrl(workshop.professor_site_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-[#ff0068]">
                       <Globe size={12} />Site
                     </a>
                   )}

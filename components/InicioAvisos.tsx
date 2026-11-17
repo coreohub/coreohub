@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Megaphone, ListOrdered, ExternalLink, Clock } from 'lucide-react';
 import type { Announcement, OrdemItem } from '../hooks/useInicioAvisos';
 import { formatDataBRComDia } from '../utils/lotes';
+import { safeHttpUrl } from '../utils/safeUrl';
 
 /** Avisos manuais do produtor. Aparece perto do topo da Início — é
  *  informação operacional urgente (mudança de local, atraso), não onboarding. */
@@ -26,7 +27,7 @@ export const AvisosDoProdutor: React.FC<{ announcements: Announcement[] }> = ({ 
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{a.body}</p>
             {a.cta_label && a.cta_url && (
               <a
-                href={a.cta_url}
+                href={safeHttpUrl(a.cta_url)}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"

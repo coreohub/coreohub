@@ -23,6 +23,7 @@ import { computeInscricaoCheckout, inscricaoLineApplies } from '../supabase/func
 import { isRegistrationPaid } from '../utils/registrationStatus';
 import { resolveTipoApresentacaoLabel, type FormatoLabelConfig } from '../utils/formatoParticipacao';
 import { usePwaUpdate } from '../contexts/PwaUpdateContext';
+import { safeHttpUrl } from '../utils/safeUrl';
 
 /* ══════════════════════════════════════════════════════════════
    TYPES
@@ -2061,7 +2062,7 @@ const MinhasCoreografias = () => {
                       ) : reg.video_url ? (
                         <div className="flex items-center gap-2 text-[11px]">
                           <span className="text-slate-400">Vídeo:</span>
-                          <a href={reg.video_url} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline truncate">{reg.video_url}</a>
+                          <a href={safeHttpUrl(reg.video_url)} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline truncate">{reg.video_url}</a>
                           <button
                             onClick={() => { setEditingVideo(reg.id); setVideoLinkInput(reg.video_url ?? ''); }}
                             className="ml-auto text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068]"

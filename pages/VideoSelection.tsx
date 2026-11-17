@@ -10,6 +10,7 @@ import { supabase, updateVideoFeeStatus } from '../services/supabase';
 import { maskMoeda, parseMoeda } from '../utils/masks';
 import EventPickerSheet from '../components/EventPickerSheet';
 import VendasTabs from '../components/VendasTabs';
+import { safeHttpUrl } from '../utils/safeUrl';
 
 type VideoStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'conditional' | 'review_later';
 
@@ -716,7 +717,7 @@ const VideoSelection: React.FC = () => {
                     <div className="flex justify-end gap-2">
                       {reg.video_url && (
                         <a
-                          href={reg.video_url}
+                          href={safeHttpUrl(reg.video_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all"
@@ -801,7 +802,7 @@ const VideoSelection: React.FC = () => {
                     </div>
                   ) : (
                     <a
-                      href={reviewing.video_url}
+                      href={safeHttpUrl(reviewing.video_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl hover:border-[#ff0068] transition-all group"

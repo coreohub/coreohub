@@ -41,6 +41,7 @@ import SessionStatusBanner from '../components/SessionStatusBanner';
 import { ticketCategory } from '../utils/meiaEntrada';
 import EventInfoSection from '../components/EventInfoSection';
 import { parseInfoConfig, hasInfoContent } from '../utils/eventInfo';
+import { safeHttpUrl } from '../utils/safeUrl';
 
 /** Deriva nome do lote pelo índice/posição. Lote único → null (não mostra label).
  *  Múltiplos lotes → "Lote N" para intermediários, "Último Lote" pro final. */
@@ -1408,7 +1409,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             visível pra qualquer visitante sem precisar rolar a página. */}
         {event.destaque_link_url && (
           <a
-            href={event.destaque_link_url}
+            href={safeHttpUrl(event.destaque_link_url)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 px-6 py-4 bg-[#1de7f2]/10 border border-[#1de7f2]/30 hover:bg-[#1de7f2]/20 rounded-2xl transition-all group"
@@ -1624,7 +1625,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Vendas encerradas</p>
                 ) : (
                 <a
-                  href={config.url_ingressos}
+                  href={safeHttpUrl(config.url_ingressos)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-3 px-6 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
@@ -1834,7 +1835,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                           })()}
                           {!eventOver && !salesEnabled && t.link && (
                             <a
-                              href={t.link}
+                              href={safeHttpUrl(t.link)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"
@@ -2408,7 +2409,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       />
                     );
                     return s.link ? (
-                      <a key={i} href={s.link} target="_blank" rel="noopener noreferrer" title={s.nome}>{Img}</a>
+                      <a key={i} href={safeHttpUrl(s.link)} target="_blank" rel="noopener noreferrer" title={s.nome}>{Img}</a>
                     ) : (
                       <div key={i} title={s.nome}>{Img}</div>
                     );
@@ -2434,7 +2435,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               </div>
             </div>
             <a
-              href={config.url_live}
+              href={safeHttpUrl(config.url_live)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-red-600/20 whitespace-nowrap"
