@@ -1,3 +1,4 @@
+import { isLightNow, zoneDisplayColor } from '../utils/zoneColor';
 import type { SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 
 const formatBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -35,7 +36,7 @@ export default function SeatZoneSelection({ rows, zones, swappable, typeNameById
             <li key={r.seatId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               <span className={`font-black tabular-nums w-14 ${strong}`}>{r.seatId}</span>
               <span className="inline-flex items-center gap-1.5 min-w-[5.5rem]">
-                <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: z?.cor ?? '#64748b' }} aria-hidden="true" />
+                <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: z ? (variant !== 'dark' && isLightNow() ? zoneDisplayColor(z.cor) : z.cor) : '#64748b' }} aria-hidden="true" />
                 <span className={muted}>{z?.nome ?? 'Sem zona'}</span>
               </span>
               {canSwap ? (

@@ -7,6 +7,7 @@
  * e feita pela edge function swap-ticket-seat (RPC tudo-ou-nada, com auditoria).
  */
 
+import { remapZonesForPublic } from '../utils/zoneColor';
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X, Armchair, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
@@ -51,7 +52,8 @@ interface Props {
   onDone: (r: SwapSeatResult) => void;
 }
 
-const SwapSeatModal: React.FC<Props> = ({ ticket, rowsConfig, seatStatuses, zoneBySeat, seatZones, groupOtherSeats, orderMates = [], onClose, onDone }) => {
+const SwapSeatModal: React.FC<Props> = ({ ticket, rowsConfig, seatStatuses, zoneBySeat, seatZones: seatZonesRaw, groupOtherSeats, orderMates = [], onClose, onDone }) => {
+  const seatZones = useMemo(() => remapZonesForPublic(seatZonesRaw), [seatZonesRaw]);
   const [newSeat, setNewSeat] = useState<string | null>(null);
   const [wholeOrder, setWholeOrder] = useState(false);
   const [newSeats, setNewSeats] = useState<string[]>([]);

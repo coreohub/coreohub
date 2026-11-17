@@ -14,6 +14,7 @@
  *   → comprador recebe email com 1 link /meu-ingresso/<token> por ingresso.
  */
 
+import { remapZonesForPublic } from '../utils/zoneColor';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
@@ -376,7 +377,7 @@ export default function CheckoutIngresso() {
   }, [event?.id]);
 
   // Preço por zona: só com mapa, zonas e algum preço por zona configurado.
-  const seatZones: SeatZone[] = Array.isArray((event as any)?.seat_zones) ? (event as any).seat_zones : [];
+  const seatZones: SeatZone[] = remapZonesForPublic(Array.isArray((event as any)?.seat_zones) ? (event as any).seat_zones as SeatZone[] : []);
   const zonePriced = zonePricingActive(seatMapEnabled, seatZones, Array.isArray(event?.ingressos_config) ? event.ingressos_config : []);
 
   const { rowsConfig, seatStatuses, markSeatsOccupied, zoneBySeat } = useSeatMap({
@@ -1002,7 +1003,7 @@ export default function CheckoutIngresso() {
               </p>
             ) : (
               <p className="text-[10px] text-slate-500 mb-3">
-                Ao escolher um lugar, ele fica reservado para você por 10 minutos.
+                Toque num lugar disponível para escolher. Ao escolher, ele fica reservado para você por 10 minutos.
               </p>
             )}
 

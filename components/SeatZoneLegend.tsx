@@ -1,3 +1,4 @@
+import { isLightNow, zoneDisplayColor } from '../utils/zoneColor';
 import type { SeatZone } from '../supabase/functions/_shared/seat-zone-pricing';
 
 const formatBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -16,13 +17,15 @@ interface Props {
 /** Legenda do mapa por zona: cor, nome e preço de cada ingresso na zona. */
 export default function SeatZoneLegend({ zones, types, freeByZone, variant = 'dark' }: Props) {
   if (zones.length === 0) return null;
+  const light = variant !== 'dark' && isLightNow();
+  const corOf = (c: string) => (light ? zoneDisplayColor(c) : c);
   const muted = variant === 'dark' ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400';
   const strong = variant === 'dark' ? 'text-white' : 'text-slate-900 dark:text-white';
   return (
     <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1" aria-label="Zonas do mapa e preços">
       {zones.map(z => (
         <li key={z.key} className="flex items-start gap-2 px-1 py-1">
-          <span className="mt-1 w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: z.cor }} aria-hidden="true" />
+          <span className="mt-1 w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: corOf(z.cor) }} aria-hidden="true" />
           <div className="min-w-0">
             <p className={`text-[11px] font-black uppercase tracking-wide ${strong}`}>
               {z.nome}
