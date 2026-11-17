@@ -115,7 +115,15 @@ try {
   const [behind, ahead] = run('git', ['rev-list', '--left-right', '--count', `origin/${branch}...HEAD`]).trim().split(/\s+/).map(Number)
   console.log(`  branch: ${branch} | arquivos alterados: ${dirty} | atras da origin: ${behind} | a frente: ${ahead}`)
   if (branch !== 'main') console.log('  aviso: edge function e deployada da pasta local, nao da branch. Deploye so a partir de uma copia da main limpa (worktree).')
-  if (dirty > 0) console.log('  aviso: arvore suja (pode ter trabalho de outra sessao). Nao use git add -A; publique so os seus commits por cherry-pick.')
+  if (dirty > 0) console.log('  aviso: arvore suja (pode ter trabalho de outra sessao). Nao use git add -A; commite so os seus arquivos.')
+  // dev x main: a dev nao pode ficar para tras da main nem ganhar commits "gemeos" por cherry-pick.
+  try {
+    const [devBehind, devAhead] = run('git', ['rev-list', '--left-right', '--count', 'origin/main...origin/dev']).trim().split(/\s+/).map(Number)
+    console.log(`  dev x main: dev esta ${devBehind} commit(s) atras da main e ${devAhead} a frente`)
+    if (devBehind > 0) console.log('  aviso: a dev esta atras da main. Faca merge da main na dev (git merge origin/main, sem -X theirs, resolvendo a mao) antes de trabalhar nela.')
+    const gemeos = run('git', ['cherry', 'origin/main', 'origin/dev']).split('\n').filter(l => l.startsWith('-')).length
+    if (gemeos > 0) console.log(`  aviso: ${gemeos} commit(s) da dev ja estao na main com outro hash (cherry-pick). Nao suba por cherry-pick: promova a dev inteira com merge/fast-forward.`)
+  } catch { /* origin/dev pode nao existir */ }
 } catch (e) {
   console.log(`  aviso: nao consegui ler o git: ${String(e.message).split('\n')[0]}`)
 }
