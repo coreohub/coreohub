@@ -1336,3 +1336,14 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - Observacao: a CLI global `supabase` 2.90 nao le o `config.toml` (chave `[local_smtp]`); usar `npx supabase` (3.2.0) com `--yes`. O worktree nao tem o projeto linkado: rodar o `pre-deploy-check` pela pasta principal.
 - Reverter: `git revert eb85b3a` e redeploy das 3 edges. `subconta_fee_charges` estava vazia (nenhuma taxa cobrada ainda), logo nao havia desconto repetido.
 - NAO verificado: a corrida real do A4 e a falha real da baixa do A3 (so testes unitarios e `deno check`); nenhum repasse real aconteceu desde o deploy.
+
+## 2026-11-17 (noite): auditoria Lote 3, B5, C1, C2 e C6 na main
+
+- B5: `send-email` decide "chamada interna" pelo claim `role === 'service_role'` do JWT (`_shared/jwt-role.ts`), nao por igualdade com a chave. `verify_jwt = true` (o gateway valida a assinatura). Deploy com plataforma parada (142 min sem venda). Verificado: anon + tipo interno = 401; service_role + `producer_welcome` para a conta de teste = 200 (e-mail enviado a `teste.produtor@coreohub.com`).
+- C1: `MeuIngresso.tsx`: erro de rede no polling mantem o ingresso (so retorno vazio sem erro vira "transferido").
+- C2: `usePermission.ts`: `has()` devolve false enquanto carrega (`RequirePermission` e `CheckIn` ja esperam `loading`).
+- C6: `utils/safeUrl.ts` (`safeHttpUrl`, so http/https) nos href de campo digitado: vitrine (destaque, ingressos, live, patrocinadores), PersonCard, avisos, video_url (inscrito e seletiva), site do professor, Ingressos, documentos. Redes sociais da vitrine ja eram normalizadas. Cobre os pontos mais expostos, nao todos os 144 do codigo.
+- Main: `b77d361` (cherry-pick de 12623af, 3fe8d05, 7b69043, 2773dd2; conflito em `PublicWorkshopPage.tsx` resolvido mantendo as classes da main). 779 testes e lint ok no worktree.
+- Reverter: `git revert` do commit do item; B5 exige redeploy de `send-email`.
+- NAO verificado: C1, C2 e C6 no navegador (so tipos e testes unitarios).
+- Pre-existente: `deno check` do `send-email` acusa 3 erros de tipo (`trilha_reminder`, `abandoned_registration`, `calculator_proposal`), tambem na main; nao bloqueiam deploy.
