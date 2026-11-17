@@ -1307,3 +1307,5 @@ Termos, Política e Entrar Juri entraram na trava de claro por rota (commit 9e73
 ### 2026-11-16 (noite) — Mapa de assentos: cores por estado (SÓ NA DEV)
 
 Zonas do mapa público usam paleta fixa azul/verde/âmbar na ordem cadastrada (o dado do evento não muda; `remapZonesForPublic` em `utils/zoneColor.ts`), disponível = lugar cheio com número branco, ocupado = cinza com "×", selecionado = magenta da marca com "✓" e anel escuro. Motivo: o rosa da zona MEIO colidia com o selecionado e o ciano das laterais tinha 1,5:1 sobre branco (mínimo 3:1, WCAG 1.4.11). Medido: azul 5,19, verde 4,55, âmbar 4,83 sobre branco; azul x violeta se confundem em deuteranopia (violeta fora da paleta). Falta: "Siga o evento" junto de "Compartilhar" (aguarda OK), conferir PDV/bloqueio/troca no painel, ver no staging.
+
+No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e foi para dentro do bloco Compartilhar, no fim da pagina da vitrine.
