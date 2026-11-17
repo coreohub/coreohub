@@ -396,6 +396,7 @@ const DEFAULT_GENERAL = {
   eventDate: '',
   endDate: '',
   eventTime: '',
+  sessionLabel: '',
   regDeadline: '',
   trackDeadline: '',
   tipos_apresentacao: ['Competitiva', 'Avaliada'],
@@ -2062,7 +2063,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, seat_map_enabled, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, politica_ingressos, billing_plan, session_group_id')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, seat_map_enabled, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, politica_ingressos, billing_plan, session_group_id, session_label')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2191,6 +2192,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             coverFocalY: evt.cover_focal_y ?? DEFAULT_GENERAL.coverFocalY,
             description: descriptionFromDb,
             eventTime:   evt.event_time || data.hora_evento || DEFAULT_GENERAL.eventTime,
+            sessionLabel: evt.session_label ?? '',
           });
           setSavedDescription(descriptionFromDb);
           setSavedEventName(data.nome_evento || evt.name || DEFAULT_GENERAL.eventName);
@@ -2638,6 +2640,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           state:                   cityState[1] || null,
           formacoes_config:        formacoesAdapted,
           event_time:              general.eventTime || null,
+          session_label:           general.sessionLabel?.trim() || null,
           programacao_config:      programacao,
           politica_ingressos:      politicaIngressos,
           patrocinadores_config:   sponsors,
@@ -3134,6 +3137,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   />
                   <p className="text-[9px] text-slate-400 mt-1">Aparece na vitrine pública. Ex: 19:00</p>
                 </div>
+                {sessionGroupId && (
+                  <div className="sm:col-span-2">
+                    <label className={label}>Nome da sessão (opcional)</label>
+                    <input
+                      type="text"
+                      maxLength={40}
+                      value={general.sessionLabel}
+                      onChange={e => setGeneral({ ...general, sessionLabel: e.target.value })}
+                      placeholder="Ex: Elenco 1"
+                      className={input}
+                    />
+                    <p className="text-[9px] text-slate-400 mt-1">Aparece junto da data e do horário na vitrine, no carrinho, em Vendas e no credenciamento. Vazio mostra só data e horário. Vale só para esta sessão.</p>
+                  </div>
+                )}
               </div>
 
               {/* Local */}

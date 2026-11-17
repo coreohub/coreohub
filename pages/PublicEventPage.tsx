@@ -154,7 +154,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Sessões do mesmo espetáculo (eventos irmãos ligados por session_group_id).
   // Só aparece quando há 2+ sessões públicas; cada uma tem URL própria.
   const [eventSessions, setEventSessions] = useState<Array<{
-    id: string; slug: string | null; name: string; start_date: string | null; event_time: string | null; is_current: boolean;
+    id: string; slug: string | null; name: string; start_date: string | null; event_time: string | null; is_current: boolean; session_label?: string | null;
   }>>([]);
   // Várias sessões e nenhuma escolhida (sem ?sessao=): os ingressos ficam bloqueados até o comprador escolher.
   const needsSessionChoice = eventSessions.length > 1 && !sessaoParam && !forcedSlug;
@@ -1532,6 +1532,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     onClick={() => { if (!selected) pickSession(s); else scrollToSection('ingressos'); }}
                     className={`relative text-left p-5 border rounded-2xl transition-colors ${selected ? 'bg-[#ff0068]/10 border-[#ff0068] ring-1 ring-[#ff0068]/50' : 'bg-white border-slate-200 hover:border-[#ff0068]/50'}`}
                   >
+                    {s.session_label && <p className="text-[11px] font-black uppercase tracking-widest text-brand-primary-ink mb-1">{s.session_label}</p>}
                     <p className="font-bold text-sm text-slate-900">{formatDate(s.start_date ?? undefined)}</p>
                     <p className="text-4xl font-black text-brand-primary-ink tabular-nums tracking-tighter mt-2">{s.event_time?.slice(0, 5) || '--:--'}</p>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mt-2">

@@ -10,6 +10,8 @@ export interface SessionInfo {
   event_time: string | null;
   session_group_id?: string | null;
   sessao_status?: string | null;
+  /** Nome opcional da sessão ("Elenco 1"). */
+  session_label?: string | null;
 }
 
 export type SessionVerdict =
@@ -24,11 +26,13 @@ const hhmm = (t: string | null | undefined): string | null => {
 };
 
 /** Rótulo curto: "20/12 às 15:30" (ou só "20/12" sem horário). */
-export function sessionText(s: Pick<SessionInfo, 'start_date' | 'event_time'> | null | undefined): string {
+export function sessionText(s: Pick<SessionInfo, 'start_date' | 'event_time' | 'session_label'> | null | undefined): string {
   const d = ymd(s?.start_date);
   if (!d) return '';
   const h = hhmm(s?.event_time);
-  return `${brDay(d)}${h ? ` às ${h}` : ''}`;
+  const base = `${brDay(d)}${h ? ` às ${h}` : ''}`;
+  const nome = s?.session_label?.trim();
+  return nome ? `${nome} · ${base}` : base;
 }
 
 /** Hoje no calendário de Brasília (AAAA-MM-DD), mesmo com o aparelho em outro fuso. */

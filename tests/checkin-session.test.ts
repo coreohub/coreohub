@@ -63,3 +63,13 @@ describe('checkTicketSession', () => {
     expect(checkTicketSession(s1, [s1, cancel], at('2026-12-20T19:20:00-03:00')).level).toBe('ok');
   });
 });
+
+describe('sessionText com nome da sessão', () => {
+  it('prefixa o nome quando existe e mantém data e horário', () => {
+    expect(sessionText({ start_date: '2026-12-20', event_time: '15:30', session_label: 'Elenco 1' })).toBe('Elenco 1 · 20/12 às 15:30');
+  });
+  it('sem nome (ou só espaços) fica como sempre', () => {
+    expect(sessionText({ start_date: '2026-12-20', event_time: '15:30', session_label: '  ' })).toBe('20/12 às 15:30');
+    expect(sessionText({ start_date: '2026-12-20', event_time: '15:30' })).toBe('20/12 às 15:30');
+  });
+});

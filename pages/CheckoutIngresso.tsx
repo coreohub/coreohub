@@ -197,7 +197,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state, max_installments, event_time, session_group_id, seat_zones')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state, max_installments, event_time, session_group_id, seat_zones, session_label')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -877,7 +877,7 @@ export default function CheckoutIngresso() {
         <p className="text-sm text-slate-600">{event.name}</p>
         {event.start_date && (
           <p className="text-sm font-bold text-slate-800 mb-6">
-            Sessão: {(() => {
+            Sessão: {event.session_label ? `${event.session_label} · ` : ''}{(() => {
               const dt = new Date(`${String(event.start_date).slice(0, 10)}T12:00:00`);
               const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(dt).replace('.', '');
               const dia = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });

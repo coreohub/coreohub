@@ -51,7 +51,7 @@ interface TicketRow {
   qr_code: string | null;
 }
 const TICKET_COLS = 'id, event_id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at, seat_id, qr_code';
-const SESSION_COLS = 'id, name, start_date, end_date, event_time, session_group_id, sessao_status';
+const SESSION_COLS = 'id, name, start_date, end_date, event_time, session_group_id, sessao_status, session_label';
 const PAID_TICKET = ['APROVADO', 'CORTESIA'];
 
 const StatusBadge = ({ ok, label }: { ok: boolean; label: string }) => (
@@ -166,7 +166,7 @@ const CheckIn = () => {
     const ids = [...byEvent.keys()];
     if (req !== statsReq.current) return;
     if (ids.length === 0) { setTicketStats([]); return; }
-    const { data: evs, error: evErr } = await supabase.from('events').select('id, name, start_date, event_time').in('id', ids);
+    const { data: evs, error: evErr } = await supabase.from('events').select('id, name, start_date, event_time, session_label').in('id', ids);
     if (evErr) console.error('[CheckIn] sessões da contagem:', evErr.message);
     const list = (evs ?? []).map(e => ({
       id: e.id as string,
