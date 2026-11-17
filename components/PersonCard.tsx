@@ -11,6 +11,7 @@
 import React, { useEffect } from 'react';
 import { Instagram, Globe, Award, Music2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { safeHttpUrl } from '../utils/safeUrl';
 
 export type GenderRole = 'M' | 'F';
 
@@ -199,7 +200,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
             )}
             {person.site_url && (
               <a
-                href={person.site_url}
+                href={safeHttpUrl(person.site_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
@@ -345,7 +346,7 @@ export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => 
                   )}
                   {person.site_url && (
                     <a
-                      href={person.site_url}
+                      href={safeHttpUrl(person.site_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-colors"

@@ -324,6 +324,7 @@ const customAwardIcon = (name: string): React.ElementType => {
 };
 
 import { motion, AnimatePresence } from 'motion/react';
+import { safeHttpUrl } from '../utils/safeUrl';
 
 type TabType =
   | 'Geral'
@@ -3440,7 +3441,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     {identity.documentos_extras.map((doc, idx) => (
                       <li key={`${doc.url}-${idx}`} className="flex items-center gap-2 text-[11px] bg-slate-50 dark:bg-white/5 rounded-lg px-3 py-2">
                         <FileText size={12} className="text-[#ff0068] shrink-0" />
-                        <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex-1 underline truncate">{doc.nome}</a>
+                        <a href={safeHttpUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="flex-1 underline truncate">{doc.nome}</a>
                         <button
                           type="button"
                           aria-label={`Remover ${doc.nome}`}

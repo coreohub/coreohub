@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ticket, Calendar, MapPin, ChevronRight, Loader2, Search, ExternalLink, Info, QrCode, Clock } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { safeHttpUrl } from '../utils/safeUrl';
 
 interface EventSummary {
   id: string;
@@ -245,7 +246,7 @@ const Ingressos: React.FC = () => {
                     </Link>
                   ) : externalSale ? (
                     <a
-                      href={ev.url_ingressos!}
+                      href={safeHttpUrl(ev.url_ingressos)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="shrink-0 inline-flex items-center gap-1 px-4 py-2.5 border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
