@@ -13,7 +13,7 @@ import {
 } from './payout-attempts.ts'
 import { planPayout, type PayoutItem } from './payout-plan.ts'
 import {
-  resolveSubcontaFee, settleSubcontaFee, SUBCONTA_FEE_MIN_WITHDRAW, type FeeMode,
+  resolveSubcontaFee, settleOrFlagSubcontaFee, SUBCONTA_FEE_MIN_WITHDRAW, type FeeMode,
 } from './subconta-fee.ts'
 
 /** Máximo de ids por `.in()` (URL do PostgREST tem limite de tamanho). */
@@ -112,7 +112,7 @@ export async function runPlannedPayout(opts: {
       return skip('attempt_marking_failed', marked.error.message)
     }
     await updateAttempt(supabase, att.id, { status: 'concluida' })
-    if (att.fee_credit > 0 && opts.fee) await settleSubcontaFee(supabase, opts.fee.producerId, att.transfer_id ?? undefined)
+    if (att.fee_credit > 0 && opts.fee) await settleOrFlagSubcontaFee(supabase, opts.fee.producerId, att.transfer_id ?? undefined)
     return { result: r, coveredCount: att.item_ids.length, coveredIds: att.item_ids, due: 0, feeDeducted: att.fee_credit }
   }
 
@@ -206,7 +206,7 @@ export async function runPlannedPayout(opts: {
     await updateAttempt(supabase, attemptId, { status: 'concluida' })
   }
 
-  if (credit > 0) await settleSubcontaFee(supabase, opts.fee!.producerId, result.transferId)
+  if (credit > 0) await settleOrFlagSubcontaFee(supabase, opts.fee!.producerId, result.transferId)
 
   return { result, coveredCount: plan.coveredIds.length, coveredIds: plan.coveredIds, due: plan.due, feeDeducted: credit }
 }

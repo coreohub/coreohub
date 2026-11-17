@@ -252,17 +252,44 @@ Deno.serve(async (req) => {
         }
 
         let run
+        let liveItems = batch.items
         try {
+          // Relê DENTRO da trava (auditoria Lote 3, A4): a lista `toSend` foi lida antes dela e outro
+          // fluxo pode ter pago estes itens no intervalo. Só entra no plano o que ainda está pendente.
+          const stillPending = new Set<string>()
+          let freshErrMsg: string | null = null
+          const allIds = batch.items.map(i => i.id)
+          for (let i = 0; i < allIds.length && !freshErrMsg; i += 100) { // .in() vira URL: em lotes
+            const { data: fresh, error: freshErr } = await supabase
+              .from('low_value_transfers')
+              .select('id')
+              .in('id', allIds.slice(i, i + 100))
+              .eq('status', 'transferido')
+              .is('pix_sent_at', null)
+            if (freshErr) freshErrMsg = freshErr.message
+            else for (const r of (fresh ?? []) as any[]) stillPending.add(String(r.id))
+          }
+          if (freshErrMsg) {
+            pixSkipped++
+            console.error(`[release-low-value-transfers][ALERT] produtor=${batch.producerId} não consegui reler os itens dentro da trava (${freshErrMsg}) — pula`)
+            continue
+          }
+          liveItems = batch.items.filter(i => stillPending.has(String(i.id)))
+          if (liveItems.length === 0) {
+            pixSkipped++
+            console.warn(`[release-low-value-transfers] produtor=${batch.producerId} itens já pagos por outro fluxo — pula`)
+            continue
+          }
           // Escolhe os itens ANTES de sacar e saca exatamente a soma; a taxa de
           // abertura da subconta vale igual aos outros fluxos de repasse.
-          const netById = new Map(batch.items.map(i => [i.id, i.net]))
+          const netById = new Map(liveItems.map(i => [i.id, i.net]))
           run = await runPlannedPayout({
             supabase,
-            items:            batch.items,
+            items:            liveItems,
             producerApiKey:   prof.asaas_api_key as string,
             producerPixKey:   prof.pix_key as string,
             asaasBaseUrl,
-            description:      `CoreoHub — repasse integral de baixo valor (${batch.items.length} itens)`,
+            description:      `CoreoHub — repasse integral de baixo valor (${liveItems.length} itens)`,
             releasedManually: false,
             attemptsMode:     attemptsMode(Deno.env.get('PAYOUT_ATTEMPTS_MODE')),
             producerId:       batch.producerId,
@@ -298,7 +325,7 @@ Deno.serve(async (req) => {
         }
 
         pixSent++
-        console.log(`[release-low-value-transfers] PIX enviado produtor=${batch.producerId} valor=R$${result.value} itens=${run.coveredCount}/${batch.items.length} transfer=${result.transferId}`)
+        console.log(`[release-low-value-transfers] PIX enviado produtor=${batch.producerId} valor=R$${result.value} itens=${run.coveredCount}/${liveItems.length} transfer=${result.transferId}`)
       }
     }
 
