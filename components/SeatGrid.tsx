@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { readableOnLight } from '../utils/zoneColor';
+import { zoneDisplayColor } from '../utils/zoneColor';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2, Accessibility, Minus, Plus, Maximize2, X, RotateCcw, ArrowLeftRight, Users, Ban, Check } from 'lucide-react';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
@@ -243,7 +243,7 @@ export default function SeatGrid(props: SeatGridProps) {
   }
 
   // Com cor de zona no checkout, o selecionado ganha anel branco (a zona "Frente" também pode ser magenta).
-  const selectedClass = showOrientation && seatZoneColors ? 'bg-[#ff0068] text-white ring-2 ring-white' : 'bg-[#ff0068] text-white';
+  const selectedClass = lightZone ? 'bg-[#ff0068] text-white ring-2 ring-slate-900 ring-offset-1 ring-offset-white' : showOrientation && seatZoneColors ? 'bg-[#ff0068] text-white ring-2 ring-white' : 'bg-[#ff0068] text-white';
   // Palco no topo (como as outras plataformas): o desenho gira 180 graus, os dados não mudam.
   const viewRows = stageOnTop(rowsConfig);
   const hasStage = !!rowsConfig[rowsConfig.length - 1]?.palco_apos;
@@ -251,7 +251,7 @@ export default function SeatGrid(props: SeatGridProps) {
   const barTone = variant === 'dark' ? 'bg-white/10 text-slate-300' : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300';
   const takenClass = variant === 'dark'
     ? 'bg-white/5 text-slate-700 cursor-not-allowed'
-    : 'bg-slate-300 dark:bg-white/5 text-slate-500 dark:text-slate-700 cursor-not-allowed';
+    : 'bg-slate-200 dark:bg-white/5 text-slate-500 dark:text-slate-700 cursor-not-allowed';
   const freeClass = variant === 'dark'
     ? 'bg-white/10 text-slate-400 hover:bg-white/20'
     : 'bg-white ring-1 ring-slate-400 dark:ring-0 dark:bg-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-50 hover:ring-slate-600 dark:hover:bg-white/20';
@@ -341,10 +341,10 @@ export default function SeatGrid(props: SeatGridProps) {
                     aria-pressed={isSelected}
                     aria-disabled={locked || undefined}
                     className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors${markedSeats?.includes(seatId) ? ' ring-2 ring-[#E3FF0A] ring-offset-1 ring-offset-black' : ''}
-                      ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : zoneStyled ? 'hover:brightness-125' : special ? specialFree : freeClass}`}
-                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? (lightZone ? { backgroundColor: '#cbd5e1', color: '#64748b' } : { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 }) : zoneStyled ? (lightZone ? { backgroundColor: `${zc}59`, color: readableOnLight(zc), boxShadow: `inset 0 0 0 1px ${zc}` } : { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` }) : undefined) : undefined}
+                      ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : zoneStyled ? (lightZone ? 'hover:brightness-110' : 'hover:brightness-125') : special ? specialFree : freeClass}`}
+                    style={zc && isSelected && zoneMode ? { backgroundColor: zc, color: '#000', boxShadow: '0 0 0 2px #fff, 0 0 0 3px #000' } : zc && !isSelected ? (isTaken ? (lightZone ? { backgroundColor: '#e2e8f0', color: '#64748b' } : { boxShadow: `inset 0 0 0 1px ${zc}99`, opacity: 0.55 }) : zoneStyled ? (lightZone ? { backgroundColor: zoneDisplayColor(zc), color: '#ffffff' } : { backgroundColor: `${zc}40`, color: zc, boxShadow: `inset 0 0 0 1px ${zc}99` }) : undefined) : undefined}
                   >
-                    {Icon ? <Icon size={s.icon} /> : n}
+                    {Icon ? <Icon size={s.icon} /> : lightZone && !blockMode && !zoneMode && isSelected ? <Check size={s.icon} strokeWidth={3} /> : lightZone && !blockMode && !zoneMode && isTaken ? '×' : n}
                   </button>
                 </span>
               );

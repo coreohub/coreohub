@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readableOnLight, contrastRatio } from '../utils/zoneColor';
+import { readableOnLight, contrastRatio, zoneDisplayColor } from '../utils/zoneColor';
 
 const toRgb = (h: string): [number, number, number] => {
   const n = parseInt(h.slice(1), 16);
@@ -24,5 +24,21 @@ describe('readableOnLight', () => {
 
   it('cor que já passa não muda', () => {
     expect(readableOnLight('#0F172A')).toBe('#0f172a');
+  });
+});
+
+
+describe('zoneDisplayColor', () => {
+  const rgb = (h: string): [number, number, number] => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+  it('rosa, magenta e vermelho viram azul (nao colidem com o selecionado)', () => {
+    for (const c of ['#ff0068', '#e11d48', '#ff3366', '#dc2626']) expect(zoneDisplayColor(c), c).toBe('#0072B2');
+  });
+  it('ciano vivo e outras cores claras ficam com 4,5:1 sobre branco', () => {
+    for (const c of ['#1DE7F2', '#E3FF0A', '#22c55e', '#f59e0b']) {
+      expect(contrastRatio(rgb(zoneDisplayColor(c)), [255, 255, 255]), c).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('cor invalida devolve cinza escuro', () => {
+    expect(zoneDisplayColor('xyz')).toBe('#475569');
   });
 });
