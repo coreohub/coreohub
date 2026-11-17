@@ -1320,3 +1320,10 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - Decisao do dono, sem ter visto um repasse real em `dry` (o plano previa observar antes). Plataforma parada na hora (pre-deploy-check ok), sem saldo liberavel (primeiro repasse real de New Ritmo por volta de 22/11).
 - No primeiro repasse real: conferir o log da `daily-release-funds`/`manual-transfer-now`, a linha em `subconta_fee_charges` (status, transfer_id) e o extrato da Asaas (R$ 12,90 saiu da subconta para a master). Se ficar `pendente`/`incerto`, o repasse daquele produtor trava: conferir o extrato antes de qualquer nova tentativa.
 - Saida de emergencia: `supabase secrets set SUBCONTA_FEE_MODE=off --project-ref ghpltzzijlvykiytwslu --yes`.
+
+## 2026-11-17 (noite): auditoria Lote 3, A1 indice unico da comissao de plateia
+
+- Reverificados A3, A4, B6, B8 e D4 na `main` (nenhum totalmente resolvido): ver `docs/auditoria/LOTE3-pendencias.md`.
+- A1 aplicado em producao com a plataforma parada (`pre-deploy-check --strict` saida 0, 113 min sem venda): `platform_commissions_payment_audience_uniq` UNIQUE (asaas_payment_id, audience_ticket_group_id) WHERE audience_ticket_group_id IS NOT NULL. Antes: 145 linhas de plateia, 0 duplicados. Conferido: indice `indisvalid` e `indisunique`. Webhook ja trata 23505, sem deploy de edge.
+- Reverter: `docs/auditoria/lote3/passo1-reverter.sql` (DROP INDEX CONCURRENTLY). Migration `20261118_platform_commissions_audience_unique.sql`.
+- Nao verificado: comportamento com reentrega concorrente real (so teste em tabela temporaria).
