@@ -94,6 +94,9 @@ describe('asaas-webhook: ligacao do reenvio', () => {
       expect(src).toMatch(new RegExp(`commissionRetryResponse\\(supabase, \\{[^}]*kind: '${kind}'`))
     }
   })
+  it('o fallback por group_id da plateia usa o ticket atualizado (senao aprova sem comissao)', () => {
+    expect(src).toContain('updatedTickets = fallback')
+  })
   it('o catch global conta a falha e nao devolve 200 incondicional', () => {
     expect(src).toContain("kind: 'unexpected'")
     expect(src).toContain('WEBHOOK_UNEXPECTED')

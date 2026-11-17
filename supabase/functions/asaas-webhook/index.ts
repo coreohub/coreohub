@@ -857,7 +857,7 @@ async function handleAudienceTicket(opts: {
     updatePayload.paid_at = new Date().toISOString()
   }
 
-  const { data: updatedTickets, error: updErr } = await supabase
+  let { data: updatedTickets, error: updErr } = await supabase
     .from('audience_tickets')
     .update(updatePayload)
     .eq('payment_id', String(payment.id))
@@ -876,6 +876,9 @@ async function handleAudienceTicket(opts: {
       .eq('id', groupId)
       .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, seat_id, commission_amount, producer_amount, fee_mode, processing_fee_amount, installments')
     if (fallback?.length) {
+      // Antes o resultado do fallback era descartado: o ticket virava APROVADO mas a função devolvia
+      // 'tickets_updated: 0' sem comissão, e-mail nem assento vendido. Usa o que o fallback atualizou.
+      updatedTickets = fallback
       console.log(`[asaas-webhook][audience] fallback group_id atualizou ${fallback.length} ticket(s)`)
     } else {
       console.error(`[asaas-webhook][audience] nenhum ticket encontrado pra payment=${payment.id} group=${groupId}`)
