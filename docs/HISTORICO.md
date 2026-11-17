@@ -1315,3 +1315,8 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - Cenario A (comissao forcada a falhar por gatilho temporario): 500, 500, 500 sem nenhum e-mail ao comprador; na 4a tentativa 200 + 1 e-mail + aviso "Comissao NAO registrada" ao admin. Depois, uma reentrega da Asaas (gatilho ja removido) gravou a comissao e marcou a falha como resolvida, e enviou um 2o e-mail ao comprador: 2 e-mails no total em vez de 1.
 - Achado menor: apos esgotar, a recuperacao tardia reenvia o e-mail porque a comissao e nova. Raro (so apos 3 falhas seguidas + recuperacao). Nao corrigido.
 - Limpeza feita e conferida: gatilho temporario, tickets, comissoes, webhook_failures, notificacoes e a funcao tmp-wh-probe removidos.
+
+### 2026-11-17 - Taxa de abertura de subconta (R$ 12,90) ligada: SUBCONTA_FEE_MODE=on
+- Decisao do dono, sem ter visto um repasse real em `dry` (o plano previa observar antes). Plataforma parada na hora (pre-deploy-check ok), sem saldo liberavel (primeiro repasse real de New Ritmo por volta de 22/11).
+- No primeiro repasse real: conferir o log da `daily-release-funds`/`manual-transfer-now`, a linha em `subconta_fee_charges` (status, transfer_id) e o extrato da Asaas (R$ 12,90 saiu da subconta para a master). Se ficar `pendente`/`incerto`, o repasse daquele produtor trava: conferir o extrato antes de qualquer nova tentativa.
+- Saida de emergencia: `supabase secrets set SUBCONTA_FEE_MODE=off --project-ref ghpltzzijlvykiytwslu --yes`.

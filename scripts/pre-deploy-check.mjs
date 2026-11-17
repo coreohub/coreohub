@@ -25,7 +25,7 @@ const EXPECTED_MODES = {
   PAYMENT_CHECK_MODE: 'observe',   // enforce so depois de 2026-11-29 e sem falso positivo
   JUDGE_SESSION_MODE: 'enforce',
   PAYOUT_ATTEMPTS_MODE: 'on',
-  SUBCONTA_FEE_MODE: 'dry',
+  SUBCONTA_FEE_MODE: 'on',     // ligado em 2026-11-17 (saida de emergencia: off)
 }
 const KNOWN_VALUES = ['off', 'observe', 'dry', 'on', 'enforce']
 
