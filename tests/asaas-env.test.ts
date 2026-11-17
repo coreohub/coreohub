@@ -6,6 +6,7 @@ import {
   resolveWebhookEnvName,
   webhookMatchesEvent,
   SANDBOX_BASE_URL,
+  requireProductionBaseUrl,
   type EnvReader,
 } from '../supabase/functions/_shared/asaas-env';
 
@@ -117,6 +118,35 @@ describe('catraca — leitura direta das chaves Asaas', () => {
       }
       const idx = join(dir, 'index.ts');
       try { scan(name, idx); } catch { /* sem index.ts */ }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('requireProductionBaseUrl (A2: nunca cai no sandbox em silencio)', () => {
+  it('devolve a URL de producao sem barra final', () => {
+    expect(requireProductionBaseUrl(reader({ ASAAS_BASE_URL: 'https://api.asaas.com/v3' }))).toBe('https://api.asaas.com/v3');
+    expect(requireProductionBaseUrl(reader({ ASAAS_BASE_URL: ' https://www.asaas.com/api/v3/ ' }))).toBe('https://www.asaas.com/api/v3');
+  });
+  it('secret ausente ou vazio => erro (nao devolve sandbox)', () => {
+    expect(() => requireProductionBaseUrl(reader({}))).toThrow(/ASAAS_BASE_URL ausente/);
+    expect(() => requireProductionBaseUrl(reader({ ASAAS_BASE_URL: '   ' }))).toThrow(/ausente/);
+  });
+  it('URL apontando para sandbox => erro', () => {
+    expect(() => requireProductionBaseUrl(reader({ ASAAS_BASE_URL: 'https://sandbox.asaas.com/api/v3' }))).toThrow(/sandbox/);
+    expect(() => requireProductionBaseUrl(reader({ ASAAS_BASE_URL: 'https://api-sandbox.asaas.com/v3' }))).toThrow(/sandbox/);
+  });
+});
+
+describe('catraca A2 — sem fallback de ASAAS_BASE_URL para URL fixa', () => {
+  it('nenhuma function usa ASAAS_BASE_URL com fallback para URL fixa', () => {
+    const root = join(__dirname, '..', 'supabase', 'functions');
+    const offenders: string[] = [];
+    for (const name of readdirSync(root)) {
+      const idx = join(root, name, 'index.ts');
+      try {
+        if (/ASAAS_BASE_URL['"]\)\s*\?\?\s*['"`]https?:/.test(readFileSync(idx, 'utf-8'))) offenders.push(name);
+      } catch { /* sem index.ts */ }
     }
     expect(offenders).toEqual([]);
   });

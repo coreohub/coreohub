@@ -6,6 +6,7 @@ import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { normalizeInstallments } from '../_shared/processing-fee.ts'
 import { computeInscricaoCheckout, inscricaoLineApplies } from '../_shared/inscricao-checkout.ts'
 import { recordPaymentExpectations, countBailarinos } from '../_shared/payment-expectations.ts'
+import { requireProductionBaseUrl } from '../_shared/asaas-env.ts'
 
 // Cria a cobrança Asaas da TAXA DE SELETIVA (Modelo 3 - Catanduva/SESI/CaconDance).
 // Distinto de create-payment-asaas (cobrança da inscrição cheia) porque:
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
     }
 
     let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    let ASAAS_BASE_URL = requireProductionBaseUrl(Deno.env)
     if (!ASAAS_API_KEY) throw new Error('Asaas não configurado.')
 
     const supabase = createClient(

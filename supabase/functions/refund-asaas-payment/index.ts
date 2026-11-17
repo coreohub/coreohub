@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { requireProductionBaseUrl } from '../_shared/asaas-env.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
 
     // Chama API Asaas para reembolso
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    const ASAAS_BASE_URL = requireProductionBaseUrl(Deno.env)
 
     // Pra partial refund em payment com split, Asaas exige `splitRefunds` —
     // sem isso, ele tenta deduzir TODO o valor do "main charge" (a parte

@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../_shared/asaas-env.ts'
+import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent, requireProductionBaseUrl } from '../_shared/asaas-env.ts'
 import { cardCreditFallback } from '../_shared/card-credit-date.ts'
 import { paymentCheckMode, checkPaymentExpectation, markExpectationAnomaly } from '../_shared/payment-check.ts'
 import { HOLD_PREFIX } from '../_shared/payment-hold.ts'
@@ -2335,7 +2335,20 @@ Deno.serve(async (req) => {
     // Pagamentos sao criados no master Asaas com split pra subconta do
     // produtor, entao master enxerga tudo via /payments/{id}.
     let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    // Falha fechada (A2): sem ASAAS_BASE_URL de producao nao ha cross-check nem fallback para o sandbox.
+    // 5xx faz a Asaas reentregar (e o webhook_failures registra); o webhook de sandbox nao precisa da URL de producao.
+    let ASAAS_BASE_URL = ''
+    if (webhookEnv !== 'sandbox') {
+      try {
+        ASAAS_BASE_URL = requireProductionBaseUrl(Deno.env)
+      } catch (e) {
+        console.error('[asaas-webhook][ALERT] ASAAS_BASE_URL de producao ausente/invalida:', (e as Error).message)
+        return new Response(JSON.stringify({ error: 'Misconfigured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
     if (webhookEnv === 'sandbox') {
       // Webhook do sandbox: confere na API do SANDBOX com a chave do sandbox.
       try {

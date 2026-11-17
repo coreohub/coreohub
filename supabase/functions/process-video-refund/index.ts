@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { requireProductionBaseUrl } from '../_shared/asaas-env.ts'
 
 // Processa o reembolso da taxa de seletiva (Modelo 3) quando o vídeo é
 // REPROVADO. A política vem de events.video_fee_refund_policy:
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
     if (!registration_id) throw new Error('registration_id é obrigatório.')
 
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    const ASAAS_BASE_URL = requireProductionBaseUrl(Deno.env)
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
