@@ -109,7 +109,9 @@ const MeuIngresso: React.FC = () => {
     const interval = isPendente ? 5_000 : 30_000;
     const t = setInterval(async () => {
       // Re-fetch silencioso
-      const { data } = await supabase.rpc('get_audience_ticket_by_token_v3', { p_token: token });
+      const { data, error: pollErr } = await supabase.rpc('get_audience_ticket_by_token_v3', { p_token: token });
+      // Erro de rede/servidor (sinal fraco na portaria) NAO e "transferido": mantem o ingresso na tela e tenta no proximo ciclo.
+      if (pollErr) { console.warn('[MeuIngresso] polling falhou, mantendo o ingresso:', pollErr.message); return; }
       const row = Array.isArray(data) ? data[0] : data;
       if (row) setTicket(row as Ticket);
       else { setTicket(null); setError('Este link deixou de valer: o ingresso foi transferido para outro titular. Quem recebeu o ingresso tem o link novo.'); }
