@@ -54,23 +54,23 @@ const SalesOpenReminder: React.FC<Props> = ({ eventId, opensAt }) => {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4">
       <div className="flex items-start gap-3">
-        <CalendarClock size={22} className="text-brand-primary-ink shrink-0 mt-0.5" aria-hidden="true" />
+        <CalendarClock size={22} className="text-[#ff0068] shrink-0 mt-0.5" aria-hidden="true" />
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">As vendas ainda não abriram</p>
-          <p className="text-base font-black text-slate-900 mt-1">Abertura: {formatOpensAt(opensAt)}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">As vendas ainda não abriram</p>
+          <p className="text-base font-black text-white mt-1">Abertura: {formatOpensAt(opensAt)}</p>
         </div>
       </div>
 
       {done ? (
-        <p role="status" className="flex items-start gap-2 text-sm text-emerald-700">
+        <p role="status" className="flex items-start gap-2 text-sm text-emerald-400">
           <CheckCircle2 size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
           Combinado. Vamos avisar por e-mail assim que as vendas abrirem.
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-3" noValidate>
-          <label htmlFor="sales-open-email" className="text-xs font-black text-slate-700 flex items-center gap-2">
+          <label htmlFor="sales-open-email" className="text-xs font-black text-slate-200 flex items-center gap-2">
             <Bell size={14} aria-hidden="true" /> Quer ser avisado quando abrir?
           </label>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -83,17 +83,17 @@ const SalesOpenReminder: React.FC<Props> = ({ eventId, opensAt }) => {
               value={email}
               onChange={ev => setEmail(ev.target.value)}
               placeholder="seu@email.com"
-              className="flex-1 min-w-0 bg-white border border-slate-300 rounded-xl py-3 px-4 text-sm text-slate-900 focus:outline-none focus:border-[#ff0068]"
+              className="flex-1 min-w-0 bg-black/30 border border-white/15 rounded-xl py-3 px-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-[#ff0068]"
             />
             <button
               type="submit"
               disabled={sending || !email.trim()}
-              className="px-5 py-3 rounded-xl bg-brand-primary-strong text-white text-xs font-black uppercase tracking-widest disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+              className="px-5 py-3 rounded-xl bg-[#ff0068] hover:bg-[#ff1a7d] text-white text-xs font-black uppercase tracking-widest disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {sending ? 'Enviando...' : 'Avise-me'}
             </button>
           </div>
-          <label className="flex items-start gap-2 text-[11px] leading-relaxed text-slate-600 cursor-pointer">
+          <label className="flex items-start gap-2 text-[11px] leading-relaxed text-slate-400 cursor-pointer">
             <input
               type="checkbox"
               checked={consent}
@@ -102,7 +102,7 @@ const SalesOpenReminder: React.FC<Props> = ({ eventId, opensAt }) => {
             />
             <span>Aceito receber 1 e-mail da CoreoHub avisando que as vendas deste evento abriram. Uso o e-mail só para isso e posso sair da lista pelo link do próprio e-mail.</span>
           </label>
-          {error && <p role="alert" className="text-xs font-bold text-rose-700">{error}</p>}
+          {error && <p role="alert" className="text-xs font-bold text-rose-400">{error}</p>}
         </form>
       )}
     </div>
