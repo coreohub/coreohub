@@ -33,6 +33,14 @@ interface Props {
  * (nunca created_by/is_public). Salvar fica indisponível até a carga terminar, para o estado
  * padrão não sobrescrever o que está no banco.
  */
+/** ISO (UTC) -> valor de <input type="datetime-local"> no horário do navegador. */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -46,6 +54,8 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
   const [audienceFeeMode, setAudienceFeeMode] = useState<'repassar' | 'absorver'>('repassar');
   const [audienceMaxPerCpf, setAudienceMaxPerCpf] = useState(6);
   const [audienceMaxPerPurchase, setAudienceMaxPerPurchase] = useState(6);
+  // Abertura programada das vendas (datetime-local, horário do navegador). Vazio = vende já.
+  const [salesOpensAt, setSalesOpensAt] = useState('');
   const [audienceReservationMinutes, setAudienceReservationMinutes] = useState(15);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -56,7 +66,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
     setMsg(null);
     const { data: ev, error } = await supabase
       .from('events')
-      .select('politica_ingressos, ingressos_config, seat_map_enabled, seat_zones, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes')
+      .select('politica_ingressos, ingressos_config, seat_map_enabled, seat_zones, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, audience_sales_opens_at')
       .eq('id', eventId)
       .maybeSingle();
     if (error || !ev) {
@@ -88,6 +98,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
     if (ev.audience_max_per_cpf != null) setAudienceMaxPerCpf(Number(ev.audience_max_per_cpf));
     if (ev.audience_max_per_purchase != null) setAudienceMaxPerPurchase(Number(ev.audience_max_per_purchase));
     if (ev.audience_reservation_minutes != null) setAudienceReservationMinutes(Number(ev.audience_reservation_minutes));
+    setSalesOpensAt(ev.audience_sales_opens_at ? toLocalInput(String(ev.audience_sales_opens_at)) : '');
     setLoaded(true);
   }, [eventId]);
 
@@ -119,6 +130,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
         audience_max_per_cpf: audienceMaxPerCpf,
         audience_max_per_purchase: audienceMaxPerPurchase,
         audience_reservation_minutes: audienceReservationMinutes,
+        audience_sales_opens_at: salesOpensAt ? new Date(salesOpensAt).toISOString() : null,
         ...(isAdmin ? { audience_commission_percent: audienceCommissionPercent, audience_commission_percent_manual: audienceCommissionPercentManual } : {}),
       };
       const { data: updated, error: evErr } = await supabase.from('events').update(eventPatch).eq('id', eventId).select('id');
@@ -519,6 +531,31 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
                             {audienceFeeMode === 'repassar'
                               ? 'Comprador vê preço + taxa de serviço.'
                               : 'Comprador vê só o preço; taxa sai do seu líquido.'}
+                          </p>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
+                            Abertura das vendas (opcional)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="datetime-local"
+                              value={salesOpensAt}
+                              onChange={e => setSalesOpensAt(e.target.value)}
+                              className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                            />
+                            {salesOpensAt && (
+                              <button type="button" onClick={() => setSalesOpensAt('')}
+                                className="px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5">
+                                Limpar
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            {salesOpensAt
+                              ? 'Programada: a vitrine vai mostrar a data de abertura. Nesta etapa a venda ainda não é bloqueada antes da hora.'
+                              : 'Vazio: a venda fica aberta desde já.'}
                           </p>
                         </div>
 
