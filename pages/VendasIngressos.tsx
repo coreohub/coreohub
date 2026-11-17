@@ -31,6 +31,7 @@ import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { salesByZone } from '../utils/salesByZone';
+import { matchesBuyerSearch } from '../utils/buyerSearch';
 import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '../utils/seatSelection';
 import { BLOCK_REASON_SUGGESTIONS, expandRange, expandRow, partitionSelection, reasonsBySeat, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
 import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
@@ -566,15 +567,9 @@ const VendasIngressos: React.FC = () => {
 
   // ─── Filtros ──────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return rows.filter(r => {
       if (statusFilter !== 'todos' && r.status_pagamento !== statusFilter) return false;
-      if (!q) return true;
-      return (
-        r.buyer_name.toLowerCase().includes(q) ||
-        r.buyer_email.toLowerCase().includes(q) ||
-        r.buyer_cpf.includes(q.replace(/\D/g, ''))
-      );
+      return matchesBuyerSearch(r, search);
     });
   }, [rows, search, statusFilter]);
 
@@ -1367,7 +1362,7 @@ const VendasIngressos: React.FC = () => {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nome, email ou CPF..."
+            placeholder="Buscar por nome, e-mail, CPF ou WhatsApp..."
             className="bg-transparent flex-1 text-sm outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
           />
         </div>
