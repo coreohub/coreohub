@@ -2339,59 +2339,6 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         </div>
         )}
 
-        {/* Redes sociais do evento — só mobile agora. No desktop já aparece
-            em versão compacta embaixo da capa no hero (evita duplicar o
-            mesmo link 2x na mesma página). */}
-        {hasSocial && (
-          <div className="space-y-3 lg:hidden">
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-600">Siga o evento</h2>
-            <div className="flex flex-wrap gap-2">
-              {social.instagram && (
-                <a aria-label="Instagram" title="Instagram" href={social.instagram} target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
-                  <Instagram size={18} />
-                </a>
-              )}
-              {social.facebook && (
-                <a aria-label="Facebook" title="Facebook" href={social.facebook} target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
-                  <Facebook size={18} />
-                </a>
-              )}
-              {social.tiktok && (
-                <a aria-label="TikTok" title="TikTok" href={social.tiktok} target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
-                  <TikTokIcon size={18} />
-                </a>
-              )}
-              {social.youtube && (
-                <a aria-label="YouTube" title="YouTube" href={social.youtube} target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
-                  <Youtube size={18} />
-                </a>
-              )}
-              {social.whatsapp && (
-                <a aria-label="WhatsApp" title="WhatsApp" href={social.whatsapp} target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
-                  <WhatsAppIcon size={18} />
-                </a>
-              )}
-              {social.website && (
-                <a aria-label="Site oficial" title="Site oficial" href={social.website} target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
-                  <Globe size={18} />
-                </a>
-              )}
-              {social.email && (
-                <a aria-label="E-mail" title="E-mail" href={social.email}
-                   className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
-                  <Mail size={18} />
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Patrocinadores */}
         {Array.isArray(event.patrocinadores_config) && event.patrocinadores_config.filter((s: any) => s.logo_url).length > 0 && (
           <div className="space-y-4">
@@ -2467,6 +2414,55 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               {copied ? (<><Check size={16} className="text-emerald-700" /> Link copiado!</>) : (<><Copy size={16} /> Copiar link</>)}
             </button>
           </div>
+          {hasSocial && (
+            <div className="space-y-3 lg:hidden pt-2">
+              <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-600">Siga o evento</h2>
+              <div className="flex flex-wrap gap-2">
+                {social.instagram && (
+                  <a aria-label="Instagram" title="Instagram" href={social.instagram} target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                    <Instagram size={18} />
+                  </a>
+                )}
+                {social.facebook && (
+                  <a aria-label="Facebook" title="Facebook" href={social.facebook} target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                    <Facebook size={18} />
+                  </a>
+                )}
+                {social.tiktok && (
+                  <a aria-label="TikTok" title="TikTok" href={social.tiktok} target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                    <TikTokIcon size={18} />
+                  </a>
+                )}
+                {social.youtube && (
+                  <a aria-label="YouTube" title="YouTube" href={social.youtube} target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                    <Youtube size={18} />
+                  </a>
+                )}
+                {social.whatsapp && (
+                  <a aria-label="WhatsApp" title="WhatsApp" href={social.whatsapp} target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                    <WhatsAppIcon size={18} />
+                  </a>
+                )}
+                {social.website && (
+                  <a aria-label="Site oficial" title="Site oficial" href={social.website} target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                    <Globe size={18} />
+                  </a>
+                )}
+                {social.email && (
+                  <a aria-label="E-mail" title="E-mail" href={social.email}
+                     className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors">
+                    <Mail size={18} />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Link redundante removido — politica_ingressos=EXTERNO acima ja
