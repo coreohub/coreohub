@@ -1353,3 +1353,12 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - `send-email`: removidos os emojis de 10 pontos (assuntos: Novo produtor, Novo lead da simulacao, Ultima chance, Trilha sonora; corpos: Confirme seu e-mail, Pague ate, Faltam N dias, Inscricao pendente, Lembrete de trilha, Aprovado na seletiva). Pedido do dono: e-mail nao leva icone colorido. Varredura das demais edges: nenhum outro e-mail com emoji.
 - Main `0686b38` (cherry-pick de b011ec4); deploy de `send-email` com plataforma parada (165 min sem venda).
 - Mantidos: glifos de texto `✓` e `→`. Fora do escopo (nao sao e-mail): emojis no texto do evento demo (`seed-demo-event`) e em comentarios/log de `judge-login` e `refund-asaas-payment`.
+
+## 2026-11-17 (noite): auditoria Lote 3, A2 (fallback para sandbox) parcialmente deployado
+
+- Codigo na `main`: `7ae07f5` (cherry-pick de 1c104a0): `requireProductionBaseUrl()` em `_shared/asaas-env.ts` (erro se `ASAAS_BASE_URL` faltar/vazio/sandbox) e as 11 edges sem fallback. Catraca em `tests/asaas-env.test.ts`. 809 testes e lint ok.
+- `ASAAS_BASE_URL` em producao = `https://api.asaas.com/v3` (conferido pelo hash SHA256 que o painel mostra; o painel nao revela o valor).
+- DEPLOYADAS (18:02-18:04 BRT, plataforma parada, `pre-deploy-check` saida 0 antes de cada): `process-video-refund`, `disable-asaas-notifications`, `check-plan-fee-status`, `close-event-billing-settlement`, `create-setup-fee-payment`, `create-video-selection-payment`, `refund-asaas-payment`. Teste sem cobranca apos o deploy: 400/401 de validacao, nenhum 5xx.
+- PENDENTES (deploy interrompido pelo pre-check, saida 2, com 2 ingressos criados e 2 reservas nos ultimos 15-30 min, pais comprando o Level Up): `create-workshop-registration`, `create-workshop-pass-registration`, `create-payment-asaas`, `asaas-webhook`. Continuam com o codigo antigo (fallback para sandbox) ate o deploy; risco praticamente zero enquanto o secret existir. Fazer na janela calma (1h-6h BRT) ou quando o pre-check der 0, um por vez, nessa ordem; `asaas-webhook` por ultimo.
+- Reverter: `git revert 7ae07f5` e redeploy das edges afetadas.
+- Observacao: no script de deploy em loop, o `process.exit` do Node crasha no Windows (libuv); usar `process.exitCode`.
