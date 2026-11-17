@@ -38,10 +38,11 @@ import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 import { DateInput } from '@/components/DateInput';
 
-const sessionLabel = (d?: string | null, t?: string | null) => {
+const sessionLabel = (d?: string | null, t?: string | null, nome?: string | null) => {
   const dia = d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '';
   const hora = t && t.includes(':') ? t.slice(0, 5) : '';
-  return [dia, hora].filter(Boolean).join(' ') || 'outra sessão';
+  const dh = [dia, hora].filter(Boolean).join(' ') || 'outra sessão';
+  return nome?.trim() ? `${nome.trim()} · ${dh}` : dh;
 };
 
 interface TicketTypeConfig {
@@ -128,7 +129,7 @@ const VendasIngressos: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   // Cancelar/adiar sessão (Decreto 13.108 arts. 20-22)
-  const [sessionInfo, setSessionInfo] = useState<{ status: string; motivo: string | null; start_date: string | null; event_time: string | null }>({ status: 'agendada', motivo: null, start_date: null, event_time: null });
+  const [sessionInfo, setSessionInfo] = useState<{ status: string; motivo: string | null; start_date: string | null; event_time: string | null; nome?: string | null }>({ status: 'agendada', motivo: null, start_date: null, event_time: null });
   const [sessionOpen, setSessionOpen] = useState(false);
   const [sessionForm, setSessionForm] = useState<{ status: 'adiada' | 'cancelada' | 'agendada'; nova_data: string; nova_hora: string; motivo: string }>({ status: 'adiada', nova_data: '', nova_hora: '', motivo: '' });
   const [sessionConfirmed, setSessionConfirmed] = useState(false);
@@ -230,7 +231,7 @@ const VendasIngressos: React.FC = () => {
     setErr(null);
     try {
       setEventId(targetEventId);
-      const { data: ev, error: evErr } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time, venue_id, session_group_id, seat_zones').eq('id', targetEventId).maybeSingle();
+      const { data: ev, error: evErr } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time, venue_id, session_group_id, seat_zones, session_label').eq('id', targetEventId).maybeSingle();
       if (evErr) console.error('[VendasIngressos] leitura do evento:', evErr.message);
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
@@ -239,13 +240,13 @@ const VendasIngressos: React.FC = () => {
       setSiblingSessions([]);
       if ((ev as any)?.session_group_id && (ev as any)?.seat_map_enabled && (ev as any)?.venue_id) {
         const { data: sibs, error: sibErr } = await supabase.from('events')
-          .select('id, start_date, event_time, venue_id, seat_map_enabled, created_by')
+          .select('id, start_date, event_time, venue_id, seat_map_enabled, created_by, session_label')
           .eq('session_group_id', (ev as any).session_group_id).neq('id', targetEventId)
           .order('start_date', { ascending: true }).order('event_time', { ascending: true });
         if (sibErr) console.error('[VendasIngressos] sessões irmãs:', sibErr.message);
         setSiblingSessions((sibs ?? [])
           .filter((x: any) => x.seat_map_enabled && x.venue_id === (ev as any).venue_id && x.created_by === (ev as any).created_by)
-          .map((x: any) => ({ id: x.id as string, label: sessionLabel(x.start_date, x.event_time) })));
+          .map((x: any) => ({ id: x.id as string, label: sessionLabel(x.start_date, x.event_time, x.session_label) })));
       }
       // Dono do evento ou super admin pode bloquear lugares e vender lugar bloqueado no PDV.
       try {
@@ -273,7 +274,7 @@ const VendasIngressos: React.FC = () => {
       }
       setBlockSelected([]);
       setBlockMsg(null);
-      setSessionInfo({ status: (ev as any)?.sessao_status ?? 'agendada', motivo: (ev as any)?.sessao_motivo ?? null, start_date: (ev as any)?.start_date ?? null, event_time: (ev as any)?.event_time ?? null });
+      setSessionInfo({ status: (ev as any)?.sessao_status ?? 'agendada', motivo: (ev as any)?.sessao_motivo ?? null, start_date: (ev as any)?.start_date ?? null, event_time: (ev as any)?.event_time ?? null, nome: (ev as any)?.session_label ?? null });
       const { data, error } = await supabase
         .from('audience_tickets')
         .select('*')
@@ -1205,7 +1206,7 @@ const VendasIngressos: React.FC = () => {
               <div className="flex flex-wrap gap-2">
                 <label className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer border ${!applyToSiblings ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-200' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'}`}>
                   <input type="radio" name="block-scope" className="sr-only" checked={!applyToSiblings} onChange={() => setApplyToSiblings(false)} />
-                  Só esta sessão ({sessionLabel(sessionInfo.start_date, sessionInfo.event_time)})
+                  Só esta sessão ({sessionLabel(sessionInfo.start_date, sessionInfo.event_time, sessionInfo.nome)})
                 </label>
                 <label className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer border ${applyToSiblings ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-200' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'}`}>
                   <input type="radio" name="block-scope" className="sr-only" checked={applyToSiblings} onChange={() => setApplyToSiblings(true)} />
