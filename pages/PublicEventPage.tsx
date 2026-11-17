@@ -1048,7 +1048,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       {(event as any).payment_sandbox && <SandboxBanner />}
       {searchParams.get('aviso') === 'saiu' && (
         <div role="status" className="max-w-5xl mx-auto px-4 pt-4">
-          <p className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-4 py-3 text-sm text-emerald-300">Pronto, você saiu da lista de aviso. Não vamos mais te mandar e-mail sobre a abertura das vendas.</p>
+          <p className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">Pronto, você saiu da lista de aviso. Não vamos mais te mandar e-mail sobre a abertura das vendas.</p>
         </div>
       )}
       {(event.sessao_status === 'adiada' || event.sessao_status === 'cancelada') && (
@@ -1660,7 +1660,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               return (
                 <div id="ingressos" className="space-y-4 scroll-mt-20 rounded-3xl bg-[#ff0068]/[0.04] border border-[#ff0068]/15 p-5 sm:p-6">
                   <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                    <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+                    <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
                   </h2>
                   <SalesOpenReminder eventId={event.id} opensAt={salesOpensAtIso} />
                 </div>
