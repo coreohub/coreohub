@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesBuyerSearch } from '../utils/buyerSearch';
+import { matchesBuyerSearch, matchesElencoSearch } from '../utils/buyerSearch';
 
 const leila = { buyer_name: 'Leila Souza', buyer_email: 'leila@exemplo.com', buyer_cpf: '12345678901', buyer_phone: '17999991234' };
 const joao = { buyer_name: 'João Lima', buyer_email: 'joao@exemplo.com', buyer_cpf: '98765432100', buyer_phone: null };
@@ -35,5 +35,26 @@ describe('matchesBuyerSearch', () => {
   });
   it('texto sem dígitos não casa documento', () => {
     expect(matchesBuyerSearch(joao, 'zzz')).toBe(false);
+  });
+});
+
+describe('matchesElencoSearch', () => {
+  const ana = { nome: 'Ana Paula', cpf: '123.456.789-01' };
+  const bia = { nome: 'Bia Souza', cpf: '98765432100' };
+  it('busca vazia passa todos', () => {
+    expect(matchesElencoSearch(ana, '')).toBe(true);
+  });
+  it('busca por nome so devolve quem casa (bug do includes vazio)', () => {
+    expect(matchesElencoSearch(ana, 'ana')).toBe(true);
+    expect(matchesElencoSearch(bia, 'ana')).toBe(false);
+  });
+  it('busca por CPF ignora a mascara dos dois lados', () => {
+    expect(matchesElencoSearch(ana, '12345678901')).toBe(true);
+    expect(matchesElencoSearch(ana, '123.456')).toBe(true);
+    expect(matchesElencoSearch(bia, '123.456')).toBe(false);
+  });
+  it('CPF ou nome nulos nao quebram', () => {
+    expect(matchesElencoSearch({ nome: null, cpf: null }, 'ana')).toBe(false);
+    expect(matchesElencoSearch({ nome: 'Ana', cpf: null }, '123')).toBe(false);
   });
 });

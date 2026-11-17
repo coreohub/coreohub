@@ -22,6 +22,8 @@ export interface EventPickerOption {
   start_date?: string | null;
   /** Horário da sessão (HH:MM). Só entra no rótulo quando há nomes repetidos. */
   event_time?: string | null;
+  /** Nome da sessão (ex.: "Elenco 1"). Entra no rótulo junto da data quando há nomes repetidos. */
+  session_label?: string | null;
 }
 
 interface Props {
@@ -49,7 +51,8 @@ const buildLabeler = (events: EventPickerOption[]) => {
     if ((counts.get(base) ?? 0) < 2 || !ev.start_date) return base;
     const [y, m, d] = ev.start_date.slice(0, 10).split('-');
     const hora = ev.event_time && /^\d{1,2}:\d{2}/.test(ev.event_time) ? ` ${ev.event_time.slice(0, 5)}` : '';
-    return `${base} · ${d}/${m}/${y}${hora}`;
+    const nome = ev.session_label?.trim();
+    return `${base} · ${nome ? `${nome} · ` : ''}${d}/${m}/${y}${hora}`;
   };
 };
 

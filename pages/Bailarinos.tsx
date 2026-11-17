@@ -8,6 +8,7 @@ import {
   Calendar, CreditCard, UserPlus, AlertTriangle, Info,
 } from 'lucide-react';
 import { DateInput } from '@/components/DateInput';
+import { matchesElencoSearch } from '../utils/buyerSearch';
 
 /* ── CPF validation (Receita Federal algorithm) ── */
 const validateCPF = (cpf: string): boolean => {
@@ -192,10 +193,7 @@ const MeuElenco = () => {
     setShowForm(true);
   };
 
-  const filtered = elenco.filter(b =>
-    b.nome.toLowerCase().includes(search.toLowerCase()) ||
-    b.cpf.includes(search.replace(/\D/g, ''))
-  );
+  const filtered = elenco.filter(b => matchesElencoSearch(b, search));
 
   /* ── Erro de sistema (substituiu banner SQL bruto que era ação de admin) ── */
   if (tableError) {

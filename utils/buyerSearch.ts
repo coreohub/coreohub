@@ -11,6 +11,16 @@ export interface BuyerSearchFields {
 
 const onlyDigits = (v: string | null | undefined) => (v ?? '').replace(/\D/g, '');
 
+/** Busca de bailarino no elenco (nome ou CPF). CPF só entra quando a busca tem dígitos. */
+export function matchesElencoSearch(row: { nome?: string | null; cpf?: string | null }, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if ((row.nome ?? '').toLowerCase().includes(q)) return true;
+  const digits = onlyDigits(q);
+  if (!digits) return false;
+  return onlyDigits(row.cpf).includes(digits);
+}
+
 export function matchesBuyerSearch(row: BuyerSearchFields, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;

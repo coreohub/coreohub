@@ -38,6 +38,9 @@ import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 import { DateInput } from '@/components/DateInput';
 
+/** "A e B" / "A, B e C": junta rótulos de sessão em português. */
+const joinLabels = (items: string[]) => items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`;
+
 const sessionLabel = (d?: string | null, t?: string | null, nome?: string | null) => {
   const dia = d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '';
   const hora = t && t.includes(':') ? t.slice(0, 5) : '';
@@ -122,7 +125,7 @@ const VendasIngressos: React.FC = () => {
   // CLAUDE.md 2026-07-12). Default continua resolvendo o evento real como
   // sempre; o picker só existe pra permitir override manual (ex: testar
   // assento numerado/PDV num evento de teste sem mexer no evento real).
-  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number | null; is_demo?: boolean | null }[]>([]);
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number | null; is_demo?: boolean | null; session_label?: string | null }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -302,7 +305,7 @@ const VendasIngressos: React.FC = () => {
       const [{ data: events }, defaultId] = await Promise.all([
         supabase
           .from('events')
-          .select('id,name,edition_year,is_demo,created_at,start_date,event_time')
+          .select('id,name,edition_year,is_demo,created_at,start_date,event_time,session_label')
           .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
           .order('created_at', { ascending: false }),
         resolveActiveEventId(),
@@ -1210,7 +1213,7 @@ const VendasIngressos: React.FC = () => {
                 </label>
                 <label className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer border ${applyToSiblings ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-200' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'}`}>
                   <input type="radio" name="block-scope" className="sr-only" checked={applyToSiblings} onChange={() => setApplyToSiblings(true)} />
-                  Todas as sessões ({siblingSessions.map(x => x.label).join(', ')})
+                  Todas as sessões ({joinLabels([sessionLabel(sessionInfo.start_date, sessionInfo.event_time, sessionInfo.nome), ...siblingSessions.map(x => x.label)])})
                 </label>
               </div>
             </fieldset>
