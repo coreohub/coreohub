@@ -1,4 +1,5 @@
 import PriceFeeNote from '../components/PriceFeeNote';
+import SalesOpenReminder from '../components/SalesOpenReminder';
 import { computePriceDisclosure } from '../utils/priceDisclosure';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
@@ -250,7 +251,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original,
             audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent, payment_sandbox,
             processing_fee_enabled, audience_processing_payer, max_installments,
-            producer_ga4_id, producer_meta_pixel_id
+            producer_ga4_id, producer_meta_pixel_id, audience_sales_opens_at
           `)
           .eq(filterCol, loadKey)
           .maybeSingle();
@@ -1017,6 +1018,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const hasPurchasableIngressos = visibleSections.some(s => s.id === 'ingressos')
     && event.politica_ingressos !== 'GRATUITO';
   const hasWorkshopsSection = visibleSections.some(s => s.id === 'workshops');
+  // Abertura programada das vendas ainda no futuro: a vitrine mostra a data e o formulário de aviso.
+  const salesOpensAtIso = ((event as any)?.audience_sales_opens_at ?? null) as string | null;
+  const salesOpensFuture = !!(event as any)?.audience_sales_enabled && !!salesOpensAtIso && new Date(salesOpensAtIso).getTime() > Date.now();
   const primaryCta = (() => {
     if (isRegistrationOpen) {
       return { kind: 'link' as const, to: `/festival/${slugOrId}/register`, label: 'Inscreva-se' };
@@ -1024,7 +1028,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     if (!eventOver && hasPurchasableIngressos) {
       return needsSessionChoice
         ? { kind: 'anchor' as const, id: 'sessoes', label: 'Escolher sessão' }
-        : { kind: 'anchor' as const, id: 'ingressos', label: 'Comprar ingresso' };
+        : { kind: 'anchor' as const, id: 'ingressos', label: salesOpensFuture ? 'Avise-me da abertura' : 'Comprar ingresso' };
     }
     if (!eventOver && hasWorkshopsSection) {
       return { kind: 'anchor' as const, id: 'workshops', label: 'Ver workshops' };
@@ -1041,6 +1045,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {(event as any).payment_sandbox && <SandboxBanner />}
+      {searchParams.get('aviso') === 'saiu' && (
+        <div role="status" className="max-w-5xl mx-auto px-4 pt-4">
+          <p className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">Pronto, você saiu da lista de aviso. Não vamos mais te mandar e-mail sobre a abertura das vendas.</p>
+        </div>
+      )}
       {(event.sessao_status === 'adiada' || event.sessao_status === 'cancelada') && (
         <div className="max-w-5xl mx-auto px-4 pt-4">
           <SessionStatusBanner {...event} dataAtual={event.start_date} horaAtual={event.event_time} context="vitrine" />
@@ -1646,6 +1655,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               .filter((t: any) => t.nome)
               .filter((t: any) => !salesEnabled || precoVigenteIngresso(t) > 0);
             if (visibleTypes.length === 0) return null;
+            if (salesOpensFuture && salesOpensAtIso) {
+              return (
+                <div id="ingressos" className="space-y-4 scroll-mt-20 rounded-3xl bg-[#ff0068]/[0.04] border border-[#ff0068]/15 p-5 sm:p-6">
+                  <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+                    <Ticket size={24} className="text-brand-primary-ink" /> Ingressos
+                  </h2>
+                  <SalesOpenReminder eventId={event.id} opensAt={salesOpensAtIso} />
+                </div>
+              );
+            }
             return (
               <div id="ingressos" className={`space-y-4 scroll-mt-20 transition-opacity ${switchingSession ? 'opacity-40 pointer-events-none' : ''}`} aria-busy={switchingSession} inert={switchingSession}>
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
