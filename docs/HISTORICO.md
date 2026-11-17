@@ -1347,3 +1347,9 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - Reverter: `git revert` do commit do item; B5 exige redeploy de `send-email`.
 - NAO verificado: C1, C2 e C6 no navegador (so tipos e testes unitarios).
 - Pre-existente: `deno check` do `send-email` acusa 3 erros de tipo (`trilha_reminder`, `abandoned_registration`, `calculator_proposal`), tambem na main; nao bloqueiam deploy.
+
+## 2026-11-17 (noite): e-mails sem emoji
+
+- `send-email`: removidos os emojis de 10 pontos (assuntos: Novo produtor, Novo lead da simulacao, Ultima chance, Trilha sonora; corpos: Confirme seu e-mail, Pague ate, Faltam N dias, Inscricao pendente, Lembrete de trilha, Aprovado na seletiva). Pedido do dono: e-mail nao leva icone colorido. Varredura das demais edges: nenhum outro e-mail com emoji.
+- Main `0686b38` (cherry-pick de b011ec4); deploy de `send-email` com plataforma parada (165 min sem venda).
+- Mantidos: glifos de texto `✓` e `→`. Fora do escopo (nao sao e-mail): emojis no texto do evento demo (`seed-demo-event`) e em comentarios/log de `judge-login` e `refund-asaas-payment`.
