@@ -51,7 +51,7 @@ export function useMyPermissions() {
     role === UserRole.ORGANIZER || role === UserRole.COREOHUB_ADMIN
     || (perms === null && role !== null && !INSCRITO_LIKE_ROLES.has(role));
   const has = useCallback(
-    (key: keyof PermissoesCustom) => loading || isFullAccessRole || perms?.[key] === true,
+    (key: keyof PermissoesCustom) => !loading && (isFullAccessRole || perms?.[key] === true), // false enquanto carrega (A6); quem precisa esperar usa `loading`
     [perms, loading, isFullAccessRole],
   );
 
