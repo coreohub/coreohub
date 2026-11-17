@@ -31,6 +31,7 @@
 
 import { buildCorsHeaders } from '../_shared/cors.ts'
 import { termsVersionAtLeast } from '../_shared/terms-version.ts'
+import { isServiceRoleToken } from '../_shared/jwt-role.ts'
 
 const BRAND_COLOR = '#ff0068'
 const BRAND_DARK = '#0b0b0f'
@@ -2419,9 +2420,10 @@ Deno.serve(async (req) => {
   // Auth: chamadas internas (service_role_key) → liberadas para qualquer tipo.
   // Chamadas com user JWT → liberadas apenas para 'producer_welcome' e somente
   // se o email do payload bater com o email do JWT (evita phishing).
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
-  const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
-  const isService = serviceKey && token === serviceKey
+  // Service = JWT com role 'service_role' (o gateway ja verificou a assinatura: verify_jwt = true no config).
+  // Nada de igualdade com a chave (auditoria Lote 3, B-N7).
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  const isService = isServiceRoleToken(token)
 
   // Lê o body uma vez para a checagem de auth + processamento
   let body: SendEmailRequest
