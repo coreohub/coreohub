@@ -554,7 +554,7 @@ const TicketTypesEditor: React.FC<Props> = ({ eventId, isAdmin, onSaved }) => {
                           </div>
                           <p className="text-[10px] text-slate-500 mt-1">
                             {salesOpensAt
-                              ? 'Programada: a vitrine vai mostrar a data de abertura. Nesta etapa a venda ainda não é bloqueada antes da hora.'
+                              ? 'Programada: até essa hora a vitrine mostra a data de abertura e um formulário de aviso por e-mail, e a compra fica fechada. Quando abrir, quem pediu aviso recebe 1 e-mail.'
                               : 'Vazio: a venda fica aberta desde já.'}
                           </p>
                         </div>
