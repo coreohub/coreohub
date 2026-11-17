@@ -4,6 +4,20 @@ Base: rodadas 1 e 2 (`docs/auditoria/SUMARIO.md`, `docs/auditoria/rodada2/SUMARI
 
 Legenda: **Risco** = estrago se alguém explorar ou der azar. **Esforço** P (até 1 h), M (1 a 3 h), G (meio dia ou mais). **Deploy** = precisa de deploy de edge function ou migration (janela calma, `scripts/pre-deploy-check.mjs`). Estado conferido em 2026-11-17 na `main` e no banco; itens marcados "verificar" não foram reconferidos e a sessão deve checar antes de mexer.
 
+## Reverificação dos itens "verificar" (2026-11-17, leitura da `origin/main`, nada alterado)
+
+Modos conferidos pelo `pre-deploy-check --strict`: saída 0, plataforma parada (105 min sem venda), `PAYMENT_CHECK_MODE=observe`, `JUDGE_SESSION_MODE=enforce`, `PAYOUT_ATTEMPTS_MODE=on`, `SUBCONTA_FEE_MODE=on`.
+
+| Item | Resultado | Evidência |
+|---|---|---|
+| A3 | **Parcial, segue aberto (baixo)**. `settleSubcontaFee` já tenta a baixa 2 vezes e grita `[ALERT]` se falhar, mas se as 2 falharem o crédito fica sem baixa e o próximo saque desconta de novo (só alerta, sem trava). Backfill `20261114b` (C-N6) não reconferido. | `_shared/subconta-fee.ts:183-205` |
+| A4 | **Aberto**. A lista `toSend` (linha 218) é lida ANTES da trava (linha 243) e não é relida dentro dela. A trava existe, mas o plano usa itens possivelmente velhos. `markCovered` tem `.is('pix_sent_at', null)`, o que limita o estrago a um saque a mais, não a dois. | `release-low-value-transfers/index.ts:218-290` |
+| B6 | **Parcial**. `admin-impersonate`: resolvido (exige super admin ou COREOHUB_ADMIN). `seed-voice-samples`: só exige usuário logado (qualquer conta gasta TTS Gemini e grava no Storage). `trigger-registration-payment`: sem nenhuma checagem de quem chama; nenhuma das três está no `config.toml`, então valem só o `verify_jwt` padrão (a chave anon pública passa). O estrago do `trigger-registration-payment` é limitado: exige UUID de inscrição com vídeo aprovado. | `index.ts` de cada uma; `config.toml` |
+| B8 | **Aberto (por desenho)**. O cross-check na API da Asaas segue fail-open: 401, 5xx, timeout ou `ASAAS_API_KEY` ausente deixam passar. Além disso o fallback de `ASAAS_BASE_URL` é o sandbox (junta com A2). Mitigado em parte pelo `payment_expectations` em `observe`. Dá para fechar devolvendo 5xx (a Asaas reentrega e já existe `webhook_failures`). | `asaas-webhook/index.ts:2335-2381` |
+| D4 | **Os dois abertos**. `quantity` não numérica: `Math.max(1, Math.min(20, Number("abc")))` dá `NaN` e entra no `mergedQty`. Estorno parcial de vídeo: o `POST /refund` manda só `value`, sem `splitRefunds`. | `create-audience-ticket/index.ts:183`; `process-video-refund/index.ts:128-132` |
+
+Nenhum dos 5 estava totalmente resolvido. Não verificado: comportamento real em execução (só leitura de código), nem o conteúdo de `20261114b`.
+
 ## Lote A: dinheiro (maior risco, aprovar primeiro)
 
 | # | Item | Risco | Esforço | Deploy | Notas |
