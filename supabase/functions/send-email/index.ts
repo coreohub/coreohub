@@ -220,7 +220,7 @@ function buildRegistrantConfirmation(p: RegistrantPayload) {
     verifyBlock = `
       <div style="margin-top:16px;padding:16px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">
         <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#b45309;">
-          ⚠ Confirme seu e-mail
+          Confirme seu e-mail
         </p>
         <p style="margin:0 0 10px;font-size:13px;line-height:1.5;color:#78350f;">
           Pra baixar seu certificado depois do festival, confirme seu e-mail. Já enviamos um link separado —
@@ -387,7 +387,7 @@ function buildAdminNewProducer(p: { produtorNome?: string; produtorEmail: string
     </p>`
 
   return {
-    subject: `🎉 Novo produtor: ${p.produtorNome ?? p.produtorEmail}`,
+    subject: `Novo produtor: ${p.produtorNome ?? p.produtorEmail}`,
     html: baseLayout({
       preheader: `Novo cadastro de produtor: ${p.produtorEmail}`,
       title: 'Novo produtor cadastrado',
@@ -1283,7 +1283,7 @@ function buildAggregateInvoiceCreated(p: AggregateInvoicePayload) {
     : ''
 
   const expiraLine = p.expiresAt
-    ? `<p style="margin:12px 0 0;font-size:12px;color:#b45309;font-weight:600;">⏰ Pague até ${escape(p.expiresAt)}.</p>`
+    ? `<p style="margin:12px 0 0;font-size:12px;color:#b45309;font-weight:600;">Pague até ${escape(p.expiresAt)}.</p>`
     : ''
 
   const contentHtml = `
@@ -1391,7 +1391,7 @@ function buildAggregateReminder(p: AggregateReminderPayload) {
   const contentHtml = `
     <div style="margin-top:4px;padding:18px;border:2px solid ${urgencyBd};border-radius:14px;background:${urgencyBg};">
       <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${urgencyColor};">
-        ${isLastChance ? '⚠ Última chance' : `⏰ Faltam ${p.diasRestantes} dia${p.diasRestantes !== 1 ? 's' : ''}`}
+        ${isLastChance ? 'Última chance' : `Faltam ${p.diasRestantes} dia${p.diasRestantes !== 1 ? 's' : ''}`}
       </p>
       <p style="margin:8px 0 0;font-size:24px;font-weight:900;color:#0b0b0f;">${escape(money(p.valorTotal))}</p>
       <p style="margin:4px 0 0;font-size:13px;color:#64748b;font-weight:600;">
@@ -1405,7 +1405,7 @@ function buildAggregateReminder(p: AggregateReminderPayload) {
     </p>`
 
   return {
-    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}${isLastChance ? '⚠ Última chance — paga até amanhã' : `Faltam ${p.diasRestantes} dias`}`,
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}${isLastChance ? 'Última chance — paga até amanhã' : `Faltam ${p.diasRestantes} dias`}`,
     html: baseLayout({
       preheader: `${p.qtdCoreografias} coreografias pendentes — ${money(p.valorTotal)} até ${p.expiresAt}.`,
       title: titulo,
@@ -1440,7 +1440,7 @@ function buildAbandonedRegistration(p: AbandonedRegistrationPayload) {
   const contentHtml = `
     <div style="margin-top:4px;padding:18px;border:2px solid #fde68a;border-radius:14px;background:#fffbeb;">
       <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#f59e0b;">
-        ⏳ Inscrição pendente
+        Inscrição pendente
       </p>
       <p style="margin:8px 0 0;font-size:18px;font-weight:900;color:#0b0b0f;line-height:1.3;">
         ${escape(p.primeiraCoreo ?? 'Sua coreografia')}${p.qtdPendentes > 1 ? ` e mais ${p.qtdPendentes - 1}` : ''}
@@ -1500,7 +1500,7 @@ function buildTrilhaReminder(p: TrilhaReminderPayload) {
   const contentHtml = `
     <div style="margin-top:4px;padding:18px;border:2px solid ${urgencyBd};border-radius:14px;background:${urgencyBg};">
       <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${urgencyColor};">
-        ${isLastChance ? '⚠ Faltam ' + p.diasRestantes + ' dia' + (p.diasRestantes !== 1 ? 's' : '') : '🎵 Lembrete de trilha'}
+        ${isLastChance ? 'Faltam ' + p.diasRestantes + ' dia' + (p.diasRestantes !== 1 ? 's' : '') : 'Lembrete de trilha'}
       </p>
       <p style="margin:8px 0 0;font-size:24px;font-weight:900;color:#0b0b0f;">${escape(p.prazoTrilha)}</p>
       <p style="margin:4px 0 0;font-size:13px;color:#64748b;font-weight:600;">
@@ -1514,7 +1514,7 @@ function buildTrilhaReminder(p: TrilhaReminderPayload) {
     </p>`
 
   return {
-    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}${isLastChance ? '⚠ Trilha sonora em ' + p.diasRestantes + ' dias' : 'Lembrete: trilha sonora pendente'}`,
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}${isLastChance ? 'Trilha sonora em ' + p.diasRestantes + ' dias' : 'Lembrete: trilha sonora pendente'}`,
     html: baseLayout({
       preheader: `Sua coreografia precisa de trilha até ${p.prazoTrilha}.`,
       title: titulo,
@@ -1575,7 +1575,7 @@ interface VideoApprovedInscriptionReadyPayload {
 }
 
 function buildVideoApprovedInscriptionReady(p: VideoApprovedInscriptionReadyPayload) {
-  const titulo = 'Aprovado na seletiva! 🎉'
+  const titulo = 'Aprovado na seletiva!'
   const intro  = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, parabéns — a coreografia <strong>${escape(p.coreografia ?? '')}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''} foi aprovada pela comissão de seletiva. Agora você pode concluir a inscrição pagando a taxa do festival.`
 
   const contentHtml = `
@@ -1770,7 +1770,7 @@ function buildAdminCalculatorLead(p: CalculatorProposalPayload) {
     </p>`
 
   return {
-    subject: `🧮 Novo lead da simulação: ${p.leadNome} (${p.planoNome})`,
+    subject: `Novo lead da simulação: ${p.leadNome} (${p.planoNome})`,
     html: baseLayout({
       preheader: `Novo lead: ${p.leadNome} simulou o plano ${p.planoNome}.`,
       title: 'Novo lead da calculadora',
