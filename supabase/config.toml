@@ -478,6 +478,14 @@ verify_jwt = false
 import_map = "./functions/validate-audience-coupon/deno.json"
 entrypoint = "./functions/validate-audience-coupon/index.ts"
 
+# Lembrete de abertura de vendas: cadastra e-mail do interessado. verify_jwt=false (público).
+# Rate-limited 8 cadastros/10min por IP no próprio código da função.
+[functions.subscribe-sales-open]
+enabled = true
+verify_jwt = false
+import_map = "./functions/subscribe-sales-open/deno.json"
+entrypoint = "./functions/subscribe-sales-open/index.ts"
+
 # Tier 2: refund de ingresso. verify_jwt=true porque requer auth do produtor
 # (ou super admin). Função revalida permissão internamente.
 [functions.refund-audience-ticket]
