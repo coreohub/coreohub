@@ -1309,3 +1309,9 @@ Termos, Política e Entrar Juri entraram na trava de claro por rota (commit 9e73
 Zonas do mapa público usam paleta fixa azul/verde/âmbar na ordem cadastrada (o dado do evento não muda; `remapZonesForPublic` em `utils/zoneColor.ts`), disponível = lugar cheio com número branco, ocupado = cinza com "×", selecionado = magenta da marca com "✓" e anel escuro. Motivo: o rosa da zona MEIO colidia com o selecionado e o ciano das laterais tinha 1,5:1 sobre branco (mínimo 3:1, WCAG 1.4.11). Medido: azul 5,19, verde 4,55, âmbar 4,83 sobre branco; azul x violeta se confundem em deuteranopia (violeta fora da paleta). Falta: "Siga o evento" junto de "Compartilhar" (aguarda OK), conferir PDV/bloqueio/troca no painel, ver no staging.
 
 No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e foi para dentro do bloco Compartilhar, no fim da pagina da vitrine.
+
+### 2026-11-17 - Teste de e-mail do webhook com falha de comissao (sandbox em producao)
+- Cenario B (comissao grava normal): 1 e-mail "Ingresso confirmado", reenvios viraram `already_processed`. OK.
+- Cenario A (comissao forcada a falhar por gatilho temporario): 500, 500, 500 sem nenhum e-mail ao comprador; na 4a tentativa 200 + 1 e-mail + aviso "Comissao NAO registrada" ao admin. Depois, uma reentrega da Asaas (gatilho ja removido) gravou a comissao e marcou a falha como resolvida, e enviou um 2o e-mail ao comprador: 2 e-mails no total em vez de 1.
+- Achado menor: apos esgotar, a recuperacao tardia reenvia o e-mail porque a comissao e nova. Raro (so apos 3 falhas seguidas + recuperacao). Nao corrigido.
+- Limpeza feita e conferida: gatilho temporario, tickets, comissoes, webhook_failures, notificacoes e a funcao tmp-wh-probe removidos.
