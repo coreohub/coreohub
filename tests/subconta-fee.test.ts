@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
-  resolveSubcontaFee, settleSubcontaFee, parseFeeMode,
+  resolveSubcontaFee, settleSubcontaFee, settleOrFlagSubcontaFee, parseFeeMode,
   SUBCONTA_FEE, MASTER_WALLET_ID, SUBCONTA_FEE_MIN_PAYOUT,
 } from '../supabase/functions/_shared/subconta-fee'
 import { planPayout } from '../supabase/functions/_shared/payout-plan'
@@ -248,6 +248,61 @@ describe('settleSubcontaFee', () => {
     const { client, db } = fakeDb({ marker: 'x', row: { status: 'concluido', settled_transfer_id: null } })
     expect(await settleSubcontaFee(client, 'p1', 'w1')).toBe(true)
     expect(db.row.settled_transfer_id).toBe('w1')
+  })
+})
+
+describe('settleOrFlagSubcontaFee (A3: baixa que falha não pode repetir o desconto)', () => {
+  // cliente em que o UPDATE de baixa (settled_transfer_id) falha, mas o de travar (status incerto) passa
+  function clientBaixaFalha(failFlag = false) {
+    const row: any = { status: 'concluido', settled_transfer_id: null, last_error: null }
+    const client = {
+      from() {
+        let patch: any = null
+        const chain: any = {
+          eq: () => chain, is: () => chain, select: () => chain,
+          update: (p: any) => { patch = p; return chain },
+          then: (res: any) => {
+            const isFlag = patch && patch.status === 'incerto'
+            if (isFlag && !failFlag) { Object.assign(row, patch); return Promise.resolve({ data: [], error: null }).then(res) }
+            return Promise.resolve({ data: null, error: { message: 'rede' } }).then(res)
+          },
+        }
+        return chain
+      },
+    }
+    return { client, row }
+  }
+
+  it('baixa ok: devolve true e não trava', async () => {
+    const { client, db } = fakeDb({ marker: 'x', row: { status: 'concluido', settled_transfer_id: null } })
+    expect(await settleOrFlagSubcontaFee(client, 'p1', 'w1')).toBe(true)
+    expect(db.row.settled_transfer_id).toBe('w1')
+    expect(db.row.status).toBe('concluido')
+  })
+
+  it('baixa falha nas 2 tentativas: trava a taxa em incerto', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { client, row } = clientBaixaFalha()
+    expect(await settleOrFlagSubcontaFee(client, 'p1', 'w9')).toBe(false)
+    expect(row.status).toBe('incerto')
+    expect(row.last_error).toContain('w9')
+  })
+
+  it('baixa e trava falham: devolve false e grita (não lança)', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { client, row } = clientBaixaFalha(true)
+    expect(await settleOrFlagSubcontaFee(client, 'p1', 'w9')).toBe(false)
+    expect(row.status).toBe('concluido')
+    expect(err).toHaveBeenCalled()
+  })
+
+  it('taxa travada em incerto segura o repasse seguinte (não desconta de novo)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { client } = fakeDb({ marker: 'x', row: { status: 'incerto', attempt_id: 'a', transfer_id: 't', settled_transfer_id: null, updated_at: new Date().toISOString() } })
+    mockAsaas()
+    const r = await call(client)
+    expect(r.skipPayout).toBe('fee_uncertain')
+    expect(r.credit).toBe(0)
   })
 })
 

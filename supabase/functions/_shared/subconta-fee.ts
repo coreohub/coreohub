@@ -202,3 +202,24 @@ export async function settleSubcontaFee(
   }
   return true
 }
+
+/** Baixa o crédito e, se NÃO conseguir, trava a taxa em `incerto`: sem baixa, o próximo repasse
+ *  descontaria os R$ 12,90 de novo (auditoria Lote 3, A3 / B-N5). `incerto` segura o repasse do
+ *  produtor até conferência manual (modo `off` continua sendo a saída de emergência). */
+export async function settleOrFlagSubcontaFee(
+  supabase: any,
+  producerId: string,
+  withdrawTransferId: string | undefined,
+): Promise<boolean> {
+  if (await settleSubcontaFee(supabase, producerId, withdrawTransferId)) return true
+  const { error } = await supabase
+    .from('subconta_fee_charges')
+    .update({ status: 'incerto', last_error: `baixa do credito falhou apos saque ${withdrawTransferId ?? 'sem-id'}`, updated_at: nowIso() })
+    .eq('producer_id', producerId)
+    .eq('status', 'concluido')
+    .is('settled_transfer_id', null)
+  if (error) {
+    console.error(`[subconta-fee][ALERT] baixa falhou E nao consegui travar a taxa; conferir produtor=${producerId} transfer=${withdrawTransferId}: ${error.message}`)
+  }
+  return false
+}
