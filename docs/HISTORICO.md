@@ -1362,3 +1362,12 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - PENDENTES (deploy interrompido pelo pre-check, saida 2, com 2 ingressos criados e 2 reservas nos ultimos 15-30 min, pais comprando o Level Up): `create-workshop-registration`, `create-workshop-pass-registration`, `create-payment-asaas`, `asaas-webhook`. Continuam com o codigo antigo (fallback para sandbox) ate o deploy; risco praticamente zero enquanto o secret existir. Fazer na janela calma (1h-6h BRT) ou quando o pre-check der 0, um por vez, nessa ordem; `asaas-webhook` por ultimo.
 - Reverter: `git revert 7ae07f5` e redeploy das edges afetadas.
 - Observacao: no script de deploy em loop, o `process.exit` do Node crasha no Windows (libuv); usar `process.exitCode`.
+
+## 2026-11-17 (18:08-18:14 BRT): A2 concluido, as 4 edges restantes deployadas com compradores ativos
+
+- Havia compra de ingresso em andamento (pedido de 2 ingressos criado as 18:06, outro as 18:10). Por isso o `pre-deploy-check` dava codigo 2 e o deploy foi feito de forma cirurgica, com OK explicito do dono:
+  1. `create-workshop-registration`, `create-workshop-pass-registration`, `create-payment-asaas`: nao estao no caminho de compra de ingresso (esse usa `create-audience-ticket`, nao alterada, e o `asaas-webhook`). Nenhuma atividade de inscricao/workshop no momento. Deploy + teste 400 de validacao.
+  2. `asaas-webhook`: esperado um instante sem nenhum ingresso PENDENTE (sondagem a cada ~15 s) e deploy imediato (18:13:47 pelo relogio do computador). Teste sem token = 401.
+- Varredura depois: os 2 pedidos ficaram APROVADO (o 1o pago 18:10:31, o 2o 18:15:32 pelo relogio do banco), 2 comissoes de plateia gravadas (R$ 14,22), 0 falhas de webhook (`webhook_failures`), 0 anomalias em `payment_expectations`.
+- NAO verificado: o 2o pagamento parece ter sido processado ANTES do deploy do webhook (relogio do banco adiantado ~2 min em relacao ao do computador). Portanto a versao nova do `asaas-webhook` ainda nao processou um pagamento real. Conferir no proximo pagamento: comissao gravada e `webhook_failures` vazio.
+- As 11 edges do A2 estao no ar. Reverter: `git revert 7ae07f5` e redeploy.
