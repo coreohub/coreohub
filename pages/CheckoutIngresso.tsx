@@ -608,22 +608,34 @@ export default function CheckoutIngresso() {
     const tipoById = new Map(selectedSeats.map(id => [id, String(seatStatuses[id]?.seat_tipo ?? 'comum')]));
     return resolveSeatAssignments({ lines, seatIds: selectedSeats, tipoById, prefs: seatTypes });
   }, [seatMapEnabled, selectedSeats, totalQty, lines, seatStatuses, seatTypes]);
+  // Pedido completo (todos os lugares escolhidos): preço da zona de cada lugar, como o servidor calcula.
+  // Pedido incompleto (ex.: ingresso PCD no carrinho e o lugar PCD ainda não escolhido): os lugares comuns
+  // já escolhidos também levam o preço da zona; só o ingresso especial sem lugar fica no preço-base.
+  const zonedPartial = !seatAssignments;
   const zoned = useMemo(() => {
-    if (!zonePriced || !seatAssignments) return null;
+    if (!zonePriced || !seatMapEnabled) return null;
     try {
-      const seatInfo = new Map(selectedSeats.map(id => [id, { zone_key: zoneBySeat[id] ?? null, seat_tipo: seatStatuses[id]?.seat_tipo ?? null }]));
+      const common = seatAssignments ? selectedSeats : selectedSeats.filter(id => seatTypes[id] != null);
+      if (common.length === 0) return null;
+      const counts = countSeatTypes(common, seatTypes);
+      const resolvedIn = seatAssignments
+        ? lines.map(l => ({ ...l, quantity: l.qty }))
+        : lines.filter(l => l.seatKind === 'comum' && (counts[l.idx] ?? 0) > 0).map(l => ({ ...l, quantity: counts[l.idx] }));
+      const assignments = seatAssignments ?? common.map(id => ({ seat_id: id, ticket_type_idx: seatTypes[id] }));
+      const seatInfo = new Map(common.map(id => [id, { zone_key: zoneBySeat[id] ?? null, seat_tipo: seatStatuses[id]?.seat_tipo ?? null }]));
       return applyZonePricing({
-        resolved: lines.map(l => ({ ...l, quantity: l.qty })),
-        ingressos: zoneIngressos, seatIds: selectedSeats, seatInfo, assignments: seatAssignments,
+        resolved: resolvedIn,
+        ingressos: zoneIngressos, seatIds: common, seatInfo, assignments,
         today: todayISO(), quotePrices: quote?.prices ?? null,
       });
     } catch { return null; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seatAssignments, selectedSeats, zoneBySeat, lines, quote]);
-  const pricedLines = useMemo<Array<LineItem & { zoneKey?: string }>>(
-    () => zoned ? zoned.resolved.map(r => ({ ...r, qty: r.quantity })) : lines,
-    [zoned, lines],
-  );
+  }, [seatAssignments, selectedSeats, seatTypes, zoneBySeat, lines, quote]);
+  const pricedLines = useMemo<Array<LineItem & { zoneKey?: string }>>(() => {
+    if (!zoned) return lines;
+    const zonedLines = zoned.resolved.map(r => ({ ...r, qty: r.quantity }));
+    return zonedPartial ? [...zonedLines, ...lines.filter(l => l.seatKind !== 'comum')] : zonedLines;
+  }, [zoned, zonedPartial, lines]);
   const totalBase = useMemo(() => round2(pricedLines.reduce((s, l) => s + l.precoUnit * l.qty, 0)), [pricedLines]);
 
   const validateCoupon = async (code: string): Promise<{ discount: number } | { error: string }> => {
