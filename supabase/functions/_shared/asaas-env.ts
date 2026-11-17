@@ -41,6 +41,20 @@ const need = (reader: EnvReader, name: string): string => {
   return v
 }
 
+/**
+ * Base URL de PRODUCAO, falhando fechado (auditoria Lote 3, A2 / B#18).
+ * Substitui `Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/...'`: se o secret sumir,
+ * a cobranca real NAO pode ir para o sandbox em silencio. Ausente, vazio ou apontando para sandbox => erro.
+ * Nao exige a API key (cada function a le do seu jeito).
+ */
+export function requireProductionBaseUrl(reader: EnvReader): string {
+  const baseUrl = need(reader, 'ASAAS_BASE_URL').replace(/\/+$/, '')
+  if (/sandbox/i.test(baseUrl)) {
+    throw new Error('[asaas-env] ASAAS_BASE_URL de produção aponta para sandbox — recusando')
+  }
+  return baseUrl
+}
+
 export function resolveAsaasEnv(input: AsaasEnvInput, reader: EnvReader): AsaasEnv {
   if (input.paymentSandbox === true) {
     if (input.producerIsTestAccount !== true) {

@@ -45,6 +45,7 @@ import { normalizeInstallments } from '../_shared/processing-fee.ts'
 import { installmentConfigFor } from '../_shared/installment-offer.ts'
 import { fetchCardAnticipationLimit, limitCovers } from '../_shared/asaas-anticipation.ts'
 import { computeQuantityDiscount, computeWorkshopCheckout, normalizeQuantityTiers } from '../_shared/workshop-checkout.ts'
+import { requireProductionBaseUrl } from '../_shared/asaas-env.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -123,7 +124,7 @@ Deno.serve(async (req) => {
     if (!isValidCpf(cpfLimpo)) throw new Error('CPF inválido (dígito verificador não bate)')
 
     let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    let ASAAS_BASE_URL = requireProductionBaseUrl(Deno.env)
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',

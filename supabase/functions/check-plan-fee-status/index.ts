@@ -7,13 +7,13 @@
 // EventCommissionModal do /super-admin.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireProductionBaseUrl } from '../_shared/asaas-env.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
       return json({ has_pending: false })
     }
 
+    const ASAAS_BASE_URL = requireProductionBaseUrl(Deno.env) // falha fechada (A2): nunca cai no sandbox
     const res = await fetch(`${ASAAS_BASE_URL}/payments/${event.billing_plan_asaas_payment_id}`, {
       headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
     })

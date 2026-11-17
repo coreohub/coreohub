@@ -19,6 +19,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireProductionBaseUrl } from '../_shared/asaas-env.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,7 +61,14 @@ Deno.serve(async (req) => {
   }
 
   const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-  const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://www.asaas.com/api/v3'
+  let ASAAS_BASE_URL: string
+  try {
+    ASAAS_BASE_URL = requireProductionBaseUrl(Deno.env) // falha fechada (A2): sem fallback silencioso
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'ASAAS_BASE_URL não configurada' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
   if (!ASAAS_API_KEY) {
     return new Response(JSON.stringify({ error: 'ASAAS_API_KEY não configurado' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
