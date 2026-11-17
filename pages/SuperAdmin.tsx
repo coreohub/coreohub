@@ -18,6 +18,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import SuperAdminMfaGate from '../components/SuperAdminMfaGate';
 import PayoutAttemptsCard from '../components/PayoutAttemptsCard';
 
+// Valor em reais no padrão brasileiro: R$ 18.356,47 (ponto nos milhares, vírgula nos centavos, sempre 2 casas).
+const brl = (n: number | string | null | undefined): string => Number(n ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 interface ProducerRow {
   id: string;
   full_name: string | null;
@@ -673,14 +676,14 @@ const SuperAdmin = () => {
             <MetricCard
               icon={DollarSign}
               label="GMV 30d"
-              value={`R$ ${stats.gross30d.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-              sub={`All-time R$ ${stats.grossTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              value={`R$ ${brl(stats.gross30d)}`}
+              sub={`All-time R$ ${brl(stats.grossTotal)}`}
             />
             <MetricCard
               icon={TrendingUp}
               label="Receita CoreoHub 30d"
-              value={`R$ ${stats.commission30d.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-              sub={`${stats.transactions30d} transações · all-time R$ ${stats.commissionTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+              value={`R$ ${brl(stats.commission30d)}`}
+              sub={`${stats.transactions30d} transações · all-time R$ ${brl(stats.commissionTotal)}`}
               tone="emerald"
             />
             <MetricCard
@@ -699,7 +702,7 @@ const SuperAdmin = () => {
             <MetricCard
               icon={AlertCircle}
               label="Refunds 30d"
-              value={`R$ ${stats.refundsTotal30d.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              value={`R$ ${brl(stats.refundsTotal30d)}`}
               sub={`${stats.refundsCount30d} estornos`}
               tone={stats.refundsCount30d > 0 ? 'rose' : 'pink'}
             />
@@ -784,7 +787,7 @@ const SuperAdmin = () => {
                         {stats.stuckCommissions} comissões retidas há +14 dias
                       </h3>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Total R$ {stats.stuckTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — possível bug no cron <code>daily-release-funds</code> ou produtores sem PIX/KYC.
+                        Total R$ {brl(stats.stuckTotal)} — possível bug no cron <code>daily-release-funds</code> ou produtores sem PIX/KYC.
                       </p>
                     </div>
                   </div>
@@ -848,7 +851,7 @@ const SuperAdmin = () => {
                     <YAxis tick={{ fontSize: 10, fontWeight: 900, fill: '#94a3b8' }} tickFormatter={(v) => `R$${v}`} />
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: '1px solid #ff0068', fontSize: 11, fontWeight: 800 }}
-                      formatter={(v: any) => [`R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, '']}
+                      formatter={(v: any) => [`R$ ${brl(v)}`, '']}
                     />
                     <Bar dataKey="bruto"    name="GMV"      fill="#ff0068" radius={[8, 8, 0, 0]} />
                     <Bar dataKey="comissao" name="CoreoHub" fill="#e3ff0a" radius={[8, 8, 0, 0]} />
@@ -872,8 +875,8 @@ const SuperAdmin = () => {
                         <Icon size={13} aria-hidden="true" className="text-[#ff0068]" />
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{meta.label}</p>
                       </div>
-                      <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">R$ {commission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{count} transaç{count === 1 ? 'ão' : 'ões'} · GMV R$ {gross.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                      <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">R$ {brl(commission)}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{count} transaç{count === 1 ? 'ão' : 'ões'} · GMV R$ {brl(gross)}</p>
                     </div>
                   );
                 })}
@@ -893,7 +896,7 @@ const SuperAdmin = () => {
                       <span className="text-2xl font-black text-[#ff0068] tabular-nums">{i + 1}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-black text-slate-900 dark:text-white truncate">{ev.name}</p>
-                        <p className="text-[10px] text-slate-500 font-bold">R$ {ev.commission.toFixed(2)}</p>
+                        <p className="text-[10px] text-slate-500 font-bold">R$ {brl(ev.commission)}</p>
                       </div>
                     </li>
                   ))}
@@ -1065,7 +1068,7 @@ const SuperAdmin = () => {
                               ) : (
                                 <span className="text-slate-700 dark:text-slate-300">
                                   {ev.commission_type === 'fixed'
-                                    ? `R$ ${Number(ev.commission_fixed ?? 0).toFixed(2)}`
+                                    ? `R$ ${brl(ev.commission_fixed)}`
                                     : `${Number(ev.commission_percent ?? 0)}%`
                                   }
                                   {ev.billing_plan && (
@@ -1079,7 +1082,7 @@ const SuperAdmin = () => {
                               {ev.setup_fee_grandfathered ? (
                                 <span className="text-slate-400" title="Isento (evento já existia antes do lançamento da taxa, ou isenção manual)">Isento</span>
                               ) : ev.setup_fee_paid_at ? (
-                                <span className="text-emerald-500" title={`R$ ${Number(ev.setup_fee_amount_paid ?? 0).toFixed(2)} · faixa ${ev.setup_fee_tier_chave ?? '—'}`}>
+                                <span className="text-emerald-500" title={`R$ ${brl(ev.setup_fee_amount_paid)} · faixa ${ev.setup_fee_tier_chave ?? '—'}`}>
                                   Paga
                                 </span>
                               ) : (
@@ -1200,8 +1203,8 @@ const SuperAdmin = () => {
                           <p className="text-[10px] text-slate-500">{p.email}</p>
                         </td>
                         <td className="px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300">{p.events_count}</td>
-                        <td className="px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 tabular-nums">R$ {p.total_gross.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-xs font-black text-[#ff0068] tabular-nums">R$ {p.total_commission.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 tabular-nums">R$ {brl(p.total_gross)}</td>
+                        <td className="px-4 py-3 text-xs font-black text-[#ff0068] tabular-nums">R$ {brl(p.total_commission)}</td>
                         <td className="px-4 py-3">
                           {(() => {
                             const plans = Array.from(plansByProducer.get(p.id) ?? []);
@@ -1666,7 +1669,7 @@ const EventCommissionModal: React.FC<{
             {invoiceDone && (
               <div className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-1">
                 <p className="text-xs font-bold text-emerald-500">
-                  Plano {invoiceDone.label} ativado. Fatura de R$ {Number(invoiceDone.valor).toFixed(2)} {invoiceDone.reused ? 'já existia em aberto (reaproveitada, sem novo e-mail)' : 'gerada e e-mail enviado'} — vence {invoiceDone.due_date}.
+                  Plano {invoiceDone.label} ativado. Fatura de R$ {brl(invoiceDone.valor)} {invoiceDone.reused ? 'já existia em aberto (reaproveitada, sem novo e-mail)' : 'gerada e e-mail enviado'} — vence {invoiceDone.due_date}.
                 </p>
                 <a href={invoiceDone.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:underline">
                   <ExternalLink size={11} /> Abrir fatura
@@ -1700,7 +1703,7 @@ const EventCommissionModal: React.FC<{
                       <span className={`font-bold ${feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'text-emerald-500' : feeStatus.status === 'OVERDUE' ? 'text-rose-500' : 'text-amber-500'}`}>
                         {feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'PAGO' : feeStatus.status === 'OVERDUE' ? 'VENCIDO' : 'PENDENTE'}
                       </span>
-                      {' '}— R$ {Number(feeStatus.value).toFixed(2)} · vence {feeStatus.due_date}
+                      {' '}— R$ {brl(feeStatus.value)} · vence {feeStatus.due_date}
                       {feeStatus.status !== 'RECEIVED' && feeStatus.status !== 'CONFIRMED' && !feeStatus.already_confirmed_locally && (
                         <span className="text-slate-400"> (webhook confirma sozinho ao pagar — não precisa fazer nada aqui)</span>
                       )}
@@ -1846,25 +1849,25 @@ const SettlementModal: React.FC<{
               </div>
               <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Faturamento líquido</p>
-                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {preview.gmv_liquido.toFixed(2)}</p>
+                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {brl(preview.gmv_liquido)}</p>
               </div>
               <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Já coletado (split)</p>
-                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {preview.comissao_coletada.toFixed(2)}</p>
+                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {brl(preview.comissao_coletada)}</p>
               </div>
               <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Devido real (R$2/part., teto 4,5%)</p>
-                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {preview.valor_devido_real.toFixed(2)}</p>
+                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {brl(preview.valor_devido_real)}</p>
               </div>
             </div>
 
             {preview.diferenca > 0 ? (
               <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-xs text-amber-700 dark:text-amber-400 font-bold">
-                Falta cobrar <strong>R$ {preview.diferenca.toFixed(2)}</strong> do produtor — confirmar gera a cobrança complementar.
+                Falta cobrar <strong>R$ {brl(preview.diferenca)}</strong> do produtor — confirmar gera a cobrança complementar.
               </div>
             ) : (
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl text-xs text-emerald-700 dark:text-emerald-400 font-bold">
-                Já coletado o suficiente (ou a mais) — confirmar fecha na hora, sem cobrança. Diferença de R$ {Math.abs(preview.diferenca).toFixed(2)} a favor do produtor vira negociação manual, não estorno automático.
+                Já coletado o suficiente (ou a mais) — confirmar fecha na hora, sem cobrança. Diferença de R$ {brl(Math.abs(preview.diferenca))} a favor do produtor vira negociação manual, não estorno automático.
               </div>
             )}
 
@@ -1882,7 +1885,7 @@ const SettlementModal: React.FC<{
         {charge && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              Cobrança complementar gerada: <strong>R$ {charge.valor_cobrado.toFixed(2)}</strong>.
+              Cobrança complementar gerada: <strong>R$ {brl(charge.valor_cobrado)}</strong>.
             </p>
             <a
               href={charge.invoice_url}
