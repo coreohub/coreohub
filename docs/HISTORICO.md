@@ -1327,3 +1327,12 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - A1 aplicado em producao com a plataforma parada (`pre-deploy-check --strict` saida 0, 113 min sem venda): `platform_commissions_payment_audience_uniq` UNIQUE (asaas_payment_id, audience_ticket_group_id) WHERE audience_ticket_group_id IS NOT NULL. Antes: 145 linhas de plateia, 0 duplicados. Conferido: indice `indisvalid` e `indisunique`. Webhook ja trata 23505, sem deploy de edge.
 - Reverter: `docs/auditoria/lote3/passo1-reverter.sql` (DROP INDEX CONCURRENTLY). Migration `20261118_platform_commissions_audience_unique.sql`.
 - Nao verificado: comportamento com reentrega concorrente real (so teste em tabela temporaria).
+
+## 2026-11-17 (noite): auditoria Lote 3, A3 e A4 em producao
+
+- A4: `release-low-value-transfers` relê os itens (`transferido`, `pix_sent_at` nulo) DENTRO da trava, em blocos de 100 ids, e só planeja o que segue pendente; releitura vazia ou com erro pula o produtor.
+- A3: `settleOrFlagSubcontaFee` (`_shared/subconta-fee.ts`): se a baixa do crédito falhar nas 2 tentativas, a taxa vai para `incerto` e segura o repasse seguinte (evita descontar R$ 12,90 duas vezes). Usada nos 2 pontos de `_shared/payout-run.ts`. Testes novos em `tests/subconta-fee.test.ts` (793 testes ok).
+- Commit na `main`: `eb85b3a` (cherry-pick do `7e0d4cb`, worktree `D:\tmp\CoreoHub-wh`). Deploy com plataforma parada (pre-deploy-check saida 0 antes de cada um, 132 a 133 min sem venda): `release-low-value-transfers` v26, `daily-release-funds` v35, `manual-transfer-now` v34, todas ACTIVE.
+- Observacao: a CLI global `supabase` 2.90 nao le o `config.toml` (chave `[local_smtp]`); usar `npx supabase` (3.2.0) com `--yes`. O worktree nao tem o projeto linkado: rodar o `pre-deploy-check` pela pasta principal.
+- Reverter: `git revert eb85b3a` e redeploy das 3 edges. `subconta_fee_charges` estava vazia (nenhuma taxa cobrada ainda), logo nao havia desconto repetido.
+- NAO verificado: a corrida real do A4 e a falha real da baixa do A3 (so testes unitarios e `deno check`); nenhum repasse real aconteceu desde o deploy.
