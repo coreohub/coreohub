@@ -1395,3 +1395,17 @@ No mesmo dia: "Siga o evento" (so celular) saiu do meio do caminho de compra e f
 - Varredura depois: os 2 pedidos ficaram APROVADO (o 1o pago 18:10:31, o 2o 18:15:32 pelo relogio do banco), 2 comissoes de plateia gravadas (R$ 14,22), 0 falhas de webhook (`webhook_failures`), 0 anomalias em `payment_expectations`.
 - NAO verificado: o 2o pagamento parece ter sido processado ANTES do deploy do webhook (relogio do banco adiantado ~2 min em relacao ao do computador). Portanto a versao nova do `asaas-webhook` ainda nao processou um pagamento real. Conferir no proximo pagamento: comissao gravada e `webhook_failures` vazio.
 - As 11 edges do A2 estao no ar. Reverter: `git revert 7ae07f5` e redeploy.
+
+## 2026-11-18, incidente: nenhum e-mail transacional saiu de 17/11 17:27 a 18/11 10:10 (BRT)
+
+**Sintoma.** O Resend não registrou envio depois de 17/11 17:27 BRT. Compradores do Level Up (telmajaqueline73, rodrigosbarco, precisacontabil1 com 2 pedidos, andressafondelo) ficaram sem o e-mail de ingresso, e o produtor sem o "Nova venda". Os ingressos e pagamentos em si estavam corretos (webhook APROVADO, comissão gravada).
+
+**Causa.** O item B5 do Lote 3 (commit 12623af) trocou o gate de service da `send-email` de "igual à chave" para "claim `role` do JWT é `service_role`" (`isServiceRoleToken`), sob a premissa de que o gateway já verificara a assinatura. A premissa era falsa: a `send-email` roda com `verify_jwt=false`. Além disso, o valor de `SUPABASE_SERVICE_ROLE_KEY` do ambiente (regravado pela plataforma em 17/11) não é a chave JWT legada (digest não bate com nenhuma chave da API), e é o que `asaas-webhook` e as demais funções enviam. Resultado: todo chamador interno recebia 401 ("chamada não autorizada bloqueada (sem service_key)", 11 ocorrências nos logs, só nas versões 106 e 107). Efeito colateral de segurança do mesmo desenho: com `verify_jwt=false`, um JWT forjado com `role=service_role` passaria.
+
+**Correção (main eef4325, send-email v108).** O gate agora aceita o token só se for IGUAL, em tempo constante (`isServiceKeyMatch`, `_shared/jwt-role.ts`), a `SUPABASE_SERVICE_ROLE_KEY` ou a `SERVICE_ROLE_KEY` do ambiente; claim sem assinatura não vale mais. Testes em `tests/jwt-role.test.ts`. Testado em produção após o deploy: JWT forjado com `role=service_role` dá 401, anon key dá 401, chave real passa o gate.
+
+**Auditoria do mesmo padrão.** As outras 16 funções que leem o `role` do JWT estão deployadas com `verify_jwt=true` (o gateway valida a assinatura), então não têm o furo. `send-lead-reengagement-emails` consta `false` no `config.toml` mas está `true` no deploy: alinhar o arquivo. O A2 (URL da Asaas) não mexe em autenticação.
+
+**Recuperação.** 10 e-mails reenviados (comprador `audience_ticket_confirmed` + produtor `audience_ticket_producer` dos 5 pedidos pagos entre 17/11 20:27 UTC e 18/11 12:03 UTC). Entregues: 8. Os 2 da precisacontabil1@gmail.com deram bounce no Gmail (rejeição geral do provedor): contatar a compradora por outro canal e mandar o link do ingresso.
+
+**Lição.** Gate por claim de JWT só vale atrás de `verify_jwt=true`; em função com `verify_jwt=false`, comparar com a chave real. E toda mudança de autenticação de função usada por outras funções precisa de teste com a chave que os chamadores realmente enviam (a do ambiente), não só a chave legada do painel. Não verificado ainda: o caminho real asaas-webhook -> send-email com a chave do ambiente (só se prova na próxima venda; conferir no Resend e nos logs).
