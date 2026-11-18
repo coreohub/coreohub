@@ -2389,7 +2389,9 @@ Deno.serve(async (req) => {
         // reentregar depois (o webhook_failures registra). 401/403/outros 4xx = nossa chave/permissao
         // com problema (um atacante nao consegue provoca-los): alerta e segue, pra nao parar todos os
         // pagamentos reais por causa de uma chave.
-        if (verifyRes.status >= 500) {
+        // 429 (limite de chamadas da Asaas) tambem e transitorio: um atacante com o token vazado poderia
+        // esgotar a cota da nossa chave com webhooks falsos e entao passar pelo fail-open.
+        if (verifyRes.status >= 500 || verifyRes.status === 429) {
           console.error(`[asaas-webhook][ALERT] cross-check indisponivel (HTTP ${verifyRes.status}) payment_id=${payment.id} — 503 pra Asaas reentregar`)
           return new Response(JSON.stringify({ error: 'cross_check_unavailable' }), {
             status: 503,
