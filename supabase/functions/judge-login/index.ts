@@ -156,6 +156,38 @@ Deno.serve(async (req) => {
   try { body = await req.json() } catch { return json({ error: 'invalid_json' }, 400) }
 
   const { action, token } = body ?? {}
+
+  // ─── action: resolve-code (Lote 3, B2) ──────────────────────────────────────
+  // Troca o código curto do evento (/entrar-juri) pelo token do produtor + event_id. Antes isso era
+  // a RPC resolve_judge_short_code, executável por qualquer anônimo e sem limite de tentativas.
+  // Única action sem `token` (é ela que o descobre). Limite por IP folgado: um salão de evento
+  // compartilha o mesmo IP de Wi-Fi entre vários jurados. Falha do limitador NÃO bloqueia o jurado.
+  if (action === 'resolve-code') {
+    const code = typeof body?.code === 'string' ? body.code.trim() : ''
+    if (!/^[A-Za-z0-9]{4,12}$/.test(code)) return json({ ok: false, reason: 'invalid_code' }, 400)
+    const ip = req.headers.get('cf-connecting-ip')
+      ?? req.headers.get('x-forwarded-for')?.split(',')[0].trim()
+      ?? req.headers.get('x-real-ip') ?? 'unknown'
+    if (ip !== 'unknown') {
+      const { data: rl, error: rlErr } = await supa.rpc('rate_limit_check', {
+        p_scope: 'judge-resolve-code', p_identifier: ip, p_window_seconds: 300, p_max_attempts: 40,
+      })
+      if (rlErr) console.warn('[judge-login] rate_limit_check falhou (segue):', rlErr.message)
+      else {
+        const row = Array.isArray(rl) ? rl[0] : rl
+        if (row && row.allowed === false) return json({ ok: false, reason: 'rate_limited' }, 429)
+      }
+    }
+    const { data: found, error: rcErr } = await supa.rpc('resolve_judge_short_code', { p_code: code })
+    if (rcErr) {
+      console.error('[judge-login] resolve-code erro:', rcErr.message)
+      return json({ ok: false, reason: 'db_error' }, 500)
+    }
+    const hit = Array.isArray(found) ? found[0] : found
+    if (!hit?.judge_access_token || !hit?.event_id) return json({ ok: false, reason: 'not_found' }, 404)
+    return json({ ok: true, token: hit.judge_access_token, event_id: hit.event_id })
+  }
+
   if (!token || typeof token !== 'string') return json({ ok: false, reason: 'invalid_token' }, 400)
 
   // Resolve produtor a partir do token público

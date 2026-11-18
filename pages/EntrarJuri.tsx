@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Gavel, Loader2, ArrowRight, AlertCircle } from 'lucide-react';
-import { supabase } from '../services/supabase';
+import { supabaseUrl, supabaseAnonKey } from '../services/supabase';
 
 /**
  * Entrada por código curto pro Terminal de Júri — mesmo padrão Kahoot
@@ -35,15 +35,30 @@ const EntrarJuri: React.FC = () => {
       // resolve_judge_short_code agora devolve linha(s) com token do produtor
       // + o event_id do evento dono desse código (código é por evento desde
       // 2026-07-15, não mais por produtor — evita ambiguidade com 2+ eventos).
-      const { data, error: rpcError } = await supabase.rpc('resolve_judge_short_code', { p_code: trimmed });
-      if (rpcError) throw rpcError;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row?.judge_access_token || !row?.event_id) {
+      // Lote 3 (B2): resolvido pela edge `judge-login` (action resolve-code, com limite por IP); a RPC
+      // deixou de ser pública.
+      const res = await fetch(`${supabaseUrl}/functions/v1/judge-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({ action: 'resolve-code', code: trimmed }),
+      });
+      const row = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        setError('Muitas tentativas. Aguarde alguns minutos e tente de novo.');
+        setLoading(false);
+        return;
+      }
+      if (res.status === 404 || res.status === 400 || !row?.token || !row?.event_id) {
+        if (res.ok === false && res.status >= 500) throw new Error(`judge-login ${res.status}`);
         setError('Código não encontrado. Confira com o produtor e tente de novo.');
         setLoading(false);
         return;
       }
-      navigate(`/judge-login/${row.judge_access_token}?event=${row.event_id}`, { replace: true });
+      navigate(`/judge-login/${row.token}?event=${row.event_id}`, { replace: true });
     } catch (err) {
       console.error('[EntrarJuri] resolve_judge_short_code', err);
       setError('Não foi possível verificar o código agora. Tente de novo.');
