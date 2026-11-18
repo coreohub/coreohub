@@ -5,15 +5,22 @@
 -- pra "No balanço do carimbó", Daniela Morais com 3 notas pra "O Som do
 -- Silêncio em Nós".
 
--- Dedupe: mantém só a linha mais recente por (judge_id, registration_id).
-DELETE FROM evaluations e
-USING evaluations e2
-WHERE e.judge_id = e2.judge_id
-  AND e.registration_id = e2.registration_id
-  AND (e.created_at < e2.created_at
-       OR (e.created_at = e2.created_at AND e.id < e2.id));
+-- Lote 3, D3: so roda se a constraint AINDA nao existe. Reaplicar esta migration (db reset, branch de
+-- preview) com a constraint ja presente nao apaga nada e nao falha; sem ela, o dedupe e o que sempre foi.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'evaluations_judge_registration_unique') THEN
+    -- Dedupe: mantem so a linha mais recente por (judge_id, registration_id).
+    DELETE FROM evaluations e
+    USING evaluations e2
+    WHERE e.judge_id = e2.judge_id
+      AND e.registration_id = e2.registration_id
+      AND (e.created_at < e2.created_at
+           OR (e.created_at = e2.created_at AND e.id < e2.id));
 
-ALTER TABLE evaluations
-  ADD CONSTRAINT evaluations_judge_registration_unique UNIQUE (judge_id, registration_id);
+    ALTER TABLE evaluations
+      ADD CONSTRAINT evaluations_judge_registration_unique UNIQUE (judge_id, registration_id);
+  END IF;
+END $$;
 
 NOTIFY pgrst, 'reload schema';
