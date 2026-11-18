@@ -89,3 +89,5 @@ Commit `4362d35` na `main` e deployados (seed-voice-samples, trigger-registratio
 - D4: `quantity` inválida dá 400; estorno parcial de vídeo manda `splitRefunds` (id do split).
 - Testado: anon em seed (401), trigger (gate depois do lookup), quantity "abc" (400), webhook sem token (401). NÃO testado: estorno parcial real, 503 do webhook em incidente da Asaas, usuário comum no seed.
 - Aviso: `supabase/config.toml` na main tem `[local_smtp]` (commit ab18828), que a CLI 2.90 rejeita; o deploy exigiu trocar o cabeçalho para `[inbucket]` só na worktree.
+
+B2 em produção (2026-11-18, `8c68d04`): action `resolve-code` no `judge-login` (limite 40/5 min por IP, falha do limitador não bloqueia), `/entrar-juri` usa a edge, migration `20261118b` tirou EXECUTE de PUBLIC/anon/authenticated da RPC (só service_role). Testado: RPC anon = 42501; código real do evento de teste resolve (antes e depois da migration; código temporário removido). Não testado: o limite de 40 tentativas, o fluxo PIN até o terminal, o QR com `?code=` no front novo em navegador real.
