@@ -96,6 +96,11 @@ Deno.serve(async (req) => {
 
   const supa = createClient(supabaseUrl, serviceKey)
 
+  // Lote 3, B6: gasta TTS (Gemini) e grava no Storage; so super admin (como o cabecalho ja dizia).
+  const { data: callerProf } = await supa
+    .from('profiles').select('is_super_admin').eq('id', user.id).maybeSingle()
+  if (callerProf?.is_super_admin !== true) return json({ error: 'forbidden' }, 403)
+
   const generated: Record<string, string> = {}
   const failed: Record<string, string> = {}
 

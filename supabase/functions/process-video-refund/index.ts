@@ -126,14 +126,39 @@ Deno.serve(async (req) => {
 
     // ── 4. Dispara estorno no Asaas se aplicável ────────────────────────────
     if (refundAmount > 0) {
-      const refundRes = await fetch(`${ASAAS_BASE_URL}/payments/${reg.video_fee_payment_id}/refund`, {
+      const refundBody: Record<string, unknown> = {
+        description: `Estorno seletiva (${policy}) — ${reg.nome_coreografia ?? 'Coreografia'}`,
+      }
+      // Estorno TOTAL: sem `value` nem `splitRefunds`, a Asaas distribui proporcional sozinha.
+      // Estorno PARCIAL em cobrança com split: sem `splitRefunds` a Asaas tira o valor inteiro da
+      // conta principal (que só tem a comissão) e recusa com "Valor da cobrança insuficiente"
+      // (Lote 3, D4/B#17). O `id` é o do SPLIT (array `split` do GET /payments/{id}), nunca o walletId.
+      const isPartial = refundAmount < originalValue
+      if (isPartial) {
+        refundBody.value = refundAmount
+        const splits: any[] = Array.isArray(payData.split) ? payData.split : []
+        const fraction = originalValue > 0 ? refundAmount / originalValue : 0
+        const splitRefunds = splits
+          .map(s => ({ id: s?.id, value: parseFloat((Number(s?.totalValue ?? s?.fixedValue ?? 0) * fraction).toFixed(2)) }))
+          .filter(s => s.id && s.value > 0)
+        if (splitRefunds.length > 0) refundBody.splitRefunds = splitRefunds
+        else console.warn(`[process-video-refund] estorno parcial SEM splitRefunds (payment sem array split) payment=${reg.video_fee_payment_id}`)
+      }
+      const callRefund = (body: Record<string, unknown>) => fetch(`${ASAAS_BASE_URL}/payments/${reg.video_fee_payment_id}/refund`, {
         method: 'POST',
         headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          value:       refundAmount,
-          description: `Estorno seletiva (${policy}) — ${reg.nome_coreografia ?? 'Coreografia'}`,
-        }),
+        body: JSON.stringify(body),
       })
+      let refundRes = await callRefund(refundBody)
+      if (!refundRes.ok && refundBody.splitRefunds) {
+        // Se a Asaas rejeitar por causa do split, tenta uma vez sem ele (comportamento anterior).
+        const errText = await refundRes.clone().text().catch(() => '')
+        if (errText.toLowerCase().includes('split')) {
+          console.warn('[process-video-refund] split rejeitado, retry sem splitRefunds:', errText.slice(0, 200))
+          const { splitRefunds: _omit, ...withoutSplit } = refundBody
+          refundRes = await callRefund(withoutSplit)
+        }
+      }
       if (!refundRes.ok) {
         const body = await refundRes.text().catch(() => '')
         console.error(`[process-video-refund] estorno Asaas falhou: ${refundRes.status} ${body}`)

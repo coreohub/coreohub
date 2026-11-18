@@ -2367,6 +2367,7 @@ Deno.serve(async (req) => {
       try {
         const verifyRes = await fetch(`${ASAAS_BASE_URL}/payments/${payment.id}`, {
           headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(8000),
         })
         if (verifyRes.status === 404) {
           console.error(`[asaas-webhook] payment_id=${payment.id} nao existe na API — rejeitando (possivel forja)`)
@@ -2384,14 +2385,33 @@ Deno.serve(async (req) => {
             return ok({ status: 'rejected', reason: 'external_reference_mismatch' })
           }
         }
-        // Outros status (401/5xx/timeout) -> log e segue (Asaas retentara
-        // se retornarmos nao-200; aqui deixamos passar pra nao bloquear
-        // webhook legitimo durante incidente da API)
+        // Falha fechada (Lote 3, B8): 5xx da Asaas nao confirma o pagamento; devolve 5xx pra Asaas
+        // reentregar depois (o webhook_failures registra). 401/403/outros 4xx = nossa chave/permissao
+        // com problema (um atacante nao consegue provoca-los): alerta e segue, pra nao parar todos os
+        // pagamentos reais por causa de uma chave.
+        if (verifyRes.status >= 500) {
+          console.error(`[asaas-webhook][ALERT] cross-check indisponivel (HTTP ${verifyRes.status}) payment_id=${payment.id} — 503 pra Asaas reentregar`)
+          return new Response(JSON.stringify({ error: 'cross_check_unavailable' }), {
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        if (verifyRes.status !== 200 && verifyRes.status !== 404) {
+          console.error(`[asaas-webhook][ALERT] cross-check respondeu HTTP ${verifyRes.status} payment_id=${payment.id} — segue sem confirmar (conferir ASAAS_API_KEY)`)
+        }
       } catch (e) {
-        console.error(`[asaas-webhook] cross-check exception (segue mesmo assim):`, (e as Error).message)
+        console.error(`[asaas-webhook][ALERT] cross-check falhou (timeout/rede) payment_id=${payment.id}: ${(e as Error).message} — 503 pra Asaas reentregar`)
+        return new Response(JSON.stringify({ error: 'cross_check_unavailable' }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
       }
     } else {
-      console.warn('[asaas-webhook] ASAAS_API_KEY nao configurada — cross-check pulado')
+      console.error('[asaas-webhook][ALERT] ASAAS_API_KEY nao configurada — 503 pra Asaas reentregar')
+      return new Response(JSON.stringify({ error: 'Misconfigured' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     // ── Ambiente x evento (Fase 2): pagamento sandbox só toca evento sandbox,

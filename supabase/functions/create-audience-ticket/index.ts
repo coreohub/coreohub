@@ -180,7 +180,9 @@ Deno.serve(async (req) => {
     if (sourceItems.length === 0) throw new Error('Carrinho vazio')
     for (const it of sourceItems) {
       if (typeof it.ticket_type_idx !== 'number') throw new Error('ticket_type_idx obrigatório em cada item')
-      const q = Math.max(1, Math.min(20, Number(it.quantity ?? 1)))
+      const qNum = Number(it.quantity ?? 1)
+      if (!Number.isFinite(qNum)) throw new Error('quantity inválida')
+      const q = Math.max(1, Math.min(20, Math.floor(qNum)))
       mergedQty.set(it.ticket_type_idx, (mergedQty.get(it.ticket_type_idx) ?? 0) + q)
     }
 
