@@ -80,3 +80,12 @@ Nenhum dos 5 estava totalmente resolvido. Não verificado: comportamento real em
 3. B7: aceita o PIN em texto puro (visível ao produtor por desenho)?
 4. D2: o que fazer com as 5.304 notas órfãs (não apagar sem OK).
 5. Janela: deploys de dinheiro só entre 1h e 6h (Brasília) ou qualquer momento parado, validado pelo `pre-deploy-check`?
+
+## Atualização 2026-11-18 (B6, B8, D4 em produção)
+
+Commit `4362d35` na `main` e deployados (seed-voice-samples, trigger-registration-payment, create-audience-ticket, process-video-refund, asaas-webhook).
+- B6: `trigger-registration-payment` exige service role, dono do evento ou super admin; `seed-voice-samples` exige super admin.
+- B8: cross-check do webhook falha fechado em 5xx, timeout (8 s) ou `ASAAS_API_KEY` ausente (503, a Asaas reentrega); 401/403 só alerta.
+- D4: `quantity` inválida dá 400; estorno parcial de vídeo manda `splitRefunds` (id do split).
+- Testado: anon em seed (401), trigger (gate depois do lookup), quantity "abc" (400), webhook sem token (401). NÃO testado: estorno parcial real, 503 do webhook em incidente da Asaas, usuário comum no seed.
+- Aviso: `supabase/config.toml` na main tem `[local_smtp]` (commit ab18828), que a CLI 2.90 rejeita; o deploy exigiu trocar o cabeçalho para `[inbucket]` só na worktree.
