@@ -433,30 +433,40 @@ const ResultsPanel = () => {
   const handlePublish = async () => {
     setPublishing(true);
     try {
-      let firstCheck = true;
+      // Lote 3 (C4): cada UPDATE confere erro E 0 linhas (RLS bloqueia em silencio). Antes só a primeira
+      // linha era conferida, e um erro no meio abortava com metade publicada. Cada UPDATE é idempotente
+      // (mesma posição/média), então publicar de novo é seguro; aqui contamos as falhas e avisamos.
+      let total = 0;
+      const failedIds: string[] = [];
+      let firstMsg = '';
+      const run = async (id: string, patch: Record<string, unknown>) => {
+        total++;
+        const { data, error } = await supabase.from('registrations').update(patch).eq('id', id).select('id');
+        if (error || !data || data.length === 0) {
+          failedIds.push(id);
+          if (!firstMsg) firstMsg = error?.message ?? 'sem permissão (0 linhas atualizadas)';
+        }
+      };
       for (const entries of Object.values(groupedByGenreCat)) {
         for (let i = 0; i < entries.length; i++) {
-          const { data, error } = await supabase.from('registrations').update({
+          await run(entries[i].id, {
             classificacao_final: i + 1,
             media_final:         entries[i].average_score,
             resultado_publicado: true,
-          }).eq('id', entries[i].id).select('id');
-          if (error) throw error;
-          // Primeira iteração: aborta cedo se RLS bloqueia silently (0 rows).
-          // Lição bug-rls-producer-update-registrations.
-          if (firstCheck) {
-            if (!data || data.length === 0) {
-              throw new Error('Sem permissão pra publicar resultados. Verifique se está logado como produtor do evento.');
-            }
-            firstCheck = false;
-          }
+          });
         }
       }
       for (const r of avaliada) {
-        const { error } = await supabase.from('registrations').update({
-          media_final: null, resultado_publicado: true,
-        }).eq('id', r.id);
-        if (error) throw error;
+        await run(r.id, { media_final: null, resultado_publicado: true });
+      }
+      if (failedIds.length > 0) {
+        console.error('[ResultsPanel] publicação incompleta:', failedIds, firstMsg);
+        await fetchResults();
+        throw new Error(
+          failedIds.length === total
+            ? `Sem permissão pra publicar resultados (${firstMsg}). Verifique se está logado como produtor do evento.`
+            : `Publicação INCOMPLETA: ${failedIds.length} de ${total} inscrições não foram atualizadas (${firstMsg}). Clique em Publicar de novo; refazer é seguro.`
+        );
       }
       alert('Resultados publicados com sucesso!');
       // Sem isso, o state local fica com resultado_publicado=false (stale) e os

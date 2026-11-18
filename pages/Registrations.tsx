@@ -1161,8 +1161,9 @@ const Registrations = () => {
       if (!r.ok) { alert(r.error ?? 'Não foi possível desclassificar.'); return; }
     } else {
       // Checa o erro: com a proteção de colunas (RLS/trigger) um UPDATE negado não pode parecer salvo.
-      const { error: triageErr } = await supabase.from('registrations').update(update).eq('id', regId);
+      const { data: triageRows, error: triageErr } = await supabase.from('registrations').update(update).eq('id', regId).select('id');
       if (triageErr) { alert(`Não foi possível salvar a decisão: ${triageErr.message}`); return; }
+      if (!triageRows || triageRows.length === 0) { alert('Não foi possível salvar a decisão: sem permissão ou inscrição não encontrada.'); return; }
     }
     setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, ...update } : r));
     setTriageAction(null);
