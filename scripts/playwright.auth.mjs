@@ -39,7 +39,11 @@ if (!validRoles.includes(role)) {
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://app.coreohub.com';
 const EMAIL = process.env[`PLAYWRIGHT_${role.toUpperCase()}_EMAIL`];
 const PASSWORD = process.env[`PLAYWRIGHT_${role.toUpperCase()}_PASSWORD`];
-const STATE_PATH = resolve(__dirname, '.playwright-auth', `storage-${role}.json`);
+const STATE_SUFFIX = (() => {
+  // Sessao do Supabase fica no localStorage, que e por origem: localhost (vite dev) precisa de estado proprio.
+  try { const h = new URL(BASE_URL).hostname; return h === 'app.coreohub.com' ? '' : `-${h.replace(/[^a-z0-9]+/gi, '_')}`; } catch { return ''; }
+})();
+const STATE_PATH = resolve(__dirname, '.playwright-auth', `storage-${role}${STATE_SUFFIX}.json`);
 
 if (!EMAIL || !PASSWORD) {
   console.error(`❌ Faltando PLAYWRIGHT_${role.toUpperCase()}_EMAIL ou PLAYWRIGHT_${role.toUpperCase()}_PASSWORD em .env.local`);

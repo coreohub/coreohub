@@ -46,7 +46,11 @@ if (forcedTheme && !['light', 'dark'].includes(forcedTheme)) {
 }
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://app.coreohub.com';
-const STATE_PATH = resolve(__dirname, '.playwright-auth', `storage-${role}.json`);
+const STATE_SUFFIX = (() => {
+  // Sessao do Supabase fica no localStorage, que e por origem: localhost (vite dev) precisa de estado proprio.
+  try { const h = new URL(BASE_URL).hostname; return h === 'app.coreohub.com' ? '' : `-${h.replace(/[^a-z0-9]+/gi, '_')}`; } catch { return ''; }
+})();
+const STATE_PATH = resolve(__dirname, '.playwright-auth', `storage-${role}${STATE_SUFFIX}.json`);
 const OUT_DIR = resolve(__dirname, '..', 'screenshots');
 
 // Primeiro arg posicional (que não comece com --) = rotas.
@@ -155,8 +159,18 @@ for (const route of routes) {
         final_url: page.url(),
       };
 
-      const status = consoleErrors.length === 0 && !overflow.hasOverflow ? '✓' : '⚠';
-      console.log(`  ${status} ${viewportName}: errors=${consoleErrors.length} overflow=${overflow.hasOverflow}`);
+      // Sessao expirada: o app manda pra /auth ou /login e a tela de login passa em "errors=0 overflow=false".
+      // Isso e falso verde. Marca como falha e sai com codigo 1 no fim.
+      const finalPath = new URL(page.url()).pathname;
+      const wantedAuth = /^\/(auth|login)(\/|$)/.test(route);
+      const authRedirect = !wantedAuth && /^\/(auth|login)(\/|$)/.test(finalPath);
+      report.viewports[viewportName].auth_redirect = authRedirect;
+      if (authRedirect) {
+        process.exitCode = 1;
+        console.error(`  ❌ ${viewportName}: SESSAO EXPIRADA, caiu em ${finalPath}. Rode "node scripts/playwright.auth.mjs --as=${role}" e repita.`);
+      }
+      const status = !authRedirect && consoleErrors.length === 0 && !overflow.hasOverflow ? '✓' : '⚠';
+      console.log(`  ${status} ${viewportName}: errors=${consoleErrors.length} overflow=${overflow.hasOverflow}${authRedirect ? ' AUTH_REDIRECT' : ''}`);
     } catch (err) {
       console.error(`  ❌ ${viewportName}: ${err.message}`);
       report.viewports[viewportName] = {

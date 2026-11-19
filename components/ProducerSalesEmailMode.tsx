@@ -81,7 +81,7 @@ const ProducerSalesEmailMode: React.FC = () => {
               aria-checked={active}
               disabled={mode === null || saving !== null}
               onClick={() => choose(o.value)}
-              className={`text-left rounded-2xl border-2 p-4 transition-all disabled:cursor-not-allowed ${
+              className={`flex flex-col justify-start text-left rounded-2xl border-2 p-4 transition-all disabled:cursor-not-allowed ${
                 active
                   ? 'border-[#ff0068] bg-[#ff0068]/5'
                   : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'

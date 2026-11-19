@@ -77,3 +77,30 @@ Os screenshots cobrem visualmente os critérios "funciona em desktop e mobile" +
 - Se o login flow do app mudar.
 
 Re-roda apenas pra role afetada — os storage states são independentes.
+
+## Testar mudança que só existe na `dev` (localhost)
+
+Staging (`staging.coreohub.com`) fica atrás do SSO da Vercel, então o Playwright não entra. O caminho é o
+servidor local, que fala com o MESMO Supabase de produção (só leitura, não clique em mutation):
+
+```powershell
+npm run dev                                                         # http://localhost:3000
+$env:PLAYWRIGHT_BASE_URL = "http://localhost:3000"
+node scripts/playwright.auth.mjs --as=produtor                      # gera storage-produtor-localhost.json
+node scripts/screenshot.mjs "account-settings?tab=Pagamentos"       # query string funciona (aspas)
+```
+
+O estado de sessão é por origem (localStorage), por isso localhost tem arquivo próprio
+(`storage-<role>-localhost.json`) e não mexe no de produção.
+
+## Sessão expirada
+
+Se a sessão vencer o app redireciona pra `/auth` e a tela de login passa em "errors=0 overflow=false".
+Desde 2026-11-19 o `screenshot.mjs` detecta isso: marca `auth_redirect` no report, imprime
+`SESSAO EXPIRADA` e sai com código 1. Resolver: `node scripts/playwright.auth.mjs --as=<role>`.
+
+## Login Google (OAuth)
+
+Não precisa passar pelo Google. As contas de teste entram por e-mail e senha (o botão do Google é só uma
+das opções da tela `/auth`). Telas com 2FA (`/super-admin`, `/cotacoes-terminal-juri`) continuam
+bloqueadas sem o código TOTP ao vivo.
