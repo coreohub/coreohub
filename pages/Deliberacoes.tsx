@@ -20,6 +20,7 @@ import {
   Star, Lock, Unlock, ChevronRight, Send,
 } from 'lucide-react';
 import { classifyAward } from '../utils/awardClassification';
+import { fetchPremiosVencedores, mergePremiosVencedores } from '../utils/premiosVencedores';
 
 type DeliberationStatus = 'COLETANDO' | 'DELIBERACAO' | 'CONFERENCIA' | 'LIBERADO';
 
@@ -130,7 +131,9 @@ const Deliberacoes: React.FC = () => {
       setMarcacoes(marcRes.data ?? []);
       setRegistrations(regsRes.data ?? []);
       setJudges(judgesRes.data ?? []);
-      const awardsRaw = (configRes.data as any)?.premios_especiais ?? [];
+      // Vencedor registrado e ainda não revelado só existe na tabela privada.
+      const winnerRows = await fetchPremiosVencedores(ev.id);
+      const awardsRaw = mergePremiosVencedores((configRes.data as any)?.premios_especiais ?? [], winnerRows);
       const enabledAwards = Array.isArray(awardsRaw) ? awardsRaw.filter((a: any) => a?.enabled) : [];
       setAwards(enabledAwards);
       // Só inicializa winnerEdits pros prêmios genuinamente editáveis — nunca

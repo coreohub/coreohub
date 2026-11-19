@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { fetchPremiosVencedores, mergePremiosVencedores } from '../utils/premiosVencedores';
 import { isStyleInList } from '../utils/styleMatch';
 import { classifyAward as classifyAwardShared, resolveMedalLabel, type MedalLabels } from '../utils/awardClassification';
 import { resolveAvaliadaLabel, type FormatoLabelConfig } from '../utils/formatoParticipacao';
@@ -193,7 +194,12 @@ const ResultsPanel = () => {
       // Premiação (mesma fonte que Telão/PDF) — lê os prêmios salvos +
       // resolve o vencedor por deliberação da banca (tipo 'premio') igual o
       // PDF faz, pra não duplicar essa conta com resultado divergente.
-      const rawAwards: any[] = Array.isArray(cfg?.premios_especiais) ? cfg.premios_especiais : [];
+      const eventId = await resolveActiveEventId();
+      // Vencedor registrado e não revelado só existe na tabela privada (B1).
+      const rawAwards: any[] = mergePremiosVencedores(
+        Array.isArray(cfg?.premios_especiais) ? cfg.premios_especiais : [],
+        await fetchPremiosVencedores(eventId),
+      );
       const enabledAwards: SpecialAwardCfg[] = rawAwards
         .filter((a: any) => a && a.enabled !== false && a.id != null)
         .map((a: any) => ({
@@ -206,7 +212,6 @@ const ResultsPanel = () => {
           winner_items: Array.isArray(a.winner_items) && a.winner_items.length > 0 ? a.winner_items : undefined,
         }));
       setAwards(enabledAwards);
-      const eventId = await resolveActiveEventId();
       const premioAwardIds = enabledAwards.filter(a => classifyAward(a).tipo === 'premio').map(a => a.id);
       if (eventId && premioAwardIds.length > 0) {
         const { data: agg } = await supabase
@@ -601,7 +606,10 @@ const ResultsPanel = () => {
       if (eventId) {
         const { fetchActiveEventConfig } = await import('../services/supabase');
         const specialCfg = await fetchActiveEventConfig('premios_especiais');
-        const rawAwards: any[] = Array.isArray(specialCfg?.premios_especiais) ? specialCfg.premios_especiais : [];
+        const rawAwards: any[] = mergePremiosVencedores(
+          Array.isArray(specialCfg?.premios_especiais) ? specialCfg.premios_especiais : [],
+          await fetchPremiosVencedores(eventId),
+        );
         const awards: SpecialAwardCfg[] = rawAwards
           .filter((a: any) => a && a.enabled !== false && a.id != null)
           .map((a: any) => ({

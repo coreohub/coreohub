@@ -4,6 +4,7 @@ import { supabase, resolveActiveEventId } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import PageHeader from '../components/PageHeader';
 import { classifyAward, type AwardReveal } from '../utils/awardClassification';
+import { fetchPremiosVencedores, mergePremiosVencedores } from '../utils/premiosVencedores';
 
 interface Premio { id: string; nome: string; valor?: string; description?: string; winner_nome?: string; winner_estudio?: string; }
 
@@ -56,7 +57,8 @@ const TelaoControle: React.FC = () => {
     if (delibErr) console.error('loadPremiacaoOptions: deliberation_aggregate', delibErr);
     setDeliberatedAwardIds(new Set((delib ?? []).map((d: any) => String(d.award_id))));
 
-    const raw = (cfg as any)?.premios_especiais ?? [];
+    // Vencedor registrado e não revelado só existe na tabela privada (B1).
+    const raw = mergePremiosVencedores((cfg as any)?.premios_especiais ?? [], await fetchPremiosVencedores(id));
     setPremios((Array.isArray(raw) ? raw : [])
       .filter((a: any) => a && a.enabled !== false && a.id != null)
       .map((a: any) => ({

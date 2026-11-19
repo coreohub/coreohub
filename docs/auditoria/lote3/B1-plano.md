@@ -31,3 +31,10 @@
 
 ## Se aceitar o risco por ora
 Só spoiler de vencedor entre "registrar" e "revelar", exige chamar a API direto. Fazer antes da próxima cerimônia real.
+
+## Estado (2026-11-19, implementado)
+- Migration `20261119c_premios_vencedores_privado.sql` aplicada em produção (tabela `premios_vencedores` sem anon; `update_premios_winners` com a mesma assinatura: `winner_*` grava no privado, `winner_revealed:true` copia para o público). 0 prêmios precisaram migrar (os 14 com vencedor já estavam revelados).
+- `get_telao_state` não lia `premios_especiais` (usa `events.telao_premiacao`), então não mudou.
+- Front: `utils/premiosVencedores.ts` mescla o privado em Deliberacoes, TelaoControle e ResultsPanel (tela e PDF).
+- Testado no evento de teste: `passo5-b1-teste.sql` (9 verificações) e roteiro por API (anon não lê o vencedor antes de revelar; depois de revelar, Telão e configuracoes mostram). Reverter: `passo5-b1-reverter.sql`.
+- NÃO testado: LED/vitrine/PDF no navegador, e cerimônia real. Janela de risco até o front ir à main: o front antigo não enxerga vencedor registrado e não revelado.
