@@ -2369,10 +2369,78 @@ function buildTermsUpdateProducer(p: TermsUpdateProducerPayload) {
   }
 }
 
+interface ProducerSalesDigestPayload {
+  produtorEmail: string
+  produtorNome?: string
+  periodoLabel: string
+  eventos: Array<{
+    nome: string
+    linhas: Array<{ tipo: string; qtd: number; bruto: number; comissao: number; liquido: number }>
+    total: { qtd: number; bruto: number; comissao: number; liquido: number }
+  }>
+  totalGeral: { qtd: number; bruto: number; comissao: number; liquido: number }
+  appUrl?: string
+}
+
+// Resumo semanal de vendas ao produtor (send-producer-sales-digest). Um e-mail por produtor, uma tabela por evento.
+function buildProducerSalesDigest(p: ProducerSalesDigestPayload) {
+  const th = 'padding:6px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;font-weight:700;text-align:right;'
+  const td = 'padding:8px 4px;font-size:13px;color:#0b0b0f;text-align:right;border-bottom:1px solid #f1f5f9;'
+  const tdL = td.replace('text-align:right;', 'text-align:left;')
+  const blocos = (p.eventos ?? []).map((ev) => {
+    const linhas = ev.linhas.map((l) => `
+      <tr>
+        <td style="${tdL}">${escape(l.tipo)}</td>
+        <td style="${td}">${escape(l.qtd)}</td>
+        <td style="${td}">${escape(money(l.bruto))}</td>
+        <td style="${td}">${escape(money(l.comissao))}</td>
+        <td style="${td}font-weight:700;">${escape(money(l.liquido))}</td>
+      </tr>`).join('')
+    return `
+    <p style="margin:22px 0 6px;font-size:15px;font-weight:800;color:#0b0b0f;">${escape(ev.nome)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <th style="${th}text-align:left;">Tipo</th><th style="${th}">Vendas</th><th style="${th}">Bruto</th><th style="${th}">Comissão</th><th style="${th}">Você recebe</th>
+      </tr>${linhas}
+      <tr>
+        <td style="${tdL}font-weight:800;">Total</td>
+        <td style="${td}font-weight:800;">${escape(ev.total.qtd)}</td>
+        <td style="${td}font-weight:800;">${escape(money(ev.total.bruto))}</td>
+        <td style="${td}font-weight:800;">${escape(money(ev.total.comissao))}</td>
+        <td style="${td}font-weight:800;color:#16a34a;">${escape(money(ev.total.liquido))}</td>
+      </tr>
+    </table>`
+  }).join('')
+
+  const geral = (p.eventos ?? []).length > 1
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">${[
+        infoRow('Vendas no período', escape(p.totalGeral.qtd)),
+        infoRow('Valor bruto', escape(money(p.totalGeral.bruto))),
+        infoRow('Comissão plataforma', escape(money(p.totalGeral.comissao))),
+        infoRow('Valor líquido (você recebe)', `<span style="color:#16a34a;">${escape(money(p.totalGeral.liquido))}</span>`),
+      ].join('')}</table>`
+    : ''
+
+  const app = p.appUrl ?? 'https://app.coreohub.com'
+  return {
+    subject: `Resumo de vendas da semana (${p.periodoLabel}) — ${money(p.totalGeral.liquido)}`,
+    html: baseLayout({
+      preheader: `${p.totalGeral.qtd} venda(s) no período, ${money(p.totalGeral.liquido)} para você.`,
+      title: 'Resumo de vendas da semana',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, estas foram as suas vendas de ${escape(p.periodoLabel)}. Estornos totais ficam de fora e estornos parciais já estão abatidos.`,
+      contentHtml: blocos + geral,
+      ctaLabel: 'Abrir painel do produtor',
+      ctaUrl: `${app}/producer-dashboard`,
+      footerNote: 'Prefere receber um e-mail a cada venda? Troque em Configurações da conta, em Avisos de venda por e-mail.',
+    }),
+  }
+}
+
 interface SendEmailRequest {
   type:
     | 'payment_confirmed_registrant'
     | 'payment_confirmed_producer'
+    | 'producer_sales_digest'
     | 'event_created_producer'
     | 'producer_welcome'
     | 'audience_ticket_confirmed'
@@ -2503,6 +2571,16 @@ Deno.serve(async (req) => {
         const p = payload as unknown as ProducerPayload
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         const tpl = buildProducerNotification(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'producer_sales_digest': {
+        const p = payload as unknown as ProducerSalesDigestPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        if (!Array.isArray(p.eventos) || !p.totalGeral) throw new Error('eventos e totalGeral são obrigatórios')
+        const tpl = buildProducerSalesDigest(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
