@@ -148,3 +148,26 @@ const FMT_DAY = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo'
 export function periodLabel(from: Date, to: Date): string {
   return `${FMT_DAY.format(from)} a ${FMT_DAY.format(to)}`
 }
+
+/** Tipos de e-mail "nova venda" ao produtor que o resumo semanal substitui. Estorno NAO entra: continua imediato. */
+export const PRODUCER_SALE_EMAIL_TYPES = new Set([
+  'payment_confirmed_producer',
+  'audience_ticket_producer',
+  'workshop_registration_producer',
+  'workshop_pass_confirmed_producer',
+])
+
+/**
+ * Decide se o aviso por venda sai agora. Falha segura: so deixa de mandar quando o modo global esta `on`
+ * E o produtor esta, de forma confirmada, em `weekly`. Qualquer outra situacao (modo global off/dry, perfil nao
+ * achado, erro de leitura, valor desconhecido) manda, para nunca perder um aviso.
+ */
+export function shouldSendProducerSaleEmail(globalMode: DigestMode, profileMode: string | null | undefined): boolean {
+  if (globalMode !== 'on') return true
+  return profileMode !== 'weekly'
+}
+
+/** Escapa curingas do LIKE (% _ \) para comparar e-mail sem diferenciar maiusculas. */
+export function escapeLike(v: string): string {
+  return v.replace(/[\\%_]/g, (c) => '\\' + c)
+}

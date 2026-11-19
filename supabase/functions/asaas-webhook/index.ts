@@ -3,6 +3,7 @@ import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent, requirePro
 import { cardCreditFallback } from '../_shared/card-credit-date.ts'
 import { paymentCheckMode, checkPaymentExpectation, markExpectationAnomaly } from '../_shared/payment-check.ts'
 import { HOLD_PREFIX } from '../_shared/payment-hold.ts'
+import { PRODUCER_SALE_EMAIL_TYPES, escapeLike, parseDigestMode, shouldSendProducerSaleEmail } from '../_shared/producer-sales-digest.ts'
 import {
   commissionFailureKey,
   unexpectedFailureKey,
@@ -348,6 +349,28 @@ async function dispararEmail(
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     if (!supabaseUrl || !serviceKey) return
+
+    // Resumo semanal: so troca o aviso "nova venda" ao produtor quando PRODUCER_DIGEST_MODE=on E ele esta em
+    // 'weekly'. Falha segura: qualquer duvida (modo off/dry, perfil nao achado, erro de leitura) = envia.
+    if (PRODUCER_SALE_EMAIL_TYPES.has(type) && parseDigestMode(Deno.env.get('PRODUCER_DIGEST_MODE')) === 'on') {
+      let profileMode: string | null = null
+      try {
+        const to = String((payload as any)?.produtorEmail ?? '').trim()
+        if (to) {
+          const sb = createClient(supabaseUrl, serviceKey)
+          const { data, error } = await sb
+            .from('profiles').select('producer_sales_email_mode').ilike('email', escapeLike(to)).limit(1).maybeSingle()
+          if (error) console.warn('[asaas-webhook] modo de aviso do produtor ilegivel, enviando:', error.message)
+          else profileMode = (data as any)?.producer_sales_email_mode ?? null
+        }
+      } catch (e) {
+        console.warn('[asaas-webhook] modo de aviso do produtor falhou, enviando:', (e as Error).message)
+      }
+      if (!shouldSendProducerSaleEmail('on', profileMode)) {
+        console.log(`[asaas-webhook] aviso ${type} suprimido: produtor em resumo semanal`)
+        return
+      }
+    }
 
     const resp = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
       method: 'POST',

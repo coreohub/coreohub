@@ -41,6 +41,7 @@ import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { parseInfoConfig, serializeInfoConfig, hasInfoContent, EMPTY_INFO, type InfoConfig } from '../utils/eventInfo';
 import EventInfoEditor from '../components/EventInfoEditor';
 import ProducerDebtsCard from '../components/ProducerDebtsCard';
+import ProducerSalesEmailMode from '../components/ProducerSalesEmailMode';
 import TaxasESimulador from '../components/TaxasESimulador';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
@@ -5282,6 +5283,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
             {/* Débitos com a CoreoHub (Termo v1.7, cláusulas 7 e 8) */}
             <ProducerDebtsCard />
+
+            {/* Avisos de venda por e-mail: resumo semanal (padrão) ou a cada venda */}
+            <ProducerSalesEmailMode />
 
             {/* Taxas de pagamento: quem paga em cada produto + simulador */}
             {adv(<TaxasESimulador eventId={activeEventId} />, advHostPag)}

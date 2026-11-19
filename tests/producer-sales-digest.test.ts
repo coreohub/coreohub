@@ -95,3 +95,29 @@ describe('modo e rotulo', () => {
     expect(periodLabel(new Date('2026-11-20T12:00:00Z'), new Date('2026-11-27T12:00:00Z'))).toBe('20/11 a 27/11');
   });
 });
+
+import { shouldSendProducerSaleEmail, escapeLike, PRODUCER_SALE_EMAIL_TYPES } from '../supabase/functions/_shared/producer-sales-digest';
+
+describe('aviso por venda (falha segura)', () => {
+  it('modo global off ou dry: sempre envia, como hoje', () => {
+    expect(shouldSendProducerSaleEmail('off', 'weekly')).toBe(true);
+    expect(shouldSendProducerSaleEmail('dry', 'weekly')).toBe(true);
+  });
+  it('modo global on: so deixa de enviar quando o produtor esta em weekly', () => {
+    expect(shouldSendProducerSaleEmail('on', 'weekly')).toBe(false);
+    expect(shouldSendProducerSaleEmail('on', 'each')).toBe(true);
+  });
+  it('modo global on com perfil nao achado, erro ou valor estranho: envia', () => {
+    expect(shouldSendProducerSaleEmail('on', null)).toBe(true);
+    expect(shouldSendProducerSaleEmail('on', undefined)).toBe(true);
+    expect(shouldSendProducerSaleEmail('on', 'diario')).toBe(true);
+  });
+  it('estorno nunca e substituido pelo resumo', () => {
+    expect(PRODUCER_SALE_EMAIL_TYPES.has('audience_ticket_late_refund_producer')).toBe(false);
+    expect(PRODUCER_SALE_EMAIL_TYPES.has('refund_confirmed_producer')).toBe(false);
+    expect(PRODUCER_SALE_EMAIL_TYPES.has('payment_confirmed_producer')).toBe(true);
+  });
+  it('escapeLike protege curingas do e-mail', () => {
+    expect(escapeLike(String.raw`a_b%c\d@x.com`)).toBe(String.raw`a\_b\%c\\d@x.com`);
+  });
+});
