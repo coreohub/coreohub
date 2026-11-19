@@ -10,7 +10,7 @@ Status: PLANO, nada implementado. Escrito em 2026-11-19 para ser executado em se
 ## Decisão de produto (confirmar antes de codar)
 - Modo `each` (a cada venda, comportamento de hoje) e `weekly` (resumo semanal, padrão).
 - Atenção: semanal é lento em semana de pico de venda. Por isso o `each` fica disponível e o seletor explica isso. Se o produtor quiser, adicionar `daily` depois sem refazer nada (a função de resumo já recebe a janela como parâmetro).
-- Padrão para produtores atuais: DECIDIDO em 2026-11-19, `weekly` para todos (com aviso por e-mail uma vez; `each` continua fácil de escolher no seletor).
+- Padrão para produtores atuais: DECIDIDO em 2026-11-19, `weekly` para todos, SEM aviso por e-mail aos produtores (decidido pelo dono; `each` continua fácil de escolher no seletor).
 - Envio: DECIDIDO em 2026-11-19, sexta-feira 12:00 UTC (09:00 BRT), cobre os 7 dias anteriores (sexta a quinta). Sem venda na janela, não manda e-mail. Motivo: o produtor decide ações de venda perto do fim de semana e os eventos acontecem sáb/dom; raciocínio nosso, não achei padrão brasileiro documentado (Sympla/Even3/Blueticket/Ingresso.com não documentam resumo por e-mail). Horário é só o cron, fácil de mudar.
 
 ## O que existe hoje (conferido em 19/11)
@@ -48,7 +48,7 @@ Sugestão de divisão: sessão 1 = etapas 1-3 (tudo desligado, sem efeito); sess
 
 ## Riscos
 - Webhook é o ponto mais sensível: erro nele derruba o aviso (ou a venda). Mitigação: modo `off`, falha segura (enviar), teste em sandbox.
-- Produtor que já se acostumou com o aviso por venda: avisar antes e deixar `each` fácil de escolher.
+- Produtor que já se acostumou com o aviso por venda: sem aviso prévio (decisão do dono); deixar `each` fácil de escolher no seletor.
 - Hotmail com atraso pode atrasar também o resumo: o resumo é 1 e-mail, não 28.
 
 ## Prompt para colar na sessão nova
