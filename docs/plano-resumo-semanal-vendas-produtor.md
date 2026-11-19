@@ -1,6 +1,10 @@
 # Plano: aviso de venda ao produtor, "a cada venda" ou "resumo semanal" (padrão)
 
-Status: PLANO, nada implementado. Escrito em 2026-11-19 para ser executado em sessão nova.
+Status: IMPLEMENTADO E LIGADO em 2026-11-19 (main 7431486). `PRODUCER_DIGEST_MODE=on` desde 14:07 UTC; cron sexta 12:00 UTC (1º resumo real em 20/11).
+Feito: migration das colunas + cron, template `producer_sales_digest`, edge `send-producer-sales-digest`, webhook respeitando o modo (falha segura), seletor em Configurações > Pagamentos (salvar testado com a conta de teste: grava, persiste após recarregar, reverte).
+Falta só conferir: (1) no Resend, o 1º resumo real (20/11) e se o Hotmail atrasa; (2) no log do webhook, o 1º "aviso ... suprimido: produtor em resumo semanal" numa venda real.
+Saída de emergência: `PRODUCER_DIGEST_MODE=off` devolve o aviso por venda para todos. O texto abaixo é o plano original (histórico).
+Escrito em 2026-11-19.
 
 ## Por que
 - Hoje o asaas-webhook manda 1 e-mail "Nova venda" por venda ao produtor, sempre, sem opção de desligar. Na semana do Level Up a Monique recebeu 28 e-mails em 3 dias.
