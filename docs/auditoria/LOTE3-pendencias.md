@@ -112,3 +112,7 @@ rate limit da API v1), D3 aplicado só no arquivo (protege db reset), D5 (itens 
 primeiro repasse real ~22/11 com `SUBCONTA_FEE_MODE=on` (conferir payout_attempts, subconta_fee_charges, extrato Asaas R$ 12,90).
 Não verificado em produção: 503 do webhook em indisponibilidade da Asaas, estorno parcial de vídeo, limite 40/5min do resolve-code,
 QR do jurado em celular.
+
+## Aplicado em 2026-11-19 (plataforma ociosa, pre-deploy-check exit 0)
+- B4: limites de tamanho nos buckets (5MB capas/narracoes, 10MB documentos, 50MB audio). Verificado.
+- D2: 5334 notas orfas copiadas para `evaluations_orfas_backup_20261119` e removidas; FK `evaluations_event_id_fkey` ON DELETE CASCADE criada. Verificado: orfas_restantes=0, backup=5334, fk=1. Reversao em docs/auditoria/lote3/passo5-reverter.sql.
