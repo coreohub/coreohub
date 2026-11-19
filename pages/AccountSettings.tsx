@@ -984,11 +984,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUserId(user.id);
-      const { data: profile } = await supabase
+      const { data: profile, error: asaasProfErr } = await supabase
         .from('profiles')
         .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role, is_super_admin, producer_terms_version, asaas_onboarding_url, asaas_kyc_status')
         .eq('id', user.id)
         .single();
+      if (asaasProfErr) console.error('[AccountSettings] falha ao ler profiles (Asaas):', asaasProfErr.message);
       setAsaasProfile(profile);
       setTermsAcceptedVersion((profile as any)?.producer_terms_version ?? null);
       // Super admin (is_super_admin=true) E COREOHUB_ADMIN role ambos liberam edicao
@@ -999,11 +1000,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       if (profile?.asaas_subconta_id) {
         await refreshKycStatus();
       }
-      const { data: events } = await supabase
+      const { data: events, error: prodEvErr } = await supabase
         .from('events')
         .select('id, name, commission_type, commission_percent, commission_fixed, fee_mode')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
+      if (prodEvErr) console.error('[AccountSettings] falha ao ler events do produtor:', prodEvErr.message);
       setProducerEvents(events ?? []);
     };
     loadAsaasData();
@@ -2037,12 +2039,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
+      const { data, error: pickerErr } = await supabase
         .from('events')
         .select('id, name, edition_year, is_demo, start_date, event_time, session_group_id')
         .eq('created_by', user.id)
         .order('is_demo', { ascending: true })
         .order('created_at', { ascending: false });
+      if (pickerErr) console.error('[AccountSettings] falha ao ler events (seletor):', pickerErr.message);
       if (data && data.length > 0) {
         setPickerEvents(data);
         setSelectedEventId(prev => prev ?? pickDefaultEvent(data[0], data).id);
@@ -2076,6 +2079,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           myEvent = evRes.data;
           if (myEvent?.id) {
             const res = await supabase.from('configuracoes').select('*').eq('id', myEvent.id).maybeSingle();
+            if (res.error) console.error('[AccountSettings] falha ao ler configuracoes do evento:', res.error.message);
             data = res.data;
             // Captura slug pra suggerir URL da vitrine no campo Site oficial
             setActiveEventSlug((myEvent as any).slug ?? myEvent.id);
@@ -2141,6 +2145,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         }
         if (!data) {
           const res = await supabase.from('configuracoes').select('*').eq('id', '1').maybeSingle();
+          if (res.error) console.error('[AccountSettings] falha ao ler configuracoes legadas:', res.error.message);
           data = res.data;
         }
         setIsFirstSave(!data?.atualizado_em);
@@ -2367,11 +2372,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       // é buscar o estado mais recente e sobrepor os campos de vencedor).
       let premiosToSave: any = awards;
       if (awardsTouched) {
-        const { data: liveCfg } = await supabase
+        const { data: liveCfg, error: liveCfgErr } = await supabase
           .from('configuracoes')
           .select('premios_especiais')
           .eq('event_id', myEvent.id)
           .maybeSingle();
+        // Lote 3 (C5): sem esta leitura nao da pra preservar vencedor/revelacao ja gravados; salvar o
+        // array inteiro agora poderia apagar uma revelacao feita ao vivo. Aborta em vez de sobrescrever.
+        if (liveCfgErr) throw new Error('Não foi possível conferir os prêmios já salvos (' + liveCfgErr.message + '). Nada foi salvo; tente de novo.');
         const liveById: Record<string, any> = {};
         (Array.isArray((liveCfg as any)?.premios_especiais) ? (liveCfg as any).premios_especiais : [])
           .forEach((a: any) => { if (a?.id != null) liveById[String(a.id)] = a; });

@@ -233,7 +233,8 @@ const MeuPerfil = () => {
       if (!user) return;
       // Quais providers o user usa pra logar (email, google, etc.)
       setAuthProviders((user.identities ?? []).map((i: any) => i.provider));
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data, error: profLoadErr } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (profLoadErr) console.error('[Profile] falha ao ler profiles:', profLoadErr.message);
       if (data) {
         setProfile(data);
         setForm({
