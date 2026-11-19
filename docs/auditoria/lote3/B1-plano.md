@@ -38,3 +38,10 @@ Só spoiler de vencedor entre "registrar" e "revelar", exige chamar a API direto
 - Front: `utils/premiosVencedores.ts` mescla o privado em Deliberacoes, TelaoControle e ResultsPanel (tela e PDF).
 - Testado no evento de teste: `passo5-b1-teste.sql` (9 verificações) e roteiro por API (anon não lê o vencedor antes de revelar; depois de revelar, Telão e configuracoes mostram). Reverter: `passo5-b1-reverter.sql`.
 - NÃO testado: LED/vitrine/PDF no navegador, e cerimônia real. Janela de risco até o front ir à main: o front antigo não enxerga vencedor registrado e não revelado.
+
+## Complemento (2026-11-19, noite)
+- Vercel: deploy de `9677f84` com status success; `app.coreohub.com` responde 200.
+- Achado: a view `deliberation_aggregate` (dono postgres, sem security_invoker) ignorava a RLS de `deliberations` e `anon` tinha SELECT, expondo o vencedor por deliberação antes da revelação. Migration `20261119e` tirou o acesso de anon (testado: anon 42501; dono e `get_telao_state` anon seguem funcionando). Tabela estava com 0 linhas, então nada vazou em dado real.
+- Residual NÃO tratado: qualquer usuário LOGADO ainda lê a view (precisa desenho: security_invoker quebraria equipe e `get_telao_state`). Reverter: `GRANT SELECT ON public.deliberation_aggregate TO anon;`.
+- PDF de Apuração gerado no navegador com resultado de teste: traz o vencedor manual e a faixa lidos da tabela privada (dados de teste apagados).
+- Vitrine de evento NÃO espetáculo após revelar: não testada (só há eventos de teste de espetáculo; a vitrine não mudou e lê o público).
