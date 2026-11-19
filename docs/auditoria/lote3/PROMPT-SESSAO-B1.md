@@ -1,0 +1,14 @@
+Implemente a B1 do Lote 3 de seguranca da CoreoHub: vencedores de premiacao nao podem ser legiveis antes da revelacao.
+
+Leia ANTES de agir: CLAUDE.md, memory/_operating_manual.md, memory/session_resume.md, docs/auditoria/lote3/B1-plano.md (o plano), docs/auditoria/LOTE3-pendencias.md e a secao "Telao" de CLAUDE.md. Depois leia POR COMPLETO, no banco e no codigo: as funcoes get_telao_state e update_premios_winners (pg_get_functiondef, so leitura), pages/Deliberacoes.tsx, pages/TelaoControle.tsx, pages/ResultsPanel.tsx, o PDF de Apuracao e utils/awardClassification.ts.
+
+Contexto verificado em 19/11/2026: qualquer anonimo le a linha inteira de configuracoes em evento publico (policy anyone_reads_public_event_configuracoes), entao o vencedor dentro de premios_especiais fica visivel antes de winner_revealed; a trava e so de interface. 15 eventos publicos, 0 privados reais. O plano recomendado (opcao 1): tabela privada premios_vencedores (RLS dono + super admin, GRANT explicito, sem anon); "Registrar" grava nela; "Revelar" (RPC atomica update_premios_winners) copia para premios_especiais com winner_revealed=true; leituras do dono de vencedor nao revelado passam a ler da tabela privada; migrar vencedores ja registrados de eventos com cerimonia pendente.
+
+Regras de trabalho:
+- Responda em portugues, curto; diga o que NAO foi verificado. Plano em 3 a 5 pontos e espere meu OK antes de migration, edge function ou mexer na revelacao.
+- Regras dev<->main do CLAUDE.md valem: sem cherry-pick, sem -X theirs/ours, push na dev sempre fast-forward sem --force. Nao use git add -A. Outras sessoes escrevem na mesma pasta: use arquivos temporarios com nome unico (scratchpad), nunca /tmp com nome generico, e releia qualquer SQL antes de rodar com --yes.
+- Migration/edge function so com `node scripts/pre-deploy-check.mjs --strict` saindo 0, lendo o codigo de saida (nao encadeie com grep/&&). Deploy a partir de uma worktree limpa da main. A CLI 2.90 rejeita [local_smtp] do supabase/config.toml: na worktree de deploy troque o cabecalho para [inbucket] (so local, nao commitar).
+- Migrations a partir de supabase/migrations/_template.sql, com passoN-teste.sql e passoN-reverter.sql.
+- Teste SO no evento de teste 752366ed-6e90-44e7-bec5-1cee38031503 / f8d9451a-847e-490b-ad70-289f12c0f562 (conta teste.produtor@coreohub.com). Nunca mutacao em evento real (Usualdance, Level Up); nunca is_demo=true. Apague por SQL o que criar e confirme.
+- Teste de cerimonia completa obrigatorio: registrar vencedor, provar que a chave anon NAO le o vencedor (REST direto em /rest/v1/configuracoes), revelar no Telao (rota publica /telao com codigo), conferir LED, vitrine e PDF de Apuracao. Nunca mostre valor de segredo.
+- Nao faca em dia de evento. Pergunte a data da proxima cerimonia real antes de comecar.
