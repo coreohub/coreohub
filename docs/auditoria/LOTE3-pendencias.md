@@ -95,3 +95,20 @@ B2 em produção (2026-11-18, `8c68d04`): action `resolve-code` no `judge-login`
 B3 em produção (2026-11-18, migration `20261118c`): `hold_event_seats` grava o IP (`cf-connecting-ip`, não forjável; `event_seats.hold_ip`) e recusa quando o IP já segura 60 lugares vigentes no evento; `service_role` (edge/PDV) isenta; sem IP legível não limita. Testado no evento de teste `752366ed`: 10 holds de 6 com tokens diferentes passam, o 11º dá 400 com a mensagem nova; `service_role` acima do limite passa. Holds de teste limpos. Não testado: como o checkout exibe a mensagem de erro; compra real de ponta a ponta; `get_event_seats_public_v2` não foi alterada (ao expirar hold ela não zera `hold_ip`; inofensivo, pois a contagem exige status reservado e vigente). Reverter: `passo3-reverter.sql`.
 
 D1 em produção (2026-11-18, migration `20261118d`): `is_event_fully_free` sem EXECUTE para PUBLIC/anon (authenticated e service_role mantidos). Testado: anon = 42501; service_role responde. Aplicada com 1 login ativo no check (sem venda), com OK do dono. D3: migration `20260709` agora guardada por IF NOT EXISTS (não aplicada, só protege db reset). C4 na main (`ab87c07`). Pendentes: C5, C7; dependem do dono: B1, B4, B7, D2; A5 só depois de 2026-11-29.
+
+## Fechamento do Lote 3 (2026-11-19)
+
+**Em produção:** A1, A2, A3, A4, B2, B3, B5, B6, B8, C1, C2, C4 (main), C6, D1, D4. Provado em venda real (4 pagamentos de ingresso
+em 18/11 pós-deploy, todos 200, sem ALERT de cross-check, 0 webhook_failures): B8, B3, D4.
+**Na dev, não na main:** C5 (`3c07f74`: log de erro nos selects de AccountSettings/Profile; salvar prêmios aborta se a leitura do
+estado atual falhar). Não foi à main porque a dev tem trabalho de outra sessão (resumo semanal: asaas-webhook, send-email,
+migrations) que não é da auditoria; sobe junto no merge da dev.
+**Em sessão dedicada (dono):** B1, plano em `B1-plano.md`.
+**Aguardam decisão do dono:** B4 (limites de bucket), B7 (PIN do jurado em texto puro), D2 (5.304 notas órfãs; não apagar).
+**Data fixa:** A5 (`PAYMENT_CHECK_MODE=enforce`) só depois de 2026-11-29.
+**Backlog aceito (baixo risco, sem plano):** C3 (SeatZonesEditor, depende da sessão de mapas), C7 (evento principal inexistente;
+rate limit da API v1), D3 aplicado só no arquivo (protege db reset), D5 (itens baixos), C5 nas telas não críticas (~130 selects).
+**Operacional:** `supabase/config.toml` da main tem `[local_smtp]` que a CLI 2.90 rejeita (atualizar CLI para 3.2.0 ou renomear);
+primeiro repasse real ~22/11 com `SUBCONTA_FEE_MODE=on` (conferir payout_attempts, subconta_fee_charges, extrato Asaas R$ 12,90).
+Não verificado em produção: 503 do webhook em indisponibilidade da Asaas, estorno parcial de vídeo, limite 40/5min do resolve-code,
+QR do jurado em celular.
