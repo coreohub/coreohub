@@ -45,3 +45,9 @@ Só spoiler de vencedor entre "registrar" e "revelar", exige chamar a API direto
 - Residual NÃO tratado: qualquer usuário LOGADO ainda lê a view (precisa desenho: security_invoker quebraria equipe e `get_telao_state`). Reverter: `GRANT SELECT ON public.deliberation_aggregate TO anon;`.
 - PDF de Apuração gerado no navegador com resultado de teste: traz o vencedor manual e a faixa lidos da tabela privada (dados de teste apagados).
 - Vitrine de evento NÃO espetáculo após revelar: não testada (só há eventos de teste de espetáculo; a vitrine não mudou e lê o público).
+
+## Complemento B1b (2026-11-22, implementado)
+- Migration `20261122_deliberations_select_equipe.sql` aplicada em produção: policy `deliberations_select_evento` (dono do evento, super admin, equipe via `team_event_ids`) + `deliberation_aggregate` com `security_invoker=true`; anon sem acesso, authenticated e service_role com SELECT. Postgres 17.6.
+- Testado em transação desfeita (`passo6-teste.sql`, evento de teste 752366ed): dono=1, super admin=1, inscrito=0, anon negado (42501), membro de equipe=1, `get_telao_state` anônimo mostra o vencedor por deliberação. `deliberations` segue com 0 linhas e o evento de teste não foi alterado.
+- Telas /premiacao, /apuracao e /telao-palco abrem sem erro de console nem overflow (produtor de teste, produção). Não testado: cerimônia real com deliberações gravadas, nem equipe com login real (só simulada por profiles.team_event_id dentro da transação).
+- Reverter: `docs/auditoria/lote3/passo6-reverter.sql` (reabre o vazamento para logado).
