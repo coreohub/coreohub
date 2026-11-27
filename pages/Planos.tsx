@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { MessageCircle, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabaseUrl } from '@/services/supabase';
-import { maskTelefoneBR, unmaskTelefoneBR } from '@/utils/masks';
+import { maskTelefoneBR, unmaskTelefoneBR, isValidTelefone } from '@/utils/masks';
 
 const WHATSAPP_NUMBER = '5517997936169';
 const WHATSAPP_DISPLAY = '+55 17 99793-6169';
@@ -253,7 +253,7 @@ const Planos: React.FC = () => {
     const whatsappDigits = unmaskTelefoneBR(leadWhatsapp);
     const emailTrimmed = leadEmail.trim();
     if (!nome) { setLeadError('Digite o nome do festival.'); return; }
-    if (whatsappDigits.length < 10) { setLeadError('Digite um WhatsApp válido com DDD.'); return; }
+    if (!isValidTelefone(leadWhatsapp)) { setLeadError('Digite um WhatsApp válido com DDD.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) { setLeadError('Digite um e-mail válido.'); return; }
 
     setLeadSubmitting(true);

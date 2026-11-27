@@ -1,3 +1,4 @@
+import { maskTelefoneBR, unmaskTelefoneBR, isValidTelefone, TELEFONE_INVALIDO_MSG } from '../utils/masks';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
@@ -941,6 +942,10 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
       setFeedback({ kind: 'err', msg: 'Preencha nome, e-mail e CPF válido.' });
       return;
     }
+    if (courtesyForm.phone && !isValidTelefone(courtesyForm.phone)) {
+      setFeedback({ kind: 'err', msg: TELEFONE_INVALIDO_MSG });
+      return;
+    }
     setCourtesySaving(true);
     try {
       const { data, error: invokeErr } = await supabase.functions.invoke('create-courtesy-entry', {
@@ -950,7 +955,7 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
           buyer_name: courtesyForm.name.trim(),
           buyer_email: courtesyForm.email.trim(),
           buyer_cpf: cpf,
-          buyer_phone: courtesyForm.phone.trim() || undefined,
+          buyer_phone: unmaskTelefoneBR(courtesyForm.phone) || undefined,
         },
       });
       if (invokeErr) {
@@ -1086,7 +1091,7 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
               <input
                 id="ws-courtesy-phone"
                 value={courtesyForm.phone}
-                onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
+                onChange={e => setCourtesyForm(f => ({ ...f, phone: maskTelefoneBR(e.target.value) }))}
                 placeholder="Telefone (opcional)"
                 className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
               />
@@ -2856,6 +2861,10 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       setFeedback({ kind: 'err', msg: 'Preencha nome, e-mail e CPF válido.' });
       return;
     }
+    if (courtesyForm.phone && !isValidTelefone(courtesyForm.phone)) {
+      setFeedback({ kind: 'err', msg: TELEFONE_INVALIDO_MSG });
+      return;
+    }
     setCourtesySaving(true);
     try {
       const { error: invokeErr } = await supabase.functions.invoke('create-courtesy-entry', {
@@ -2865,7 +2874,7 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
           buyer_name: courtesyForm.name.trim(),
           buyer_email: courtesyForm.email.trim(),
           buyer_cpf: cpf,
-          buyer_phone: courtesyForm.phone.trim() || undefined,
+          buyer_phone: unmaskTelefoneBR(courtesyForm.phone) || undefined,
         },
       });
       if (invokeErr) throw new Error(invokeErr.message);
@@ -3020,7 +3029,7 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
                     <input
                       id={`pass-courtesy-phone-${p.id}`}
                       value={courtesyForm.phone}
-                      onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
+                      onChange={e => setCourtesyForm(f => ({ ...f, phone: maskTelefoneBR(e.target.value) }))}
                       placeholder="Telefone (opcional)"
                       className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
                     />

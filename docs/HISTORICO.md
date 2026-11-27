@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-11-27 — Telefone com `+55` perdia os 2 últimos dígitos 🟡 telas na dev; servidor e dados pendentes
+
+- **Sintoma:** aviso da Asaas de número incorreto. 21 de ~225 compras de ingresso (Level Up) salvas como `55` + DDD + 7 dígitos: a máscara cortava em 11 antes de tratar o código do país. A origem do `55` (provável autofill, campo usava `autoComplete="tel"`) não foi reproduzida em aparelho real.
+- **Feito:** `maskTelefoneBR` remove `+55` (ou `55` com 12+ dígitos) e o `0` inicial antes do corte, preserva DDD 55 e número `+` de outro país; `isValidTelefone` bloqueia número quebrado; máscaras locais duplicadas removidas; `autoComplete="tel-national"` e sem `maxLength` nos checkouts. `events.whatsapp_event` ficou de fora (usa `55` no link `wa.me`).
+- **Pendente:** (a) mesma regra nas edge functions de pagamento; até lá o checkout não envia número estrangeiro; (b) corrigir banco + cliente Asaas de Regiani e Nathalia (número certo existe em outra compra do mesmo CPF).
+
 ### 2026-11-15 (noite) — Auditoria Lote 1: verificação (console, criação de evento, code-review) 🟡 pagamento sandbox pendente
 
 - **Console (conta `teste.produtor`, Vite local, 5 rotas x desktop/mobile, 2 visitas por rota):** 0 `pageerror`, 0 overflow. Todo `TypeError: Failed to fetch` e todo `net::ERR_ABORTED` tinham a requisição abortada pela própria navegação do script (mesma URL aparece como `requestfailed`): ruído de teste, não bug. Único 404 real: `POST get-producer-asaas-balance` (2x por carga do `/qg-organizador`), resposta `no_asaas_account` porque a conta de teste não tem subconta Asaas (função existe e responde como projetado); só barulho no console. Nenhum 404 de recurso estático.

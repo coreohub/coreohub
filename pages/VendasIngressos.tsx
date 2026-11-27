@@ -35,7 +35,7 @@ import { matchesBuyerSearch } from '../utils/buyerSearch';
 import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '../utils/seatSelection';
 import { BLOCK_REASON_SUGGESTIONS, expandRange, expandRow, partitionSelection, reasonsBySeat, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
 import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
-import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR, isValidTelefone, telefoneParaCobranca, TELEFONE_INVALIDO_MSG } from '../utils/masks';
 import { DateInput } from '@/components/DateInput';
 
 /** "A e B" / "A, B e C": junta rótulos de sessão em português. */
@@ -627,6 +627,10 @@ const VendasIngressos: React.FC = () => {
       setCourtesyError('Preencha nome, e-mail e CPF válido.');
       return;
     }
+    if (courtesyForm.phone && !isValidTelefone(courtesyForm.phone)) {
+      setCourtesyError(TELEFONE_INVALIDO_MSG);
+      return;
+    }
     setCourtesySaving(true);
     try {
       const { data, error: invokeErr } = await supabase.functions.invoke('create-courtesy-entry', {
@@ -677,6 +681,10 @@ const VendasIngressos: React.FC = () => {
       setPdvError('Preencha nome, e-mail e CPF válido.');
       return;
     }
+    if (pdvForm.phone && !isValidTelefone(pdvForm.phone)) {
+      setPdvError(TELEFONE_INVALIDO_MSG);
+      return;
+    }
     if (seatMapEnabled && pdvSelectedSeats.length !== pdvTotalQty) {
       setPdvError(`Escolha exatamente ${pdvTotalQty} assento(s).`);
       return;
@@ -700,7 +708,7 @@ const VendasIngressos: React.FC = () => {
             name: pdvForm.name.trim(),
             email: pdvForm.email.trim(),
             cpf,
-            phone: unmaskTelefoneBR(pdvForm.phone) || undefined,
+            phone: telefoneParaCobranca(pdvForm.phone),
           },
           payment_method: pdvMethod,
           ...(seatMapEnabled ? { seat_ids: orderedSeats } : {}),

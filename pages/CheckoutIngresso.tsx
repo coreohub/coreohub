@@ -14,6 +14,8 @@
  *   → comprador recebe email com 1 link /meu-ingresso/<token> por ingresso.
  */
 
+import { maskTelefoneBR, isValidTelefone, telefoneParaCobranca } from '../utils/masks';
+import { PhoneHint } from '../components/PhoneHint';
 import { remapZonesForPublic } from '../utils/zoneColor';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -70,11 +72,6 @@ const isValidCpf = (cpf: string): boolean => {
 const formatCpf = (v: string) => {
   const d = v.replace(/\D/g, '').slice(0, 11);
   return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-};
-const formatPhone = (v: string) => {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 10) return d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
-  return d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
 };
 
 const detectKind = (nome: string): string => {
@@ -754,7 +751,7 @@ export default function CheckoutIngresso() {
   const largoSelected = selectedSeats.filter(id => tipoOfSeat(id) === 'pcd_largo').length;
   const seatsReady = !seatMapEnabled || (selectedSeats.length === totalQty && seatsSatisfyRules(specialSelected, compSelected, pcdQty, compQty, largoSelected, obesoQty));
   const canSubmit = !!name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    && isValidCpf(cpf) && totalQty >= 1 && !paying && !anySoldOut && seatsReady;
+    && isValidCpf(cpf) && (!phone || isValidTelefone(phone)) && totalQty >= 1 && !paying && !anySoldOut && seatsReady;
 
   const handlePay = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -770,7 +767,7 @@ export default function CheckoutIngresso() {
             name: name.trim(),
             email: email.trim().toLowerCase(),
             cpf: cpf.replace(/\D/g, ''),
-            phone: phone.replace(/\D/g, '') || undefined,
+            phone: telefoneParaCobranca(phone),
           },
           coupon_code: appliedCouponCode ?? undefined,
           quote_id: quote?.id,
@@ -1229,10 +1226,11 @@ export default function CheckoutIngresso() {
           )}
 
           <Field label="Telefone (opcional)" icon={<Phone size={14} />} htmlFor="buyer-phone">
-            <input id="buyer-phone" name="phone" value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
-              inputMode="tel" type="tel" placeholder="(00) 00000-0000" autoComplete="tel"
+            <input id="buyer-phone" name="phone" value={phone} onChange={e => setPhone(maskTelefoneBR(e.target.value))}
+              inputMode="tel" type="tel" placeholder="(00) 00000-0000" autoComplete="tel-national"
               className="bg-transparent w-full text-sm outline-none placeholder:text-slate-400 font-mono tracking-wide" />
           </Field>
+          <PhoneHint value={phone} inputId="buyer-phone" />
         </div>
 
         {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}

@@ -10,6 +10,8 @@
  *   → comprador recebe 1 email consolidado com voucher de cada workshop incluso
  */
 
+import { maskTelefoneBR, isValidTelefone, telefoneParaCobranca } from '../utils/masks';
+import { PhoneHint } from '../components/PhoneHint';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
@@ -46,11 +48,6 @@ const isValidCpf = (cpf: string): boolean => {
 const formatCpf = (v: string) => {
   const d = v.replace(/\D/g, '').slice(0, 11);
   return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-};
-const formatPhone = (v: string) => {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 10) return d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
-  return d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
 };
 
 const CheckoutWorkshopPass: React.FC = () => {
@@ -346,6 +343,7 @@ const CheckoutWorkshopPass: React.FC = () => {
   };
 
   const canSubmit = !!name.trim()
+    && (!phone || isValidTelefone(phone))
     && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf)
     && !paying && !error && !comboLoading && !esgotado && selectionOk;
@@ -364,7 +362,7 @@ const CheckoutWorkshopPass: React.FC = () => {
             name: name.trim(),
             email: email.trim().toLowerCase(),
             cpf: cpf.replace(/\D/g, ''),
-            phone: phone.replace(/\D/g, '') || undefined,
+            phone: telefoneParaCobranca(phone),
           },
           user_id: user?.id,
           combo_opt_in: true,
@@ -522,7 +520,8 @@ const CheckoutWorkshopPass: React.FC = () => {
               )}
             </FieldLabel>
             <FieldLabel icon={Phone} label="Telefone (opcional)">
-              <input type="tel" value={phone} onChange={e => setPhone(formatPhone(e.target.value))} className={inputCls} placeholder="(00) 00000-0000" maxLength={15} disabled={esgotado} />
+              <input id="pass-buyer-phone" type="tel" autoComplete="tel-national" value={phone} onChange={e => setPhone(maskTelefoneBR(e.target.value))} className={inputCls} placeholder="(00) 00000-0000" disabled={esgotado} />
+              <PhoneHint value={phone} inputId="pass-buyer-phone" />
             </FieldLabel>
           </div>
 

@@ -1,3 +1,4 @@
+import { maskTelefoneBR, isValidTelefone } from '../utils/masks';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { pickDefaultEvent } from '../utils/defaultEvent';
 import { createPortal } from 'react-dom';
@@ -1074,7 +1075,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     if (!asaasForm.province.trim())          { setAsaasFormError('Informe o bairro.'); return; }
     if (!asaasForm.city.trim())              { setAsaasFormError('Informe a cidade.'); return; }
     if (asaasForm.state.trim().length !== 2) { setAsaasFormError('Informe a UF (2 letras, ex.: SP).'); return; }
-    if (phoneDigits.length < 10 || phoneDigits.length > 11) { setAsaasFormError('Celular inválido. Informe DDD + número.'); return; }
+    if (asaasForm.mobile_phone.startsWith('+') || !isValidTelefone(asaasForm.mobile_phone)) { setAsaasFormError('Celular inválido. Informe DDD + número.'); return; }
 
     const accountEmail = asaasForm.account_email.trim();
     if (accountEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail)) { setAsaasFormError('E-mail da conta de recebimento inválido.'); return; }
@@ -5792,11 +5793,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           inputMode="numeric"
                           value={asaasForm.mobile_phone}
                           onChange={e => {
-                            const d = e.target.value.replace(/\D/g, '').slice(0, 11);
-                            const formatted = d.length <= 10
-                              ? d.replace(/(\d{2})(\d{0,4})(\d{0,4}).*/, (_,a,b,c) => [a && `(${a})`, b && ` ${b}`, c && `-${c}`].filter(Boolean).join(''))
-                              : d.replace(/(\d{2})(\d{0,5})(\d{0,4}).*/, (_,a,b,c) => [a && `(${a})`, b && ` ${b}`, c && `-${c}`].filter(Boolean).join(''));
-                            setAsaasForm(f => ({ ...f, mobile_phone: formatted }));
+                            setAsaasForm(f => ({ ...f, mobile_phone: maskTelefoneBR(e.target.value) }));
                           }}
                           placeholder="(11) 91234-5678"
                           className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"

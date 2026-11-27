@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, Send, ChevronDown } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { edgeErrorMessage } from '../utils/edgeError';
-import { maskCpfCnpj, maskTelefoneBR, validateCpf } from '../utils/masks';
+import { maskCpfCnpj, maskTelefoneBR, isValidTelefone, TELEFONE_INVALIDO_MSG, validateCpf } from '../utils/masks';
 
 /**
  * Transferência gratuita de titularidade do ingresso (Decreto 13.108/2026, arts. 17-19).
@@ -33,7 +33,7 @@ const TransferTicketPanel: React.FC<Props> = ({ token, isMeia, hasSeat, onTransf
     if (name.trim().length < 3) return 'Informe o nome completo do novo titular.';
     if (!validateCpf(cpf)) return 'CPF do novo titular inválido.';
     if (!EMAIL_RE.test(email.trim())) return 'E-mail do novo titular inválido.';
-    if (phone.replace(/\D/g, '').length < 10) return 'Telefone do novo titular inválido (com DDD).';
+    if (!isValidTelefone(phone)) return TELEFONE_INVALIDO_MSG;
     return null;
   };
 

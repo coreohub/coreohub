@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, formatPrecoBR, parsePrecoBR,
   maskData, parseDataISO, maskTempo, parseTempoSegundos, formatTempo,
-  validateCpf, validateCnpj, maskTelefoneBR, unmaskTelefoneBR,
+  validateCpf, validateCnpj, maskTelefoneBR, unmaskTelefoneBR, isValidTelefone, telefoneParaCobranca,
 } from '../utils/masks';
 
 // CPF/CNPJ válidos batem na API Asaas — se a validação local deixar passar lixo,
@@ -33,6 +33,47 @@ describe('maskTelefoneBR', () => {
   });
   it('unmaskTelefoneBR extrai só os dígitos', () => {
     expect(unmaskTelefoneBR('(17) 98126-4290')).toBe('17981264290');
+  });
+});
+
+describe('telefone com código do país', () => {
+  // Digita um caractere por vez, como o input controlado
+  const digitar = (s: string) => [...s].reduce((v, c) => maskTelefoneBR(v + c), '');
+
+  it.each([
+    '+5517991326034', '+55 17 99132-6034', '+55 (17) 99132-6034', '5517991326034', '017991326034',
+  ])('colado ou preenchido "%s" não perde o fim do número', entrada => {
+    expect(maskTelefoneBR(entrada)).toBe('(17) 99132-6034');
+    expect(digitar(entrada)).toBe('(17) 99132-6034');
+  });
+  it('fixo com 55 na frente', () => {
+    expect(maskTelefoneBR('551732221234')).toBe('(17) 3222-1234');
+  });
+  it('DDD 55 não é confundido com o código do país', () => {
+    expect(maskTelefoneBR('55991234567')).toBe('(55) 99123-4567');
+    expect(digitar('55991234567')).toBe('(55) 99123-4567');
+    expect(maskTelefoneBR('5532221234')).toBe('(55) 3222-1234');
+    expect(maskTelefoneBR('+5555991234567')).toBe('(55) 99123-4567');
+  });
+  it('preserva número de outro país', () => {
+    expect(maskTelefoneBR('+14155552671')).toBe('+14155552671');
+    expect(digitar('+5491123456789')).toBe('+5491123456789');
+    expect(digitar('+14155552671')).toBe('+14155552671');
+    expect(isValidTelefone('+14155552671')).toBe(true);
+  });
+  it('recusa o número cortado e incompletos', () => {
+    expect(isValidTelefone('(55) 17991-3260')).toBe(false);
+    expect(isValidTelefone('(17) 9913-26')).toBe(false);
+    expect(isValidTelefone('')).toBe(false);
+  });
+  it('aceita celular e fixo', () => {
+    expect(isValidTelefone('(17) 99132-6034')).toBe(true);
+    expect(isValidTelefone('(17) 3222-1234')).toBe(true);
+  });
+  it('só manda à cobrança número brasileiro válido', () => {
+    expect(telefoneParaCobranca('(17) 99132-6034')).toBe('17991326034');
+    expect(telefoneParaCobranca('+14155552671')).toBeUndefined();
+    expect(telefoneParaCobranca('')).toBeUndefined();
   });
 });
 

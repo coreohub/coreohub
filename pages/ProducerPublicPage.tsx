@@ -35,6 +35,7 @@ const normalizeInstagramUrl = (handle: string) =>
 const normalizeWhatsappUrl = (raw: string) => {
   if (raw.startsWith('http')) return raw;
   const digits = raw.replace(/\D/g, '');
+  if (raw.trim().startsWith('+')) return `https://wa.me/${digits}`;
   // Número nacional tem 10-11 dígitos; só 12+ começando com 55 já traz o código do país
   // (senão o DDD 55, de Santa Maria/RS, seria confundido com ele).
   return `https://wa.me/${digits.length >= 12 && digits.startsWith('55') ? digits : `55${digits}`}`;

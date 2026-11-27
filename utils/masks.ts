@@ -109,10 +109,28 @@ export function parsePrecoBR(str: string): number {
   return isNaN(num) ? 0 : num;
 }
 
+/** Número de fora do Brasil: digitado com "+" e código diferente de 55. */
+function isTelefoneEstrangeiro(value: string): boolean {
+  const v = value.trim();
+  if (!v.startsWith('+')) return false;
+  const digits = v.replace(/\D/g, '');
+  return !'55'.startsWith(digits.slice(0, 2));
+}
+
 /** "17981264290" → "(17) 98126-4290" · "1738211234" → "(17) 3821-1234".
- *  Detecta pelo length: 11 dígitos = celular (9º dígito), 10 = fixo. Limita a 11 dígitos. */
+ *  Detecta pelo length: 11 dígitos = celular (9º dígito), 10 = fixo.
+ *  O código do país (+55, ou 55 em 12+ dígitos) e o 0 de discagem saem ANTES
+ *  do corte em 11, senão o autofill do celular come o fim do número. Com 10 ou
+ *  11 dígitos o 55 é DDD (Santa Maria/RS) e fica. Número de outro país ("+1...")
+ *  é preservado, sem máscara. */
 export function maskTelefoneBR(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
+  const raw = value.trim();
+  let digits = raw.replace(/\D/g, '');
+  // "+" ou "+5" ainda não dizem o país: mantém o que foi digitado
+  if (raw.startsWith('+') && digits.length < 2) return `+${digits}`;
+  if (isTelefoneEstrangeiro(raw)) return `+${digits.slice(0, 15)}`;
+  if (digits.startsWith('55') && (raw.startsWith('+') || digits.length >= 12)) digits = digits.slice(2);
+  digits = digits.replace(/^0+/, '').slice(0, 11);
   if (digits.length <= 10) {
     return digits
       .replace(/(\d{2})(\d)/, '($1) $2')
@@ -125,6 +143,25 @@ export function maskTelefoneBR(value: string): string {
 
 /** Extrai só os dígitos (10 ou 11), sem o "+55" pra guardar no banco/CTA de WhatsApp. */
 export function unmaskTelefoneBR(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+export const TELEFONE_INVALIDO_MSG = 'Confira o telefone: DDD + número, ex.: (17) 99999-9999.';
+
+/** Celular (DDD + 9 + 8 dígitos) ou fixo (DDD + 8 dígitos começando em 2-5).
+ *  Estrangeiro ("+..."): só confere o tamanho. Vazio é inválido: quem trata
+ *  campo opcional é o chamador. */
+export function isValidTelefone(value: string): boolean {
+  const digits = value.replace(/\D/g, '');
+  if (isTelefoneEstrangeiro(value)) return digits.length >= 8 && digits.length <= 15;
+  return /^[1-9]{2}(9\d{8}|[2-5]\d{7})$/.test(digits);
+}
+
+/** Telefone pro checkout, que repassa à Asaas: só número brasileiro. Estrangeiro
+ *  fica de fora enquanto o servidor não souber tratar (a Asaas poderia recusar o
+ *  cliente e derrubar a venda). */
+export function telefoneParaCobranca(value: string): string | undefined {
+  if (isTelefoneEstrangeiro(value) || !isValidTelefone(value)) return undefined;
   return value.replace(/\D/g, '');
 }
 

@@ -1,3 +1,4 @@
+import { maskTelefoneBR, isValidTelefone, TELEFONE_INVALIDO_MSG } from '../utils/masks';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
@@ -40,12 +41,6 @@ const docStatus = (raw: string, allowCnpj = true): 'valid' | 'invalid' | 'neutra
 };
 
 /* ── Masks ── */
-const maskPhone = (v: string) => {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 10)
-    return d.replace(/(\d{2})(\d{0,4})(\d{0,4})/, (_, a, b, c) => `(${a}) ${b}${c ? '-' + c : ''}`).trim();
-  return d.replace(/(\d{2})(\d{5})(\d{0,4})/, (_, a, b, c) => `(${a}) ${b}${c ? '-' + c : ''}`).trim();
-};
 
 const maskDoc = (v: string) => {
   const d = v.replace(/\D/g, '').slice(0, 14);
@@ -350,6 +345,10 @@ const MeuPerfil = () => {
       setError(isProducer ? 'CPF/CNPJ inválido. Corrija antes de salvar.' : 'CPF inválido. Corrija antes de salvar.');
       return;
     }
+    if ([form.whatsapp, isProducer ? form.whatsapp_producer : ''].some(p => p && !isValidTelefone(p))) {
+      setError(TELEFONE_INVALIDO_MSG);
+      return;
+    }
     if (isProducer && form.public_page_enabled && !slugify(form.public_slug, '')) {
       setError('Defina um endereço válido pra sua página pública antes de ativar.');
       return;
@@ -490,7 +489,7 @@ const MeuPerfil = () => {
             <div>
               <label className={labelClass}><Phone size={10} /> WhatsApp</label>
               <input type="tel" value={form.whatsapp}
-                onChange={e => set('whatsapp')(maskPhone(e.target.value))}
+                onChange={e => set('whatsapp')(maskTelefoneBR(e.target.value))}
                 placeholder="(11) 99999-9999"
                 className={inputClass()} />
             </div>
@@ -851,7 +850,7 @@ const MeuPerfil = () => {
               <div>
                 <label className={labelClass}><MessageCircle size={10} /> WhatsApp (produtor)</label>
                 <input type="tel" value={form.whatsapp_producer}
-                  onChange={e => set('whatsapp_producer')(maskPhone(e.target.value))}
+                  onChange={e => set('whatsapp_producer')(maskTelefoneBR(e.target.value))}
                   placeholder="(11) 99999-9999"
                   className={inputClass()} />
               </div>
