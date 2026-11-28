@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-11-28 — Telefone: conferência em produção, e-mails e botão travado ✅ botão só na dev
+
+- **Relato de corte no celular (27/11):** versão antiga em cache (SW novo em espera; comprador sem login não vê o aviso de atualização). Em 28/11, com `index-D2bUT8MC.js`, digitação no Chrome e preenchimento automático (viewport de celular, app. e coreohub.com) corretos. Aparelho real não testado pelo Claude.
+- **E-mails:** enviados às 8 pessoas (sem número completo ou a confirmar) de contato@coreohub.com; os 8 constam como entregues. Quando responderem, corrigir banco e Asaas.
+- **Botão travado (workshop e passe):** falha ao pagar agora fica em `payError`, exibida acima do botão, sem desativá-lo; erro de carregamento e esgotado seguem bloqueando. Testado local, computador e celular simulado, envios interceptados.
+
 ### 2026-11-27 — Telefone com `+55` perdia os 2 últimos dígitos 🟡 telas em produção; servidor pendente
 
 - **Sintoma:** aviso da Asaas de número incorreto. 21 de ~225 compras de ingresso (Level Up) salvas como `55` + DDD + 7 dígitos: a máscara cortava em 11 antes de tratar o código do país. A origem do `55` (provável autofill, campo usava `autoComplete="tel"`) não foi reproduzida em aparelho real.

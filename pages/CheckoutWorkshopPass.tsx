@@ -59,6 +59,8 @@ const CheckoutWorkshopPass: React.FC = () => {
   const [esgotado, setEsgotado] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
+  // Falha ao pagar fica separada do erro de carregamento: não trava o botão.
+  const [payError, setPayError] = useState<string | null>(null);
 
   // À la carte (2026-09-14): pass vira POOL de aulas, aluno marca quais quer.
   const isALaCarte = pass?.selection_mode === 'a_la_carte';
@@ -352,7 +354,7 @@ const CheckoutWorkshopPass: React.FC = () => {
     e?.preventDefault();
     if (!canSubmit || !pass) return;
     setPaying(true);
-    setError(null);
+    setPayError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error: invokeErr } = await supabase.functions.invoke('create-workshop-pass-registration', {
@@ -383,7 +385,7 @@ const CheckoutWorkshopPass: React.FC = () => {
 
       throw new Error('Resposta inesperada do servidor');
     } catch (err: any) {
-      setError(err.message ?? String(err));
+      setPayError(err.message ?? String(err));
       setPaying(false);
     }
   };
@@ -657,6 +659,13 @@ const CheckoutWorkshopPass: React.FC = () => {
             onAcceptedChange={setRefundAccepted}
             theme="light"
           />
+
+          {payError && (
+            <div role="alert" className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-sm text-rose-700 flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span className="font-bold">{payError}</span>
+            </div>
+          )}
 
           <button
             type="submit"

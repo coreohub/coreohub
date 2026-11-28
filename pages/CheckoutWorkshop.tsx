@@ -59,6 +59,8 @@ const CheckoutWorkshop: React.FC = () => {
   const [stock, setStock]       = useState<any>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
+  // Falha ao pagar fica separada do erro de carregamento: não trava o botão.
+  const [payError, setPayError] = useState<string | null>(null);
 
   // Hospedagem (add-on, Frente 1 do Vicenza Dance Camp) — só relevante quando
   // o workshop tem hospedagem_delta configurado. Pool de vagas é por noite,
@@ -414,7 +416,7 @@ const CheckoutWorkshop: React.FC = () => {
     e?.preventDefault();
     if (!canSubmit || !workshop) return;
     setPaying(true);
-    setError(null);
+    setPayError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error: invokeErr } = await supabase.functions.invoke('create-workshop-registration', {
@@ -459,7 +461,7 @@ const CheckoutWorkshop: React.FC = () => {
 
       throw new Error('Resposta inesperada do servidor');
     } catch (err: any) {
-      setError(err.message ?? String(err));
+      setPayError(err.message ?? String(err));
       setPaying(false);
     }
   };
@@ -794,6 +796,13 @@ const CheckoutWorkshop: React.FC = () => {
               onAcceptedChange={setRefundAccepted}
               theme="light"
             />
+          )}
+
+          {payError && (
+            <div role="alert" className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-sm text-rose-700 flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span className="font-bold">{payError}</span>
+            </div>
           )}
 
           <button
