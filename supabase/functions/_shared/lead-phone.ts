@@ -1,4 +1,4 @@
-// WhatsApp do lead da calculadora. Mesmas regras de utils/masks.ts: número de
+// Telefone do lead da calculadora e do novo titular na transferência. Mesmas regras de utils/masks.ts: número de
 // outro país volta com "+"; brasileiro volta só com DDD + número, sem o 55.
 // null = inválido (ex.: cortado).
 export function normalizeLeadPhone(raw: unknown): string | null {

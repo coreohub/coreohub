@@ -25,6 +25,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
 import { dispararEmail } from '../_shared/audience-refund.ts'
+import { normalizeLeadPhone as normalizePhone } from '../_shared/lead-phone.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -82,11 +83,11 @@ Deno.serve(async (req) => {
     const name = String(h.name ?? '').trim().replace(/\s+/g, ' ')
     const cpf = String(h.cpf ?? '').replace(/\D/g, '')
     const email = String(h.email ?? '').trim().toLowerCase()
-    const phone = String(h.phone ?? '').replace(/\D/g, '')
+    const phone = normalizePhone(h.phone)
     if (name.length < 3 || name.length > 120) throw new Error('Informe o nome completo do novo titular')
     if (!validCpf(cpf)) throw new Error('CPF do novo titular inválido')
     if (!EMAIL_RE.test(email) || email.length > 160) throw new Error('E-mail do novo titular inválido')
-    if (phone.length < 10 || phone.length > 13) throw new Error('Telefone do novo titular inválido (com DDD)')
+    if (!phone) throw new Error('Telefone do novo titular inválido (com DDD)')
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
