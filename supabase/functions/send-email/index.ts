@@ -1737,18 +1737,19 @@ function buildCalculatorProposal(p: CalculatorProposalPayload) {
 // buildAdminNewProducer no case producer_welcome.
 
 function buildAdminCalculatorLead(p: CalculatorProposalPayload) {
-  // leadWhatsapp vem como dígitos sem DDI (10 = fixo, 11 = celular), validado
-  // em submit-calculator-lead (10-13 dígitos totais). Formata só os casos
-  // comuns pra exibição; fora disso, mostra cru (nunca quebra o e-mail).
+  // leadWhatsapp vem de submit-calculator-lead: brasileiro só com DDD + número
+  // (10 = fixo, 11 = celular); de outro país, com "+". Fora disso, mostra cru.
   const wa = p.leadWhatsapp ?? ''
+  const estrangeiro = wa.startsWith('+')
   const whatsappFormatado =
-    wa.length === 11 ? `+55 (${wa.slice(0, 2)}) ${wa.slice(2, 7)}-${wa.slice(7)}`
+    estrangeiro ? wa
+    : wa.length === 11 ? `+55 (${wa.slice(0, 2)}) ${wa.slice(2, 7)}-${wa.slice(7)}`
     : wa.length === 10 ? `+55 (${wa.slice(0, 2)}) ${wa.slice(2, 6)}-${wa.slice(6)}`
     : wa || '—'
   const waText = encodeURIComponent(
     `Olá ${p.leadNome}! Vi que você simulou o plano ${p.planoNome} pro seu festival na CoreoHub. Bora conversar?`
   )
-  const ctaUrl = p.leadWhatsapp ? `https://wa.me/55${p.leadWhatsapp}?text=${waText}` : undefined
+  const ctaUrl = wa ? `https://wa.me/${estrangeiro ? wa.slice(1) : `55${wa}`}?text=${waText}` : undefined
 
   const contentHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">

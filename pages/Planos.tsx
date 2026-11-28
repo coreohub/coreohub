@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { MessageCircle, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabaseUrl } from '@/services/supabase';
-import { maskTelefoneBR, unmaskTelefoneBR, isValidTelefone } from '@/utils/masks';
+import { maskTelefoneBR, telefoneParaSalvar, isValidTelefone } from '@/utils/masks';
 
 const WHATSAPP_NUMBER = '5517997936169';
 const WHATSAPP_DISPLAY = '+55 17 99793-6169';
@@ -250,7 +250,7 @@ const Planos: React.FC = () => {
   const submitCalculatorLead = async () => {
     setLeadError(null);
     const nome = leadNome.trim();
-    const whatsappDigits = unmaskTelefoneBR(leadWhatsapp);
+    const whatsapp = telefoneParaSalvar(leadWhatsapp);
     const emailTrimmed = leadEmail.trim();
     if (!nome) { setLeadError('Digite o nome do festival.'); return; }
     if (!isValidTelefone(leadWhatsapp)) { setLeadError('Digite um WhatsApp válido com DDD.'); return; }
@@ -263,7 +263,7 @@ const Planos: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nome_festival: nome,
-          whatsapp: whatsappDigits,
+          whatsapp,
           email: emailTrimmed,
           numero_coreografias: calcCoreografias,
           media_bailarinos_coreografia: calcMediaBailarinos,
@@ -490,7 +490,7 @@ const Planos: React.FC = () => {
                     <input
                       id="lead-whatsapp"
                       type="tel"
-                      inputMode="numeric"
+                      autoComplete="tel-national"
                       value={leadWhatsapp}
                       onChange={(e) => setLeadWhatsapp(maskTelefoneBR(e.target.value))}
                       placeholder="(17) 99999-9999"

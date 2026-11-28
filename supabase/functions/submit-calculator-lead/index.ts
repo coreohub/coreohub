@@ -25,6 +25,7 @@
 // }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { normalizeLeadPhone } from '../_shared/lead-phone.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +60,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const nomeFestival = typeof body.nome_festival === 'string' ? body.nome_festival.trim() : ''
-  const whatsappDigits = typeof body.whatsapp === 'string' ? body.whatsapp.replace(/\D/g, '') : ''
+  const whatsapp = normalizeLeadPhone(body.whatsapp)
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const faixaRecomendada = typeof body.faixa_recomendada === 'string' ? body.faixa_recomendada : ''
 
@@ -73,7 +74,7 @@ Deno.serve(async (req: Request) => {
   if (!nomeFestival || nomeFestival.length > 200) {
     return json({ error: 'nome_festival_invalido' }, 400)
   }
-  if (whatsappDigits.length < 10 || whatsappDigits.length > 13) {
+  if (!whatsapp) {
     return json({ error: 'whatsapp_invalido' }, 400)
   }
   if (!EMAIL_REGEX.test(email)) {
@@ -101,7 +102,7 @@ Deno.serve(async (req: Request) => {
     .from('calculator_leads')
     .insert({
       nome_festival: nomeFestival,
-      whatsapp: whatsappDigits,
+      whatsapp,
       email,
       numero_coreografias: Math.round(numeroCoreografias),
       media_bailarinos_coreografia: mediaBailarinos,
@@ -131,7 +132,7 @@ Deno.serve(async (req: Request) => {
       payload: {
         leadEmail: email,
         leadNome: nomeFestival,
-        leadWhatsapp: whatsappDigits,
+        leadWhatsapp: whatsapp,
         numeroCoreografias: Math.round(numeroCoreografias),
         mediaBailarinos,
         ticketMedio,
@@ -164,7 +165,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         created_at: inserted.created_at,
         nome_festival: nomeFestival,
-        whatsapp: whatsappDigits,
+        whatsapp,
         email,
         numero_coreografias: Math.round(numeroCoreografias),
         media_bailarinos_coreografia: mediaBailarinos,
