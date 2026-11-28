@@ -1230,7 +1230,7 @@ export default function CheckoutIngresso() {
               inputMode="tel" type="tel" placeholder="(00) 00000-0000" autoComplete="tel-national"
               className="bg-transparent w-full text-sm outline-none placeholder:text-slate-400 font-mono tracking-wide" />
           </Field>
-          <PhoneHint value={phone} inputId="buyer-phone" />
+          <PhoneHint value={phone} inputId="buyer-phone" cobranca />
         </div>
 
         {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}

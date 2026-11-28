@@ -2771,10 +2771,12 @@ const Registrations = () => {
                   // A17 auditoria Sessão 3: precisa de 10 (DDD+8) ou 11 (DDD+9) dígitos
                   // antes de prefixar 55. Com prefixo BR, aceita 12 ou 13. Qualquer
                   // outro tamanho é número quebrado — não mostra botão.
-                  const hasBr = digits.startsWith('55');
-                  const local = hasBr ? digits.slice(2) : digits;
-                  if (local.length !== 10 && local.length !== 11) return null;
-                  const phone = `55${local}`;
+                  // "+" de outro país vai como está; senão é número brasileiro
+                  const raw = String(viewingReg.profiles?.whatsapp ?? '').trim();
+                  const estrangeiro = raw.startsWith('+') && !digits.startsWith('55');
+                  const local = digits.length >= 12 && digits.startsWith('55') ? digits.slice(2) : digits;
+                  if (!estrangeiro && local.length !== 10 && local.length !== 11) return null;
+                  const phone = estrangeiro ? digits : `55${local}`;
                   const nome = viewingReg.profiles?.full_name ?? '';
                   const coreo = viewingReg.nome_coreografia ?? '';
                   const eventoNome = activeEventInfo?.name ?? '';

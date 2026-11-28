@@ -35,8 +35,9 @@ import { matchesBuyerSearch } from '../utils/buyerSearch';
 import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '../utils/seatSelection';
 import { BLOCK_REASON_SUGGESTIONS, expandRange, expandRow, partitionSelection, reasonsBySeat, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
 import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
-import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR, isValidTelefone, telefoneParaCobranca, TELEFONE_INVALIDO_MSG } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, isValidTelefone, telefoneParaCobranca, telefoneParaSalvar, TELEFONE_INVALIDO_MSG } from '../utils/masks';
 import { DateInput } from '@/components/DateInput';
+import { PhoneHint } from '../components/PhoneHint';
 
 /** "A e B" / "A, B e C": junta rótulos de sessão em português. */
 const joinLabels = (items: string[]) => items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`;
@@ -640,7 +641,7 @@ const VendasIngressos: React.FC = () => {
           buyer_name: courtesyForm.name.trim(),
           buyer_email: courtesyForm.email.trim(),
           buyer_cpf: cpf,
-          buyer_phone: unmaskTelefoneBR(courtesyForm.phone) || undefined,
+          buyer_phone: telefoneParaSalvar(courtesyForm.phone) || undefined,
         },
       });
       if (invokeErr) {
@@ -1783,6 +1784,7 @@ const VendasIngressos: React.FC = () => {
                       placeholder="(00) 00000-0000"
                       className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                     />
+                    <PhoneHint value={pdvForm.phone} inputId="pdv-phone" cobranca />
                   </div>
                   <div>
                     <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Forma de pagamento</span>

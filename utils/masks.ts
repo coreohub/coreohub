@@ -129,8 +129,13 @@ export function maskTelefoneBR(value: string): string {
   // "+" ou "+5" ainda não dizem o país: mantém o que foi digitado
   if (raw.startsWith('+') && digits.length < 2) return `+${digits}`;
   if (isTelefoneEstrangeiro(raw)) return `+${digits.slice(0, 15)}`;
-  if (digits.startsWith('55') && (raw.startsWith('+') || digits.length >= 12)) digits = digits.slice(2);
-  digits = digits.replace(/^0+/, '').slice(0, 11);
+  digits = digits.replace(/^0+/, '');
+  // Já formatado como DDD 55 e válido: um dígito a mais não pode virar outro número
+  const ehDdd55 = raw.startsWith('(55)') && isValidTelefone(digits.slice(0, 11));
+  if (digits.startsWith('55') && (raw.startsWith('+') || (digits.length >= 12 && !ehDdd55))) {
+    digits = digits.slice(2).replace(/^0+/, '');
+  }
+  digits = digits.slice(0, 11);
   if (digits.length <= 10) {
     return digits
       .replace(/(\d{2})(\d)/, '($1) $2')
@@ -155,6 +160,18 @@ export function isValidTelefone(value: string): boolean {
   const digits = value.replace(/\D/g, '');
   if (isTelefoneEstrangeiro(value)) return digits.length >= 8 && digits.length <= 15;
   return /^[1-9]{2}(9\d{8}|[2-5]\d{7})$/.test(digits);
+}
+
+/** Telefone pra gravar fora da cobrança: estrangeiro mantém o "+", senão passa
+ *  por número brasileiro. */
+export function telefoneParaSalvar(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  return isTelefoneEstrangeiro(value) ? `+${digits}` : digits;
+}
+
+/** Estrangeiro completo que o checkout não grava (aviso na tela). */
+export function isTelefoneNaoSalvoNaCobranca(value: string): boolean {
+  return isTelefoneEstrangeiro(value) && isValidTelefone(value);
 }
 
 /** Telefone pro checkout, que repassa à Asaas: só número brasileiro. Estrangeiro

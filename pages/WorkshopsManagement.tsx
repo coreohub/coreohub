@@ -1,4 +1,4 @@
-import { maskTelefoneBR, unmaskTelefoneBR, isValidTelefone, TELEFONE_INVALIDO_MSG } from '../utils/masks';
+import { maskTelefoneBR, telefoneParaSalvar, isValidTelefone, TELEFONE_INVALIDO_MSG } from '../utils/masks';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
@@ -955,7 +955,7 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
           buyer_name: courtesyForm.name.trim(),
           buyer_email: courtesyForm.email.trim(),
           buyer_cpf: cpf,
-          buyer_phone: unmaskTelefoneBR(courtesyForm.phone) || undefined,
+          buyer_phone: telefoneParaSalvar(courtesyForm.phone) || undefined,
         },
       });
       if (invokeErr) {
@@ -2874,7 +2874,7 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
           buyer_name: courtesyForm.name.trim(),
           buyer_email: courtesyForm.email.trim(),
           buyer_cpf: cpf,
-          buyer_phone: unmaskTelefoneBR(courtesyForm.phone) || undefined,
+          buyer_phone: telefoneParaSalvar(courtesyForm.phone) || undefined,
         },
       });
       if (invokeErr) throw new Error(invokeErr.message);

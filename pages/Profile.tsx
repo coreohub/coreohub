@@ -1,4 +1,5 @@
 import { maskTelefoneBR, isValidTelefone, TELEFONE_INVALIDO_MSG } from '../utils/masks';
+import { PhoneHint } from '../components/PhoneHint';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
@@ -345,8 +346,13 @@ const MeuPerfil = () => {
       setError(isProducer ? 'CPF/CNPJ inválido. Corrija antes de salvar.' : 'CPF inválido. Corrija antes de salvar.');
       return;
     }
-    if ([form.whatsapp, isProducer ? form.whatsapp_producer : ''].some(p => p && !isValidTelefone(p))) {
-      setError(TELEFONE_INVALIDO_MSG);
+    // Só barra o que foi alterado agora: número antigo errado não pode travar o resto
+    const telefoneRuim = ([
+      ['WhatsApp', form.whatsapp, profile?.whatsapp],
+      ['WhatsApp (produtor)', isProducer ? form.whatsapp_producer : '', profile?.whatsapp_producer],
+    ] as const).find(([, atual, salvo]) => atual && atual !== (salvo || '') && !isValidTelefone(atual));
+    if (telefoneRuim) {
+      setError(`${telefoneRuim[0]}: ${TELEFONE_INVALIDO_MSG}`);
       return;
     }
     if (isProducer && form.public_page_enabled && !slugify(form.public_slug, '')) {
@@ -488,10 +494,11 @@ const MeuPerfil = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}><Phone size={10} /> WhatsApp</label>
-              <input type="tel" value={form.whatsapp}
+              <input id="profile-whatsapp" type="tel" value={form.whatsapp}
                 onChange={e => set('whatsapp')(maskTelefoneBR(e.target.value))}
                 placeholder="(11) 99999-9999"
                 className={inputClass()} />
+              <PhoneHint value={form.whatsapp} inputId="profile-whatsapp" />
             </div>
             <div>
               <label className={labelClass}><Instagram size={10} /> Instagram</label>
@@ -849,10 +856,11 @@ const MeuPerfil = () => {
               </div>
               <div>
                 <label className={labelClass}><MessageCircle size={10} /> WhatsApp (produtor)</label>
-                <input type="tel" value={form.whatsapp_producer}
+                <input id="profile-whatsapp-producer" type="tel" value={form.whatsapp_producer}
                   onChange={e => set('whatsapp_producer')(maskTelefoneBR(e.target.value))}
                   placeholder="(11) 99999-9999"
                   className={inputClass()} />
+                <PhoneHint value={form.whatsapp_producer} inputId="profile-whatsapp-producer" />
               </div>
             </div>
 

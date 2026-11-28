@@ -8,7 +8,8 @@ Cronológico inverso. Detalhes individuais em `memory/`.
 
 - **Sintoma:** aviso da Asaas de número incorreto. 21 de ~225 compras de ingresso (Level Up) salvas como `55` + DDD + 7 dígitos: a máscara cortava em 11 antes de tratar o código do país. A origem do `55` (provável autofill, campo usava `autoComplete="tel"`) não foi reproduzida em aparelho real.
 - **Feito:** `maskTelefoneBR` remove `+55` (ou `55` com 12+ dígitos) e o `0` inicial antes do corte, preserva DDD 55 e número `+` de outro país; `isValidTelefone` bloqueia número quebrado; máscaras locais duplicadas removidas; `autoComplete="tel-national"` e sem `maxLength` nos checkouts. `events.whatsapp_event` ficou de fora (usa `55` no link `wa.me`).
-- **Pendente:** (a) mesma regra nas edge functions de pagamento; até lá o checkout não envia número estrangeiro; (b) corrigir banco + cliente Asaas de Regiani e Nathalia (número certo existe em outra compra do mesmo CPF).
+- **Revisão e E2E (mesmo dia):** corrigidos DDD 55 com um dígito a mais virando outro número, prefixo `0055`/`055`, aviso de que o checkout e o PDV não salvam número de fora, "+" mantido nas cortesias, botão de WhatsApp em `/registrations`, aviso do campo sem pulo de tela e perfil que só valida o telefone alterado. Compra no sandbox gravou o número certo (ingresso de teste apagado). Não testados: cortesia de passe, envio do formulário da conta de recebimento, autofill em aparelho real. Troca conhecida: quem digitar à mão, sem "+", o 55 seguido de um DDD 91 a 99 fica com o número lido como DDD 55.
+- **Pendente:** (0) `submit-calculator-lead` e `transfer-ticket` apagam o "+" e limitam a 10-13 dígitos; (a) mesma regra nas edge functions de pagamento; até lá o checkout não envia número estrangeiro; (b) corrigir banco + cliente Asaas de Regiani e Nathalia (número certo existe em outra compra do mesmo CPF).
 
 ### 2026-11-15 (noite) — Auditoria Lote 1: verificação (console, criação de evento, code-review) 🟡 pagamento sandbox pendente
 

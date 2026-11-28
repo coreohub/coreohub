@@ -519,10 +519,12 @@ const CheckoutWorkshopPass: React.FC = () => {
                 <p className="mt-1 text-[11px] text-rose-700">CPF inválido</p>
               )}
             </FieldLabel>
-            <FieldLabel icon={Phone} label="Telefone (opcional)">
-              <input id="pass-buyer-phone" type="tel" autoComplete="tel-national" value={phone} onChange={e => setPhone(maskTelefoneBR(e.target.value))} className={inputCls} placeholder="(00) 00000-0000" disabled={esgotado} />
-              <PhoneHint value={phone} inputId="pass-buyer-phone" />
-            </FieldLabel>
+            <div>
+              <FieldLabel icon={Phone} label="Telefone (opcional)">
+                <input id="pass-buyer-phone" type="tel" autoComplete="tel-national" value={phone} onChange={e => setPhone(maskTelefoneBR(e.target.value))} className={inputCls} placeholder="(00) 00000-0000" disabled={esgotado} />
+              </FieldLabel>
+              <PhoneHint value={phone} inputId="pass-buyer-phone" cobranca />
+            </div>
           </div>
 
           {pass.auto_detect_combo && (

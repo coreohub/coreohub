@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, formatPrecoBR, parsePrecoBR,
   maskData, parseDataISO, maskTempo, parseTempoSegundos, formatTempo,
-  validateCpf, validateCnpj, maskTelefoneBR, unmaskTelefoneBR, isValidTelefone, telefoneParaCobranca,
+  validateCpf, validateCnpj, maskTelefoneBR, unmaskTelefoneBR, isValidTelefone, telefoneParaCobranca, telefoneParaSalvar,
 } from '../utils/masks';
 
 // CPF/CNPJ válidos batem na API Asaas — se a validação local deixar passar lixo,
@@ -54,6 +54,19 @@ describe('telefone com código do país', () => {
     expect(digitar('55991234567')).toBe('(55) 99123-4567');
     expect(maskTelefoneBR('5532221234')).toBe('(55) 3222-1234');
     expect(maskTelefoneBR('+5555991234567')).toBe('(55) 99123-4567');
+  });
+  it('dígito a mais em número com DDD 55 não troca o número', () => {
+    expect(maskTelefoneBR('(55) 99312-34567')).toBe('(55) 99312-3456');
+    expect(maskTelefoneBR('(55) 997312-3456')).toBe('(55) 99731-2345');
+    expect(maskTelefoneBR('(55) 3222-12345')).toBe('(55) 32221-2345'); // inválido, bloqueado na tela
+  });
+  it.each(['0055 17 99132-6034', '055 17 99132-6034'])('prefixo de discagem "%s"', entrada => {
+    expect(maskTelefoneBR(entrada)).toBe('(17) 99132-6034');
+  });
+  it('estrangeiro é gravado com o "+"', () => {
+    expect(telefoneParaSalvar('+14155552671')).toBe('+14155552671');
+    expect(telefoneParaSalvar('(17) 99132-6034')).toBe('17991326034');
+    expect(telefoneParaSalvar('')).toBe('');
   });
   it('preserva número de outro país', () => {
     expect(maskTelefoneBR('+14155552671')).toBe('+14155552671');
